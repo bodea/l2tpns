@@ -2,6 +2,7 @@ DESTDIR =
 bindir = /usr/sbin
 etcdir = /etc/l2tpns
 libdir = /usr/lib/l2tpns
+mandir = /usr/share/man/man8
 statedir = /var/lib/l2tpns
 
 DEFINES =
@@ -83,7 +84,9 @@ bounce:	test/bounce.o
 
 install: all
 	$(INSTALL) -m 0755 l2tpns $(DESTDIR)$(bindir)/l2tpns
+	$(INSTALL) -m 0644 l2tpns.8 $(DESTDIR)$(mandir)/l2tpns.8
 	$(INSTALL) -m 0755 nsctl $(DESTDIR)$(bindir)/nsctl
+	$(INSTALL) -m 0644 nsctl.8 $(DESTDIR)$(mandir)/nsctl.8
 	@if [ -f $(DESTDIR)$(etcdir)/startup-config ]; then \
 		echo '***' Installing default config files in $(DESTDIR)$(etcdir) as .defaults; \
 		suffix=.default; \

@@ -1,3 +1,7 @@
+* ?
+- Add manpages from Jonathan McDowell
+- Remove reference to old -a command line argument
+
 * Tue Nov 16 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.8
 - Ignore gateway address in Framed-Route (from Jonathan McDowell).
 - Call sessionshutdown() when a tunnel is dropped rather than

@@ -1,0 +1,41 @@
+.\"                                      Hey, EMACS: -*- nroff -*-
+.\" First parameter, NAME, should be all caps
+.\" Second parameter, SECTION, should be 1-8, maybe w/ subsection
+.\" other parameters are allowed: see man(7), man(1)
+.TH NSCTL 8 "November 16, 2004"
+.\" Please adjust this date whenever revising the manpage.
+.\"
+.\" Some roff macros, for reference:
+.\" .nh        disable hyphenation
+.\" .hy        enable hyphenation
+.\" .ad l      left justify
+.\" .ad b      justify to both left and right margins
+.\" .nf        disable filling
+.\" .fi        enable filling
+.\" .br        insert line break
+.\" .sp <n>    insert n+1 empty lines
+.\" for manpage-specific macros, see man(7)
+.SH NAME
+nsctl \- Issue commands to l2tpns plugins
+.SH SYNOPSIS
+.B nsctl \fI<host>\fP \fI<command>\fP [ \fIargs...\fP ]
+.SH DESCRIPTION
+nsctl is part of the l2tpns package. It allows the system administrator
+to allow messages to be passed to l2tpns plugins.
+.SH OPTIONS
+.TP
+.B <host>
+The host running l2tpns that should receive the message.
+.TP
+.B <command>
+The command to send. Currently one of \fIload_plugin\fP,
+\fIunload_plugin\fP, \fIgarden\fP or \fIungarden\fP.
+\fIgarden\fP/\fIungarden\fP enable or disable the walled garden plugin
+for a particular user; they take a single argument which is the session
+id to affect.
+.SH SEE ALSO
+.BR l2tpns(8)
+.SH AUTHOR
+This manual page was written by Jonathan McDowell <noodles@the.earth.li>,
+for the Debian GNU/Linux system (but may be used by others).
+

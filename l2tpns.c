@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.49 2004-11-16 07:54:32 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.50 2004-11-16 21:54:46 fred_nerk Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -2952,10 +2952,9 @@ int main(int argc, char *argv[])
 				break;
 			default:
 				printf("Args are:\n"
-				       "\t-d\tDetach from terminal\n"
+				       "\t-d\t\tDetach from terminal\n"
 				       "\t-c <file>\tConfig file\n"
 				       "\t-h <hostname>\tForce hostname\n"
-				       "\t-a <address>\tUse specific address\n"
 				       "\t-v\t\tDebug\n");
 
 				return (0);
