@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.49.2.3 2005-01-13 07:58:54 bodea Exp $
+// $Id: l2tpns.h,v 1.49.2.4 2005-02-14 05:58:07 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -15,11 +15,11 @@
 #include <sys/types.h>
 #include <libcli.h>
 
-#define VERSION	"2.0.15"
+#define VERSION	"2.0.16"
 
 // Limits
 #define MAXTUNNEL	500		// could be up to 65535
-#define MAXSESSION	50000		// could be up to 65535
+#define MAXSESSION	60000		// could be up to 65535
 #define MAXTBFS		6000		// Maximum token bucket filters. Might need up to 2 * session.
 
 #define RADIUS_SHIFT	5
@@ -579,6 +579,7 @@ void radiusclear(uint16_t r, sessionidt s);
 clockt backoff(uint8_t try);
 sessionidt sessionbyip(in_addr_t ip);
 sessionidt sessionbyuser(char *username);
+void sessionkill(sessionidt s, char *reason);
 void sessionshutdown(sessionidt s, char *reason);
 void send_garp(in_addr_t ip);
 void tunnelsend(uint8_t *buf, uint16_t l, tunnelidt t);
