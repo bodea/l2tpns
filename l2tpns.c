@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.31 2004-10-25 15:07:51 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.32 2004-10-28 03:31:39 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -57,7 +57,7 @@ int snoopfd = -1;		// UDP file handle for sending out intercept data
 int *radfds = NULL;		// RADIUS requests file handles
 int ifrfd = -1;			// File descriptor for routing, etc
 time_t basetime = 0;		// base clock
-char *hostname = NULL;		// us.
+char hostname[1000] = "";	// us.
 int tunidx;			// ifr_ifindex of tun device
 u32 sessionid = 0;		// session id for radius accounting
 int syslog_log = 0;		// are we logging to syslog
@@ -95,7 +95,6 @@ struct config_descriptt config_values[] = {
 	CONFIG("debug", debug, INT),
 	CONFIG("log_file", log_filename, STRING),
 	CONFIG("pid_file", pid_file, STRING),
-	CONFIG("hostname", hostname, STRING),
 	CONFIG("l2tp_secret", l2tpsecret, STRING),
 	CONFIG("primary_dns", default_dns1, IP),
 	CONFIG("secondary_dns", default_dns2, IP),
@@ -2180,6 +2179,7 @@ int regular_cleanups(void)
 			if (++count >= MAX_ACTIONS) break;
 		}
 	}
+
 	if (*config->accounting_dir && next_acct <= TIME)
 	{
 		// Dump accounting data
@@ -2360,14 +2360,17 @@ void mainloop(void)
 			for (i = 0; i < config->num_radfds; i++)
 				if (FD_ISSET(radfds[i], &r))
 					processrad(buf, recv(radfds[i], buf, sizeof(buf), 0), i);
+
 			if (FD_ISSET(cluster_sockfd, &r))
 			{
 				int size;
 				size = recvfrom(cluster_sockfd, buf, sizeof(buf), MSG_WAITALL, (void *) &addr, &alen);
 				processcluster(buf, size, addr.sin_addr.s_addr);
 			}
+
 			if (FD_ISSET(controlfd, &r))
 				processcontrol(buf, recvfrom(controlfd, buf, sizeof(buf), MSG_WAITALL, (void *) &addr, &alen), &addr);
+
 			if (FD_ISSET(clifd, &r))
 			{
 				struct sockaddr_in addr;
@@ -2547,10 +2550,13 @@ void initdata(int optdebug, char *optconfig)
 	for (i = 1; i < MAXTUNNEL- 1; i++)
 		tunnel[i].state = TUNNELUNDEF;	// mark it as not filled in.
 
-	// Grab my hostname unless it's been specified
-	gethostname(config->hostname, sizeof(config->hostname));
-	if ((p = strchr(config->hostname, '.'))) *p = 0;
-	hostname = config->hostname;
+	if (!*hostname)
+	{
+		char *p;
+		// Grab my hostname unless it's been specified
+		gethostname(hostname, sizeof(hostname));
+		if ((p = strchr(hostname, '.'))) *p = 0;
+	}
 
 	_statistics->start_time = _statistics->last_reset = time(NULL);
 
@@ -2956,7 +2962,7 @@ int main(int argc, char *argv[])
 	initdata(optdebug, optconfig);
 
 	init_tbf();
-	init_cli();
+	init_cli(hostname);
 	read_config_file();
 
 	log(0, 0, 0, 0, "L2TPNS version " VERSION "\n");
