@@ -1,0 +1,180 @@
+Documentation on various internal structures.
+
+Most important structure use an anonymous shared mmap()
+so that child processes can watch them. (All the cli connections
+are handled in child processes).
+
+TODO: Re-investigate threads to see if we can use a thread to handle
+cli connections without killing forwarding performance.
+
+session[]
+	An array of session structures. This is one of the two
+	major data structures that are sync'ed across the cluster.
+
+	This array is statically allocated at startup time to a 
+	compile time size (currently 50k sessions). This sets a
+	hard limit on the number of sessions a cluster can handle.
+
+	There is one element per l2tp session. (I.e. each active user).
+
+	The zero'th session is always invalid.
+
+tunnel[]
+	An array of tunnel structures. This is the other major data structure
+	that's actively sync'ed across the cluster.
+
+	As per sessions, this is statically allocated at startup time
+	to a compile time size limit.
+
+	There is one element per l2tp tunnel. (normally one per BRAS
+	that this cluster talks to).
+
+	The zero'th tunnel is always invalid.
+
+ip_pool[]
+	
+	A table holding all the IP address in the pool. As addresses
+	are used, they are tagged with the username of the session,
+	and the session index.
+
+	When they are free'd the username tag ISN'T cleared. This is
+	to ensure that were possible we re-allocate the same IP
+	address back to the same user.
+
+radius[]
+	A table holding active radius session. Whenever a radius
+	conversation is needed (login, accounting et al), a radius
+	session is allocated.
+
+char **ip_hash
+
+	A mapping of IP address to session structure. This is a
+	tenary tree (each byte of the IP address is used in turn
+	to index that level of the tree).
+
+	If the value is postive, it's considered to be an index
+	into the session table. 
+
+	If it's negative, it's considered to be an index into
+	the ip_pool[] table.
+
+	If it's zero, then there is no associated value.
+	
+
+
+============================================================
+
+Clustering: How it works.
+
+	At a high level, the various members of the cluster elect
+a master. All other machines become slaves. Slaves handle normal
+packet forwarding. Whenever a slave get a 'state changing' packet
+(i.e. tunnel setup/teardown, session setup etc) it _doesn't_ handle
+it, but instead forwards it to the master.
+
+	'State changing' it defined to be "a packet that would cause
+a change in either a session or tunnel structure that isn't just
+updating the idle time or byte counters". In practise, this means
+also all LCP, IPCP, and L2TP control packets.
+
+	The master then handles the packet normally, updating
+the session/tunnel structures. The changed structures are then
+flooded out to the slaves via a multicast packet.
+
+
+Heartbeat'ing:
+	The master sends out a multicast 'heartbeat' packet
+at least once every second. This packet contains a sequence number,
+and any changes to the session/tunnel structures that have
+been queued up. If there is room in the packet, it also sends
+out a number of extra session/tunnel structures.
+
+	The sending out of 'extra' structures means that the
+master will slowly walk the entire session and tunnel tables.
+This allows a new slave to catch-up on cluster state.
+
+
+	Each heartbeat has an in-order sequence number. If a
+slave receives a heartbeat with a sequence number other than 
+the one it was expecting, it drops the unexpected packet and
+unicasts C_LASTSEEN to tell the master the last heartbeast it
+had seen. The master normally than unicasts the missing packets
+to the slave. If the master doesn't have the old packet any more
+(i.e. it's outside the transmission window) then the master
+unicasts C_KILL to the slave asking it to die. (it should then
+restart, and catchup on state via the normal process).
+
+Ping'ing:
+	All slaves send out a 'ping' once per second as a
+multicast packet. This 'ping' contains the slave's ip address,
+and most importantly: The number of seconds from epoch
+that the slave started up. (I.e. the value of time(2) at
+that the process started).
+
+
+Elections:
+
+	All machines start up as slaves.
+
+	Each slave listens for a heartbeat from the master.
+If a slave fails to hear a heartbeat for N seconds then it
+checks to see if it should become master.
+
+	A slave will become master if:
+		* It hasn't heard from a master for N seconds.
+		* It is the oldest of all it's peers (the other slaves).
+		* In the event of a tie, the machine with the
+			lowest IP address will win.
+
+	A 'peer' is any other slave machine that's send out a
+	ping in the last N seconds. (i.e. we must have seen
+	a recent ping from that slave for it to be considered).
+
+	The upshot of this is that no special communication
+	takes place when a slave becomes a master.
+
+	On initial cluster startup, the process would be (for example)
+
+		* 3 machines startup simultaneously, all as slaves.
+		* each machine sends out a multicast 'ping' every second.
+		* 15 seconds later, the machine with the lowest IP
+			address becomes master, and starts sending
+			out heartbeats.
+		* The remaining two machine hear the heartbeat and
+			set that machine as their master.
+
+Becoming master:
+	
+	When a slave become master, the only structure maintained up
+	to date are the tunnel and session structures. This means
+	the master will rebuild a number of mappings.
+
+	#0. All the session and table structures are marked as
+	defined. (Even if we weren't fully up to date, it's
+	too late now).
+
+	#1. All the token bucket filters are re-build from scratch
+	with the associated session to tbf pointers being re-built.
+
+TODO: These changed tbf pointers aren't flooded to the slave right away!
+Throttled session could take a couple of minutes to start working again
+on master failover!
+
+	#2. The ipcache to session hash is rebuilt. (This isn't
+	strictly needed, but it's a safety measure).
+
+	#3. The mapping from the ippool into the session table
+	(and vice versa) is re-built.
+
+
+Becoming slave:
+
+	At startup the entire session and table structures are
+	marked undefined.
+
+	As it seens updates from the master, the updated structures
+	are marked as defined.
+
+	When there are no undefined tunnel or session structures, the
+	slave marks itself as 'up-to-date' and starts advertising routes
+	(if BGP is enabled).
