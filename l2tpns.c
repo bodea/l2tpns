@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.17 2004-07-28 04:01:12 fred_nerk Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.18 2004-07-28 06:12:30 fred_nerk Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -1114,7 +1114,7 @@ void sendipcp(tunnelidt t, sessionidt s)
 	*(u16 *) (q + 2) = htons(10);
 	q[4] = 3;
 	q[5] = 6;
-	*(u32 *) (q + 6) = config->bind_address; // send my IP
+	*(u32 *) (q + 6) = config->bind_address ? config->bind_address : my_address; // send my IP
 	tunnelsend(buf, 10 + (q - buf), t); // send it
 	session[s].flags &= ~SF_IPCP_ACKED;	// Clear flag.
 }
