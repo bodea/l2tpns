@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.78 2005-01-13 07:57:36 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.79 2005-01-13 08:42:52 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -857,7 +857,7 @@ static void processipout(uint8_t * buf, int len)
 			{
 				INC_STAT(tun_rx_dropped, sess_local[s].packets_dropped);
 				LOG(3, s, t, "Dropped %u/%u packets to %s for %suser %s\n",
-					sess_local[s].packets_out, sess_local[s].packets_dropped,
+					sess_local[s].packets_dropped, sess_local[s].packets_out,
 					fmtaddr(ip, 0), sp->throttle_out ? "throttled " : "",
 					sp->user);
 			}
