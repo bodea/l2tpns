@@ -360,23 +360,25 @@ define the body of the access-list.  Standard access-list syntax:
 
 Extended access-lists:
 
-<DL>
-  <DD>{<B>permit</B>|<B>deny</B>} <B>ip</B>
+<DIV STYLE="margin-left: 4em; text-indent: -2em">
+  <P>{<B>permit</B>|<B>deny</B>} <B>ip</B>
     {<I>host</I>|<I>source source-wildcard</I>|<B>any</B>}
-    {<I>host</I>|<I>destination destination-wildcard</I>|<B>any</B>}
-  <DD>{<B>permit</B>|<B>deny</B>} <B>udp</B>
+    {<I>host</I>|<I>destination destination-wildcard</I>|<B>any</B>} [<B>fragments</B>]
+  <P>{<B>permit</B>|<B>deny</B>} <B>udp</B>
     {<I>host</I>|<I>source source-wildcard</I>|<B>any</B>}
 	[{<B>eq</B>|<B>neq</B>|<B>gt</B>|<B>lt</B>} <I>port</I>|<B>range</B> <I>from</I> <I>to</I>]
     {<I>host</I>|<I>destination destination-wildcard</I>|<B>any</B>}
 	[{<B>eq</B>|<B>neq</B>|<B>gt</B>|<B>lt</B>} <I>port</I>|<B>range</B> <I>from</I> <I>to</I>]
-  <DD>{<B>permit</B>|<B>deny</B>} <B>tcp</B>
+	[<B>fragments</B>]
+  <P>{<B>permit</B>|<B>deny</B>} <B>tcp</B>
     {<I>host</I>|<I>source source-wildcard</I>|<B>any</B>}
 	[{<B>eq</B>|<B>neq</B>|<B>gt</B>|<B>lt</B>} <I>port</I>|<B>range</B> <I>from</I> <I>to</I>]
     {<I>host</I>|<I>destination destination-wildcard</I>|<B>any</B>}
 	[{<B>eq</B>|<B>neq</B>|<B>gt</B>|<B>lt</B>} <I>port</I>|<B>range</B> <I>from</I> <I>to</I>]
 	[{<B>established</B>|{<B>match-any</B>|<B>match-all</B>}
-	    {<B>+</B>|<B>-</B>}{<B>fin</B>|<B>syn</B>|<B>rst</B>|<B>psh</B>|<B>ack</B>|<B>urg</B>} ...]
-</DL>
+	    {<B>+</B>|<B>-</B>}{<B>fin</B>|<B>syn</B>|<B>rst</B>|<B>psh</B>|<B>ack</B>|<B>urg</B>}
+	    ...|<B>fragments</B>]
+</DIV>
 
 <H3 ID="users">users</H3>
 
