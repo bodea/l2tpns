@@ -1,10 +1,11 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.18 2004-09-19 23:26:46 fred_nerk Exp $
+// $Id: l2tpns.h,v 1.18.2.1 2004-09-21 07:39:46 fred_nerk Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
 
 #include <netinet/in.h>
+#include <net/ethernet.h>
 #include <execinfo.h>
 #include <stdio.h>
 #include <signal.h>
@@ -96,9 +97,9 @@ enum
 };
 
 // Types
-typedef unsigned short u16;
-typedef unsigned int u32;
-typedef unsigned char u8;
+typedef uint16_t u16;
+typedef uint32_t u32;
+typedef uint8_t u8;
 typedef u32 ipt;
 typedef u16 portt;
 typedef u16 sessionidt;
@@ -172,7 +173,6 @@ typedef struct sessions
 	u16 tbf_in;			// filter bucket for throttling in from the user.
 	u16 tbf_out;			// filter bucket for throttling out to the user.
 	u8 l2tp_flags;			// various bit flags from the ICCN on the l2tp tunnel.
-	u8 reserved_old_snoop;		// No longer used - remove at some time
 	u8 walled_garden;		// is this session gardened?
 	u8 flags1;			// additional flags (currently unused);
 	char random_vector[MAXTEL];
@@ -186,7 +186,9 @@ typedef struct sessions
 	ipt snoop_ip;			// Interception destination IP
 	u16 snoop_port;			// Interception destination port
 	u16 sid;			// near end session id.
-	char reserved[20];		// Space to expand structure without changing HB_VERSION
+	u8 client_mac[6];		// Client MAC address for PPPoE
+	u16 vlan;			// VLAN for PPPoE
+	char reserved[32];		// Space to expand structure without changing HB_VERSION
 }
 sessiont;
 
@@ -197,9 +199,10 @@ typedef struct {
 	u32	cout;
 } sessioncountt;
 
-#define	SESSIONPFC	1            // PFC negotiated flags
-#define	SESSIONACFC	2           // ACFC negotiated flags
-#define SESSIONLCPACK	4	// LCP negotiated
+#define	SESSIONPFC	1		// PFC negotiated flags
+#define	SESSIONACFC	2		// ACFC negotiated flags
+#define SESSIONLCPACK	4		// LCP negotiated
+#define SESSIONPPPOE	8		// This is a PPPoE session, not L2TP
 
 // 168 bytes per tunnel
 typedef struct tunnels
@@ -221,6 +224,8 @@ typedef struct tunnels
 	u16 controlc;		// outstaind messages in queue
 	controlt *controls;	// oldest message
 	controlt *controle;	// newest message
+	u16 vlan;		// VLAN for PPPoE
+	u8 reserved[32];
 }
 tunnelt;
 
@@ -301,6 +306,13 @@ struct Tstats
     unsigned long	tun_rx_errors;
     unsigned long	tun_tx_errors;
 
+    unsigned long	tap_rx_packets;
+    unsigned long	tap_tx_packets;
+    unsigned long	tap_rx_bytes;
+    unsigned long	tap_tx_bytes;
+    unsigned long	tap_rx_errors;
+    unsigned long	tap_tx_errors;
+
     unsigned long	tunnel_rx_packets;
     unsigned long	tunnel_tx_packets;
     unsigned long	tunnel_rx_bytes;
@@ -331,6 +343,7 @@ struct Tstats
     unsigned long	recv_forward;
 #ifdef STATISTICS
     unsigned long	call_processtun;
+    unsigned long	call_processtap;
     unsigned long	call_processipout;
     unsigned long	call_processudp;
     unsigned long	call_sessionbyip;
@@ -449,6 +462,7 @@ struct configt
 	u16		bgp_peer_as[2];
 #endif
 	char		hostname[256];			// our hostname - set to gethostname() by default
+	u8		mac_address[6];			// MAC address for PPPoE
 };
 
 struct config_descriptt
@@ -456,11 +470,11 @@ struct config_descriptt
 	char *key;
 	int offset;
 	int size;
-	enum { INT, STRING, UNSIGNED_LONG, SHORT, BOOL, IP } type;
+	enum { INT, STRING, UNSIGNED_LONG, SHORT, BOOL, IP, MAC } type;
 };
 
 // arp.c
-void sendarp(int ifr_idx, const unsigned char* mac, ipt ip);
+void sendarp(int ifr_idx, const unsigned char *mac, ipt ip);
 
 
 // ppp.c

@@ -4,7 +4,7 @@ etcdir = $(DESTDIR)/etc/l2tpns
 libdir = $(DESTDIR)/usr/lib/l2tpns
 
 CC = gcc
-DEFINES = -DBGP -DRINGBUFFER -DSTAT_CALLS -DSTATISTICS
+DEFINES = -DBGP -DRINGBUFFER -DSTAT_CALLS -DSTATISTICS -D_GNU_SOURCE
 OPTIM = -g -O3 -funroll-loops -fomit-frame-pointer -finline-functions
 CFLAGS = -Wall $(OPTIM) $(DEFINES)
 LDFLAGS = -rdynamic

@@ -1,3 +1,6 @@
+* ? David Parrish <david@dparrish.com> 2.1.0
+- Add support for direct PPPoE. This touches a lot of stuff.
+
 * ? David Parrish <david@dparrish.com> ?
 - Added support for hidden AVPs by Robert Clark
 - l2tpns-chap-response.patch from Robert Clark

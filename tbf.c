@@ -1,8 +1,6 @@
 // L2TPNS: token bucket filters
 
-char const *cvs_id_tbf = "$Id: tbf.c,v 1.6 2004-09-02 04:18:07 fred_nerk Exp $";
-
-#define _GNU_SOURCE
+char const *cvs_id_tbf = "$Id: tbf.c,v 1.6.2.1 2004-09-21 07:39:46 fred_nerk Exp $";
 
 #include <string.h>
 #include <unistd.h>
