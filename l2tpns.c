@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.27 2004-09-19 23:26:46 fred_nerk Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.28 2004-09-20 23:34:35 fred_nerk Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -2867,7 +2867,7 @@ void dump_acct_info()
 
 	for (i = 0; i < MAXSESSION; i++)
 	{
-		if (!session[i].opened || !session[i].ip || !session[i].cin || !session[i].cout || !*session[i].user || session[i].walled_garden)
+		if (!session[i].opened || !session[i].ip || (!session[i].cin && !session[i].cout) || !*session[i].user || session[i].walled_garden)
 			continue;
 		if (!f)
 		{
