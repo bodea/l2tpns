@@ -5,7 +5,7 @@
 
 /* throttle control */
 
-char const *cvs_id = "$Id: throttlectl.c,v 1.1 2004-11-17 15:08:19 bodea Exp $";
+char const *cvs_id = "$Id: throttlectl.c,v 1.2 2004-11-18 05:44:36 bodea Exp $";
 
 int plugin_api_version = PLUGIN_API_VERSION;
 static struct pluginfuncs *p = 0;
@@ -110,11 +110,11 @@ int plugin_control(struct param_control *data)
 				int len = strlen(data->argv[i]);
 				if (!strncmp(data->argv[i], "in", len))
 				{
-					rate_in = atoi(argv[i+1]);
+					rate_in = atoi(data->argv[i+1]);
 				}
 				else if (!strncmp(data->argv[i], "out", len))
 				{
-					rate_out = atoi(argv[i+1]);
+					rate_out = atoi(data->argv[i+1]);
 				}
 				else
 				{
@@ -142,7 +142,7 @@ int plugin_control(struct param_control *data)
 	}
 
 	p->throttle(session, rate_in, rate_out);
-	p->sesssion_changed(session);
+	p->session_changed(session);
 
 	data->response = NSCTL_RES_OK;
 	data->additional = 0;

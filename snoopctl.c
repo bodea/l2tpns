@@ -5,7 +5,7 @@
 
 /* snoop control */
 
-char const *cvs_id = "$Id: snoopctl.c,v 1.1 2004-11-17 15:08:19 bodea Exp $";
+char const *cvs_id = "$Id: snoopctl.c,v 1.2 2004-11-18 05:44:36 bodea Exp $";
 
 int plugin_api_version = PLUGIN_API_VERSION;
 static struct pluginfuncs *p = 0;
@@ -129,7 +129,7 @@ int plugin_control(struct param_control *data)
 		s->snoop_port = 0;
 	}
 
-	p->sesssion_changed(session);
+	p->session_changed(session);
 
 	data->response = NSCTL_RES_OK;
 	data->additional = 0;

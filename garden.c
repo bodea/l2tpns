@@ -9,7 +9,7 @@
 
 /* walled garden */
 
-char const *cvs_id = "$Id: garden.c,v 1.14 2004-11-17 15:08:19 bodea Exp $";
+char const *cvs_id = "$Id: garden.c,v 1.15 2004-11-18 05:44:36 bodea Exp $";
 
 int plugin_api_version = PLUGIN_API_VERSION;
 static struct pluginfuncs *p = 0;
@@ -76,15 +76,15 @@ int plugin_kill_session(struct param_new_session *data)
 }
 
 char *plugin_control_help[] = {
-	"  garden USER|SID           Put user into the walled garden",
-	"  ungarden USER|SID         Release user from garden",
+	"  garden USER|SID                             Put user into the walled garden",
+	"  ungarden USER|SID                           Release user from garden",
 	0
 };
 
 int plugin_control(struct param_control *data)
 {
-	sessionidt s;
-	sessiont *sess = 0;
+	sessionidt session;
+	sessiont *s = 0;
 	int flag;
 	char *end;
 
@@ -111,7 +111,12 @@ int plugin_control(struct param_control *data)
 	}
 
 	if (!(session = strtol(data->argv[1], &end, 10)) || *end)
-		session = p->get_session_by_username(data->argv[1]);
+	{
+		if (flag)
+			session = p->get_session_by_username(data->argv[1]);
+		else
+			session = 0; // can't ungarden by username
+	}
 
 	if (session)
 		s = p->get_session_by_id(session);
@@ -131,7 +136,7 @@ int plugin_control(struct param_control *data)
 	}
 
 	garden_session(s, flag);
-	p->sesssion_changed(session);
+	p->session_changed(session);
 
 	data->response = NSCTL_RES_OK;
 	data->additional = 0;
