@@ -1,16 +1,19 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.4 2004-04-16 02:33:32 fred_nerk Exp $
+// $Id: l2tpns.h,v 1.5 2004-05-24 04:24:06 fred_nerk Exp $
 
 #include <netinet/in.h>
 #include <stdio.h>
-#include "config.h"
+#include <config.h>
 
-#define VERSION	"1.1.2"
+#define VERSION	"1.2.0"
 
 // Limits
 #define MAXTUNNEL	500		// could be up to 65535
 #define MAXSESSION	50000		// could be up to 65535
-#define	MAXRADIUS	255
+#define RADIUS_SHIFT	5
+#define RADIUS_MASK	((unsigned short)(((unsigned short)~0) >> (16 - RADIUS_SHIFT)))
+#define	MAXRADIUS	((2 << (RADIUS_SHIFT - 1)) * 255)
+
 #define	MAXCONTROL	1000		// max length control message we ever send...
 #define	MAXETHER	(1500+18)	// max packet we try sending to tap
 #define	MAXTEL		96		// telephone number
@@ -30,11 +33,11 @@
 #define TAPDEVICE	"/dev/net/tun"
 #define	UDP		17
 #define HOMEDIR		"/home/l2tpns/"			// Base dir for data
-#define STATEFILE	"/tmp/l2tpns.dump"		// State dump file
-#define NOSTATEFILE	"/tmp/l2tpns.no_state_reload"	// If exists, state will not be reloaded
-#define CONFIGFILE	ETCDIR "/l2tpns.cfg"		// Configuration file
-#define CLIUSERS	ETCDIR "/l2tpns.users"		// CLI Users file
-#define IPPOOLFILE	ETCDIR "/l2tpns.ip_pool"	// Address pool configuration
+#define STATEFILE	"/tmp/l2tpns.dump"              // State dump file
+#define NOSTATEFILE	"/tmp/l2tpns.no_state_reload"   // If exists, state will not be reloaded
+#define CONFIGFILE	ETCDIR "/l2tpns.cfg"            // Configuration file
+#define CLIUSERS	ETCDIR "/l2tpns.users"          // CLI Users file
+#define IPPOOLFILE	ETCDIR "/l2tpns.ip_pool"        // Address pool configuration
 #ifndef LIBDIR
 #define LIBDIR		"/usr/lib/l2tpns"
 #endif
@@ -52,6 +55,7 @@
 #define	PPPCCP		0x80FD
 #define PPPIP		0x0021
 #define PPPMP		0x003D
+#define MIN_IP_SIZE	0x20
 enum
 {
 	ConfigReq = 1,
@@ -99,10 +103,8 @@ controlt;
 
 typedef struct stbft
 {
-    struct stbft *next;
     char handle[10];
     char in_use;
-    int mark;
 } tbft;
 
 
@@ -128,7 +130,7 @@ typedef struct sessions
 	time_t last_packet;		// Last packet from the user (used for idle timeouts)
 	ipt dns1, dns2;			// DNS servers
 	routet route[MAXROUTE];		// static routes
-	u8 radius;			// which radius session is being used (0 for not waiting on authentication)
+	u16 radius;			// which radius session is being used (0 for not waiting on authentication)
 	u8 flags;			// various bit flags
 	u8 snoop;			// are we snooping this session?
 	u8 throttle;			// is this session throttled?
@@ -172,26 +174,27 @@ typedef struct tunnels
 tunnelt;
 
 // 180 bytes per radius session
-typedef struct radiuss          // outstanding RADIUS requests
+typedef struct radiuss		// outstanding RADIUS requests
 {
-	sessionidt session;          // which session this applies to
-	hasht auth;               // request authenticator
-	clockt retry;              // when to try next
-	char calling[MAXTEL];    // calling number
-	char pass[129];          // password
-	u8 id;                 // ID for PPP response
-	u8 try;                // which try we are on
-	u8 state;              // state of radius requests
-	u8 chap;               // set if CHAP used (is CHAP identifier)
+	sessionidt session;	// which session this applies to
+	hasht auth;		// request authenticator
+	clockt retry;		// when to try next
+	char calling[MAXTEL];	// calling number
+	char pass[129];		// password
+	u8 id;			// ID for PPP response
+	u8 try;			// which try we are on
+	u8 state;		// state of radius requests
+	u8 chap;		// set if CHAP used (is CHAP identifier)
 }
 radiust;
 
 typedef struct
 {
-	ipt	address;
-	char	assigned;	// 1 if assigned, 0 if free
-	clockt	last;		// last used
-	char	user[129];      // user (try to have ip addresses persistent)
+	ipt		address;
+	char		assigned;	// 1 if assigned, 0 if free
+	sessionidt	session;
+	clockt		last;		// last used
+	char		user[129];      // user (try to have ip addresses persistent)
 }
 ippoolt;
 
@@ -325,6 +328,8 @@ struct configt
 
 	char		config_file[128];
 	int		reload_config;			// flag to re-read config (set by cli)
+	int		cleanup_interval;		// interval between regular cleanups (in seconds)
+	int		multi_read_count;		// amount of packets to read per fd in processing loop
 
 	char		tapdevice[10];			// tap device name
 	char		log_filename[128];
@@ -334,6 +339,7 @@ struct configt
 	int		radius_accounting;
 	ipt		radiusserver[MAXRADSERVER];	// radius servers
 	u8		numradiusservers;		// radius server count
+	short		num_radfds;			// Number of radius filehandles allocated
 
 	ipt		default_dns1, default_dns2;
 
@@ -350,6 +356,8 @@ struct configt
 	int		dump_speed;
 	char		plugins[64][MAXPLUGINS];
 	char		old_plugins[64][MAXPLUGINS];
+
+	int		next_tbf;			// Next HTB id available to use
 };
 
 struct config_descriptt
@@ -380,11 +388,11 @@ void dumplcp(char *p, int l);
 
 // radius.c
 void initrad(void);
-void radiussend(u8 r, u8 state);
-void processrad(u8 *buf, int len);
-void radiusretry(u8 r);
-u8 radiusnew(sessionidt s);
-void radiusclear(u8 r, sessionidt s);
+void radiussend(u16 r, u8 state);
+void processrad(u8 *buf, int len, char socket_index);
+void radiusretry(u16 r);
+u16 radiusnew(sessionidt s);
+void radiusclear(u16 r, sessionidt s);
 
 // throttle.c
 int throttle_session(sessionidt s, int throttle);
@@ -437,7 +445,7 @@ void mainloop(void);
 #ifndef log_hex
 #define log_hex(a,b,c,d) do{if (a <= config->debug) _log_hex(a,0,0,0,b,c,d);}while (0)
 #endif
-void _log(int level, ipt address, sessionidt s, tunnelidt t, const char *format, ...);
+void _log(int level, ipt address, sessionidt s, tunnelidt t, const char *format, ...) __attribute__((format (printf, 5, 6)));
 void _log_hex(int level, ipt address, sessionidt s, tunnelidt t, const char *title, const char *data, int maxsize);
 void build_chap_response(char *challenge, u8 id, u16 challenge_length, char **challenge_response);
 int sessionsetup(tunnelidt t, sessionidt s, u8 routes);
@@ -460,3 +468,19 @@ void host_unreachable(ipt destination, u16 id, ipt source, char *packet, int pac
 extern tunnelt *tunnel;
 extern sessiont *session;
 #define sessionfree (session[0].next)
+
+#define log_backtrace(count, max) \
+if (count++ < max) { \
+	void *array[20]; \
+	char **strings; \
+	int size, i; \
+	log(0, 0, 0, t, "Backtrace follows"); \
+	size = backtrace(array, 10); \
+	strings = backtrace_symbols(array, size); \
+	if (strings) for (i = 0; i < size; i++) \
+	{ \
+		log(0, 0, 0, t, "%s\n", strings[i]); \
+	} \
+	free(strings); \
+}
+
