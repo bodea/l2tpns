@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.74 2004-12-18 01:20:05 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.73.2.1 2005-01-10 07:08:13 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -95,17 +95,17 @@ config_descriptt config_values[] = {
 	CONFIG("log_file", log_filename, STRING),
 	CONFIG("pid_file", pid_file, STRING),
 	CONFIG("l2tp_secret", l2tpsecret, STRING),
-	CONFIG("primary_dns", default_dns1, IPv4),
-	CONFIG("secondary_dns", default_dns2, IPv4),
+	CONFIG("primary_dns", default_dns1, IP),
+	CONFIG("secondary_dns", default_dns2, IP),
 	CONFIG("save_state", save_state, BOOL),
-	CONFIG("primary_radius", radiusserver[0], IPv4),
-	CONFIG("secondary_radius", radiusserver[1], IPv4),
+	CONFIG("primary_radius", radiusserver[0], IP),
+	CONFIG("secondary_radius", radiusserver[1], IP),
 	CONFIG("primary_radius_port", radiusport[0], SHORT),
 	CONFIG("secondary_radius_port", radiusport[1], SHORT),
 	CONFIG("radius_accounting", radius_accounting, BOOL),
 	CONFIG("radius_secret", radiussecret, STRING),
-	CONFIG("bind_address", bind_address, IPv4),
-	CONFIG("peer_address", peer_address, IPv4),
+	CONFIG("bind_address", bind_address, IP),
+	CONFIG("peer_address", peer_address, IP),
 	CONFIG("send_garp", send_garp, BOOL),
 	CONFIG("throttle_speed", rl_rate, UNSIGNED_LONG),
 	CONFIG("throttle_buckets", num_tbfs, INT),
@@ -117,7 +117,8 @@ config_descriptt config_values[] = {
 	CONFIG("scheduler_fifo", scheduler_fifo, BOOL),
 	CONFIG("lock_pages", lock_pages, BOOL),
 	CONFIG("icmp_rate", icmp_rate, INT),
-	CONFIG("cluster_address", cluster_address, IPv4),
+	CONFIG("packet_limit", max_packets, INT),
+	CONFIG("cluster_address", cluster_address, IP),
 	CONFIG("cluster_interface", cluster_interface, STRING),
 	CONFIG("cluster_hb_interval", cluster_hb_interval, INT),
 	CONFIG("cluster_hb_timeout", cluster_hb_timeout, INT),
@@ -711,7 +712,7 @@ static void processipout(uint8_t * buf, int len)
 	tunnelidt t;
 	in_addr_t ip;
 
-	char * data = buf;	// Keep a copy of the originals.
+	char *data = buf;	// Keep a copy of the originals.
 	int size = len;
 
 	uint8_t b[MAXETHER + 20];
@@ -721,13 +722,13 @@ static void processipout(uint8_t * buf, int len)
 	if (len < MIN_IP_SIZE)
 	{
 		LOG(1, 0, 0, "Short IP, %d bytes\n", len);
-		STAT(tunnel_tx_errors);
+		STAT(tun_rx_errors);
 		return;
 	}
 	if (len >= MAXETHER)
 	{
 		LOG(1, 0, 0, "Oversize IP packet %d bytes\n", len);
-		STAT(tunnel_tx_errors);
+		STAT(tun_rx_errors);
 		return;
 	}
 
@@ -764,6 +765,43 @@ static void processipout(uint8_t * buf, int len)
 	}
 	t = session[s].tunnel;
 	sp = &session[s];
+
+	// DoS prevention: enforce a maximum number of packets per 0.1s for a session
+	if (config->max_packets > 0)
+	{
+		if (sess_count[s].last_packet_out == TIME)
+		{
+			int max = config->max_packets;
+
+			// All packets for throttled sessions are handled by the
+			// master, so further limit by using the throttle rate.
+			// A bit of a kludge, since throttle rate is in kbps,
+			// but should still be generous given our average DSL
+			// packet size is 200 bytes: a limit of 28kbps equates
+			// to around 180 packets per second.
+			if (!config->cluster_iam_master && sp->throttle_out && sp->throttle_out < max)
+				max = sp->throttle_out;
+
+			if (++sess_count[s].packets_out > max)
+			{
+				sess_count[s].packets_dropped++;
+				return;
+			}
+		}
+		else
+		{
+			if (sess_count[s].packets_dropped)
+			{
+				INC_STAT(tun_rx_dropped, sess_count[s].packets_dropped);
+				LOG(2, s, t, "Possible DoS attack on %s (%s); dropped %u packets.",
+					fmtaddr(ip, 0), sp->user, sess_count[s].packets_dropped);
+			}
+
+			sess_count[s].last_packet_out = TIME;
+			sess_count[s].packets_out = 1;
+			sess_count[s].packets_dropped = 0;
+		}
+	}
 
 	// run access-list if any
 	if (session[s].filter_out && !ip_filter(buf, len, session[s].filter_out - 1))
@@ -1993,7 +2031,7 @@ static void processtun(uint8_t * buf, int len)
 		return;
 	}
 
-	if (*(uint16_t *) (buf + 2) == htons(PKTIP)) // IPv4
+	if (*(uint16_t *) (buf + 2) == htons(PKTIP)) // IP
 		processipout(buf, len);
 	// Else discard.
 }

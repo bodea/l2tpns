@@ -2,7 +2,7 @@
 .de Id
 .ds Dt \\$4 \\$5
 ..
-.Id $Id: startup-config.5,v 1.3 2004-11-29 06:29:28 bodea Exp $
+.Id $Id: startup-config.5,v 1.3.2.1 2005-01-10 07:08:36 bodea Exp $
 .TH STARTUP-CONFIG 5 "\*(Dt" L2TPNS "File Formats and Conventions"
 .SH NAME
 startup\-config \- configuration file for l2tpns
@@ -159,6 +159,12 @@ process in memory.
 .TP
 .B icmp_rate
 Maximum number of host unreachable ICMP packets to send per second.
+.TP
+.B packet_limit
+Maximum number of packets of downstream traffic to be handled each
+tenth of a second per session.  If zero, no limit is applied (default: 
+0).  Intended as a DoS prevention mechanism and not a general
+throttling control (packets are dropped, not queued).
 .TP
 .B cluster_address
 Multicast cluster address (default: 239.192.13.13).

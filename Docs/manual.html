@@ -307,6 +307,13 @@ Keep all pages mapped by the l2tpns process in memory.
 Maximum number of host unreachable ICMP packets to send per second.
 </LI>
 
+<LI><B>packet_limit</B> (int><BR>
+Maximum number of packets of downstream traffic to be handled each
+tenth of a second per session.  If zero, no limit is applied (default: 
+0).  Intended as a DoS prevention mechanism and not a general
+throttling control (packets are dropped, not queued).
+</LI>
+
 <LI><B>cluster_address</B> (ip address)<BR>
 Multicast cluster address (default:  239.192.13.13).  See the section
 on <A HREF="#Clustering">Clustering</A> for more information.

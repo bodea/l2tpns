@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.49.2.1 2005-01-06 01:39:23 bodea Exp $
+// $Id: l2tpns.h,v 1.49.2.2 2005-01-10 07:08:14 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -15,7 +15,7 @@
 #include <sys/types.h>
 #include <libcli.h>
 
-#define VERSION	"2.0.14"
+#define VERSION	"2.0.15"
 
 // Limits
 #define MAXTUNNEL	500		// could be up to 65535
@@ -211,8 +211,14 @@ sessiont;
 
 typedef struct
 {
+	// byte counters
 	uint32_t cin;
 	uint32_t cout;
+
+	// DoS prevention
+	clockt last_packet_out;
+	uint32_t packets_out;
+	uint32_t packets_dropped;
 } sessioncountt;
 
 #define	SESSIONPFC	1	// PFC negotiated flags
@@ -316,6 +322,7 @@ struct Tstats
     uint32_t	tun_tx_bytes;
     uint32_t	tun_rx_errors;
     uint32_t	tun_tx_errors;
+    uint32_t	tun_rx_dropped;
 
     uint32_t	tunnel_rx_packets;
     uint32_t	tunnel_tx_packets;
@@ -446,7 +453,8 @@ typedef struct
 	int		next_tbf;			// Next HTB id available to use
 	int		scheduler_fifo;			// If the system has multiple CPUs, use FIFO scheduling policy for this process.
 	int		lock_pages;			// Lock pages into memory.
-	int		icmp_rate;			// Max number of ICMP unreachable per second to send>
+	int		icmp_rate;			// Max number of ICMP unreachable per second to send
+	int		max_packets;			// DoS prevention: per session limit of packets/0.1s
 
 	in_addr_t	cluster_address;		// Multicast address of cluster.
 							// Send to this address to have everyone hear.
