@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.18 2004-09-19 23:26:46 fred_nerk Exp $
+// $Id: l2tpns.h,v 1.19 2004-10-04 23:34:07 fred_nerk Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -456,7 +456,7 @@ struct config_descriptt
 	char *key;
 	int offset;
 	int size;
-	enum { INT, STRING, UNSIGNED_LONG, SHORT, BOOL, IP } type;
+	enum { INT, STRING, UNSIGNED_LONG, SHORT, BOOL, IP, MAC } type;
 };
 
 // arp.c
