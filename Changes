@@ -1,12 +1,17 @@
 * ? David Parrish <david@dparrish.com> ?
 - Added support for hidden AVPs by Robert Clark
 - l2tpns-chap-response.patch from Robert Clark
-- merge l2tpns-config-hostname.patch from Robert Clark
+- Merge l2tpns-config-hostname.patch from Robert Clark
 - l2tpns-dont-timeshift-unidirectional-traffic.patch from Robert Clark - Dump accounting data if cin OR cout is non-zero
 - Don't write accounting files if no accounting dir is set - Yuri
 - Fix checking for mmap success
 - Renegotiate MRU - Yuri
 - Take LCP ConfigReq length from the packet length field - Yuri
+- Hostname set via command line not config
+- Make number of throttle buckets configurable
+- Shared_malloc returns NULL on failure
+- Sync changes
+- Unfsck 4->8 indenting change
 
 * Thu Sep 02 2004 David Parrish <david@dparrish.com> 2.0.2
 - Combined LCP patches from Iain and Yuri. This should allow Windows 2k/XP
