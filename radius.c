@@ -1,5 +1,5 @@
 // L2TPNS Radius Stuff
-// $Id: radius.c,v 1.2 2004-03-05 00:09:03 fred_nerk Exp $
+// $Id: radius.c,v 1.3 2004-05-24 04:27:11 fred_nerk Exp $
 
 #include <time.h>
 #include <stdio.h>
@@ -7,6 +7,7 @@
 #include <sys/socket.h>
 #include <malloc.h>
 #include <string.h>
+#include <fcntl.h>
 #include <arpa/inet.h>
 #include <ctype.h>
 #include <netinet/in.h>
@@ -20,9 +21,9 @@ extern radiust *radius;
 extern sessiont *session;
 extern tunnelt *tunnel;
 extern u32 sessionid;
-extern int radfd;
 extern struct Tstats *_statistics;
 extern struct configt *config;
+extern int *radfds;
 
 const char *radius_state(int state)
 {
@@ -39,30 +40,51 @@ const char *radius_state(int state)
 // Set up socket for radius requests
 void initrad(void)
 {
-	radfd = socket(AF_INET, SOCK_DGRAM, UDP);
+	int i;
+	log(3, 0, 0, 0, "Creating %d sockets for RADIUS queries\n", config->num_radfds);
+	radfds = calloc(sizeof(int), config->num_radfds);
+	for (i = 0; i < config->num_radfds; i++)
+	{
+		int flags;
+		if (!radfds[i]) radfds[i] = socket(AF_INET, SOCK_DGRAM, UDP);
+		flags = fcntl(radfds[i], F_GETFL, 0);
+		fcntl(radfds[i], F_SETFL, flags | O_NONBLOCK);
+	}
 }
 
-void radiusclear(u8 r, sessionidt s)
+void radiusclear(u16 r, sessionidt s)
 {
 	if (s) session[s].radius = 0;
 	memset(&radius[r], 0, sizeof(radius[r])); // radius[r].state = RADIUSNULL;
 }
 
-static u8 new_radius()
+int next_radius_id = 1;
+
+static u16 new_radius()
 {
-	u8 i;
-	for (i = 1; i < MAXRADIUS; i++)
+	u16 i;
+	int loops = 0;
+	for (i = next_radius_id; ; i = (i + 1) % MAXRADIUS)
 	{
 		if (radius[i].state == RADIUSNULL)
+		{
+			next_radius_id = (next_radius_id + 1) % MAXRADIUS;
 			return i;
+		}
+		if (next_radius_id == i)
+		{
+			if (++loops == 2)
+			{
+				log(0, 0, 0, 0, "Can't find a free radius session! This is very bad!\n");
+				return 0;
+			}
+		}
 	}
-	log(0, 0, 0, 0, "Can't find a free radius session! This could be bad!\n");
-	return 0;
 }
 
-u8 radiusnew(sessionidt s)
+u16 radiusnew(sessionidt s)
 {
-	u8 r;
+	u16 r;
 	if (!(r = new_radius()))
 	{
 		log(1, 0, s, session[s].tunnel, "No free RADIUS sessions\n");
@@ -77,7 +99,7 @@ u8 radiusnew(sessionidt s)
 }
 
 // Send a RADIUS request
-void radiussend(u8 r, u8 state)
+void radiussend(u16 r, u8 state)
 {
 	struct sockaddr_in addr;
 	u8 b[4096];            // RADIUS packet
@@ -111,12 +133,21 @@ void radiussend(u8 r, u8 state)
 		radius[r].try = 0;
 	radius[r].state = state;
 	radius[r].retry = backoff(radius[r].try++);
-	log(4, 0, s, session[s].tunnel, "Send RADIUS %d state %s try %d\n", r, radius_state(radius[r].state), radius[r].try);
+	log(4, 0, s, session[s].tunnel, "Send RADIUS id %d sock %d state %s try %d\n",
+			r >> RADIUS_SHIFT, r & RADIUS_MASK,
+			radius_state(radius[r].state), radius[r].try);
 	if (radius[r].try > config->numradiusservers * 2)
 	{
 		if (s)
 		{
-			sessionshutdown(s, "RADIUS timeout");
+			if (state == RADIUSAUTH)
+				sessionshutdown(s, "RADIUS timeout");
+			else
+			{
+				log(1, 0, s, session[s].tunnel, "RADIUS timeout, but in state %s so don't timeout session\n",
+					radius_states[state]);
+				radiusclear(r, s);
+			}
 			STAT(radius_timeout);
 		}
 		else
@@ -130,17 +161,17 @@ void radiussend(u8 r, u8 state)
 	// contruct RADIUS access request
 	switch (state)
 	{
-	case RADIUSAUTH:
-		b[0] = 1;               // access request
-		break;
-	case RADIUSSTART:
-	case RADIUSSTOP:
-		b[0] = 4;               // accounting request
-		break;
-	default:
-		log(0, 0, 0, 0, "Unknown radius state %d\n", state);
+		case RADIUSAUTH:
+			b[0] = 1;               // access request
+			break;
+		case RADIUSSTART:
+		case RADIUSSTOP:
+			b[0] = 4;               // accounting request
+			break;
+		default:
+			log(0, 0, 0, 0, "Unknown radius state %d\n", state);
 	}
-	b[1] = r;                    // identifier
+	b[1] = r >> RADIUS_SHIFT;       // identifier
 	memcpy(b + 4, radius[r].auth, 16);
 	p = b + 20;
 	if (s)
@@ -307,15 +338,15 @@ void radiussend(u8 r, u8 state)
 	addr.sin_port = htons((state == RADIUSAUTH) ? RADPORT : RADAPORT);
 
 	log_hex(5, "RADIUS Send", b, (p - b));
-	sendto(radfd, b, p - b, 0, (void *) &addr, sizeof(addr));
+	sendto(radfds[r & RADIUS_MASK], b, p - b, 0, (void *) &addr, sizeof(addr));
 }
 
 // process RADIUS response
-void processrad(u8 * buf, int len)
+void processrad(u8 *buf, int len, char socket_index)
 {
 	u8 b[MAXCONTROL];
 	MD5_CTX ctx;
-	u8 r;
+	u16 r;
 	sessionidt s;
 	tunnelidt t = 0;
 	hasht hash;
@@ -331,9 +362,10 @@ void processrad(u8 * buf, int len)
 		return ;
 	}
 	len = ntohs(*(u16 *) (buf + 2));
-	r = buf[1];
+	r = socket_index | (buf[1] << RADIUS_SHIFT);
 	s = radius[r].session;
-	log(3, 0, s, session[s].tunnel, "Received %s, radius %d response for session %u\n", radius_states[radius[r].state], r, s);
+	log(3, 0, s, session[s].tunnel, "Received %s, radius %d response for session %u\n",
+			radius_states[radius[r].state], r, s);
 	if (!s && radius[r].state != RADIUSSTOP)
 	{
 		log(1, 0, s, session[s].tunnel, "   Unexpected RADIUS response\n");
@@ -473,9 +505,12 @@ void processrad(u8 * buf, int len)
 						}
 						else
 						{
-							log(3, 0, s, session[s].tunnel, "   Radius reply contains route for %d/%d\n",
-									inet_toa(ip),
-									inet_toa(mask));
+							char *ips, *masks;
+							ips = strdup(inet_toa(ip));
+							masks = strdup(inet_toa(mask));
+							log(3, 0, s, session[s].tunnel, "   Radius reply contains route for %s/%s\n", ips, masks);
+							free(ips);
+							free(masks);
 							session[s].route[routes].ip = ip;
 							session[s].route[routes].mask = mask;
 							routes++;
@@ -540,7 +575,7 @@ void processrad(u8 * buf, int len)
 					log(3, 0, s, t, "   No IP allocated by radius. Assigned %s from pool\n",
 							inet_toa(htonl(session[s].ip)));
 				else
-					log(3, 0, s, t, "   No IP allocated by radius. None available in pool\n");
+					log(0, 0, s, t, "   No IP allocated by radius. The IP address pool is FULL!\n");
 			}
 			if (!session[s].dns1 && config->default_dns1)
 			{
@@ -567,7 +602,7 @@ void processrad(u8 * buf, int len)
 		}
 		else
 		{
-			log(3, 0, s, t, "   RADIUS response in state %d\n", radius[r].state);
+			log(3, 0, s, t, "   RADIUS response in state %s\n", radius_states[radius[r].state]);
 		}
 	} while (0);
 
@@ -576,7 +611,7 @@ void processrad(u8 * buf, int len)
 }
 
 // Send a retry for RADIUS/CHAP message
-void radiusretry(u8 r)
+void radiusretry(u16 r)
 {
 	sessionidt s = radius[r].session;
 	tunnelidt t = 0;
@@ -585,31 +620,31 @@ void radiusretry(u8 r)
 #endif
 	if (s)
 		t = session[s].tunnel;
-	radius[r].retry = 0;
+	radius[r].retry = backoff(radius[r].try + 1);
 	switch (radius[r].state)
 	{
-	case RADIUSCHAP:           // sending CHAP down PPP
-		sendchap(t, s);
-		break;
-	case RADIUSIPCP:
-		sendipcp(t, s);         // send IPCP
-		break;
-	case RADIUSAUTH:           // sending auth to RADIUS server
-		radiussend(r, RADIUSAUTH);
-		break;
-	case RADIUSSTART:          // sending start accounting to RADIUS server
-		radiussend(r, RADIUSSTART);
-		break;
-	case RADIUSSTOP:           // sending stop accounting to RADIUS server
-		radiussend(r, RADIUSSTOP);
-		break;
-	default:
-	case RADIUSNULL:           // Not in use
-	case RADIUSWAIT:           // waiting timeout before available, in case delayed reply from RADIUS server
-		// free up RADIUS task
-		radiusclear(r, s);
-		log(3, 0, s, session[s].tunnel, "Freeing up radius session %d\n", r);
-		break;
+		case RADIUSCHAP:           // sending CHAP down PPP
+			sendchap(t, s);
+			break;
+		case RADIUSIPCP:
+			sendipcp(t, s);         // send IPCP
+			break;
+		case RADIUSAUTH:           // sending auth to RADIUS server
+			radiussend(r, RADIUSAUTH);
+			break;
+		case RADIUSSTART:          // sending start accounting to RADIUS server
+			radiussend(r, RADIUSSTART);
+			break;
+		case RADIUSSTOP:           // sending stop accounting to RADIUS server
+			radiussend(r, RADIUSSTOP);
+			break;
+		default:
+		case RADIUSNULL:           // Not in use
+		case RADIUSWAIT:           // waiting timeout before available, in case delayed reply from RADIUS server
+			// free up RADIUS task
+			radiusclear(r, s);
+			log(3, 0, s, session[s].tunnel, "Freeing up radius session %d\n", r);
+			break;
 	}
 }
 

@@ -30,8 +30,8 @@ struct pluginfuncs
 	sessiont *(*get_session_by_id)(sessionidt s);
 	sessionidt (*get_id_by_session)(sessiont *s);
 	void (*sessionkill)(sessionidt s, char *reason);
-	u8 (*radiusnew)(sessionidt s);
-	void (*radiussend)(u8 r, u8 state);
+	u16 (*radiusnew)(sessionidt s);
+	void (*radiussend)(u16 r, u8 state);
 };
 
 struct param_pre_auth
