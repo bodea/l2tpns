@@ -12,7 +12,6 @@ Brief Installation guide for L2TPNS
 
 2. Compile
 
-./configure --prefix=/usr --sysconfdir=/etc/l2tpns
 make
 
 
