@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.54 2005-01-25 04:19:05 bodea Exp $
+// $Id: l2tpns.h,v 1.55 2005-02-09 00:16:19 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -470,7 +470,6 @@ typedef struct
 	unsigned long	rl_rate;			// default throttle rate
 	int		num_tbfs;			// number of throttle buckets
 
-	int		save_state;
 	char		accounting_dir[128];
 	in_addr_t	bind_address;
 	in_addr_t	peer_address;

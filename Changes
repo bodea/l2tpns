@@ -1,11 +1,11 @@
-* Tue Jan 25 2005 Brendan O'Dea <bod@optusnet.com.au> 2.1.0
+* Wed Feb 9 2005 Brendan O'Dea <bod@optusnet.com.au> 2.1.0
 - Add IPv6 support from Jonathan McDowell.
 - Add CHAP support from Jordan Hrycaj (work in progress).
 - Sanity check that cluster_send_session is not called from a child
   process.
 - Throttle outgoing LASTSEEN packets to at most one per second for a
   given seq#.
-- More DoS prevention:  add packet_limit option to apply a hard limit
+- More DoS prevention: add packet_limit option to apply a hard limit
   to downstream packets per session.
 - Use bounds-checking lookup functions for string constants.
 - Add enum for RADIUS codes.
@@ -15,6 +15,8 @@
 - Log "Accepted connection to CLI" at 4 when connection is from localhost
   to reduce noise in logs.
 - Show time since last counter reset in "show counters".
+- Remove "save_state" option.  Not maintained anymore; use clustering
+  to retain state across restarts.
 
 * Fri Dec 17 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.13
 - Better cluster master collision resolution: keep a counter of state

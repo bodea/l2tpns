@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.81 2005-02-08 01:20:38 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.82 2005-02-09 00:16:17 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -106,7 +106,6 @@ config_descriptt config_values[] = {
 	CONFIG("l2tp_secret", l2tpsecret, STRING),
 	CONFIG("primary_dns", default_dns1, IPv4),
 	CONFIG("secondary_dns", default_dns2, IPv4),
-	CONFIG("save_state", save_state, BOOL),
 	CONFIG("primary_radius", radiusserver[0], IPv4),
 	CONFIG("secondary_radius", radiusserver[1], IPv4),
 	CONFIG("primary_radius_port", radiusport[0], SHORT),
@@ -179,8 +178,6 @@ static void sigalrm_handler(int sig);
 static void sigterm_handler(int sig);
 static void sigquit_handler(int sig);
 static void sigchild_handler(int sig);
-static void read_state(void);
-static void dump_state(void);
 static void build_chap_response(char *challenge, uint8_t id, uint16_t challenge_length, char **challenge_response);
 static void update_config(void);
 static void read_config_file(void);
@@ -3637,8 +3634,6 @@ int main(int argc, char *argv[])
 	initrad();
 	initippool();
 
-	read_state();
-
 	signal(SIGHUP, sighup_handler);
 	signal(SIGTERM, sigterm_handler);
 	signal(SIGINT, sigterm_handler);
@@ -3730,9 +3725,6 @@ static void sigalrm_handler(int sig)
 static void sigterm_handler(int sig)
 {
 	LOG(1, 0, 0, "Shutting down cleanly\n");
-	if (config->save_state)
-		dump_state();
-
 	main_quit++;
 }
 
@@ -3763,182 +3755,6 @@ static void sigchild_handler(int sig)
 {
 	while (waitpid(-1, NULL, WNOHANG) > 0)
 	    ;
-}
-
-static void read_state()
-{
-	struct stat sb;
-	int i;
-	ippoolt itmp;
-	FILE *f;
-	char magic[sizeof(DUMP_MAGIC) - 1];
-	uint32_t buf[2];
-
-	if (!config->save_state)
-	{
-		unlink(STATEFILE);
-		return ;
-	}
-
-	if (stat(STATEFILE, &sb) < 0)
-	{
-		unlink(STATEFILE);
-		return ;
-	}
-
-	if (sb.st_mtime < (time(NULL) - 60))
-	{
-		LOG(0, 0, 0, "State file is too old to read, ignoring\n");
-		unlink(STATEFILE);
-		return ;
-	}
-
-	f = fopen(STATEFILE, "r");
-	unlink(STATEFILE);
-
-	if (!f)
-	{
-		LOG(0, 0, 0, "Can't read state file: %s\n", strerror(errno));
-		exit(1);
-	}
-
-	if (fread(magic, sizeof(magic), 1, f) != 1 || strncmp(magic, DUMP_MAGIC, sizeof(magic)))
-	{
-		LOG(0, 0, 0, "Bad state file magic\n");
-		exit(1);
-	}
-
-	LOG(1, 0, 0, "Reading state information\n");
-	if (fread(buf, sizeof(buf), 1, f) != 1 || buf[0] > MAXIPPOOL || buf[1] != sizeof(ippoolt))
-	{
-		LOG(0, 0, 0, "Error/mismatch reading ip pool header from state file\n");
-		exit(1);
-	}
-
-	if (buf[0] > ip_pool_size)
-	{
-		LOG(0, 0, 0, "ip pool has shrunk!  state = %d, current = %d\n", buf[0], ip_pool_size);
-		exit(1);
-	}
-
-	LOG(2, 0, 0, "Loading %u ip addresses\n", buf[0]);
-	for (i = 0; i < buf[0]; i++)
-	{
-		if (fread(&itmp, sizeof(itmp), 1, f) != 1)
-		{
-			LOG(0, 0, 0, "Error reading ip %d from state file: %s\n", i, strerror(errno));
-			exit(1);
-		}
-
-		if (itmp.address != ip_address_pool[i].address)
-		{
-			LOG(0, 0, 0, "Mismatched ip %d from state file: pool may only be extended\n", i);
-			exit(1);
-		}
-
-		memcpy(&ip_address_pool[i], &itmp, sizeof(itmp));
-	}
-
-	if (fread(buf, sizeof(buf), 1, f) != 1 || buf[0] != MAXTUNNEL || buf[1] != sizeof(tunnelt))
-	{
-		LOG(0, 0, 0, "Error/mismatch reading tunnel header from state file\n");
-		exit(1);
-	}
-
-	LOG(2, 0, 0, "Loading %u tunnels\n", MAXTUNNEL);
-	if (fread(tunnel, sizeof(tunnelt), MAXTUNNEL, f) != MAXTUNNEL)
-	{
-		LOG(0, 0, 0, "Error reading tunnel data from state file\n");
-		exit(1);
-	}
-
-	for (i = 0; i < MAXTUNNEL; i++)
-	{
-		tunnel[i].controlc = 0;
-		tunnel[i].controls = NULL;
-		tunnel[i].controle = NULL;
-		if (*tunnel[i].hostname)
-			LOG(3, 0, 0, "Created tunnel for %s\n", tunnel[i].hostname);
-	}
-
-	if (fread(buf, sizeof(buf), 1, f) != 1 || buf[0] != MAXSESSION || buf[1] != sizeof(sessiont))
-	{
-		LOG(0, 0, 0, "Error/mismatch reading session header from state file\n");
-		exit(1);
-	}
-
-	LOG(2, 0, 0, "Loading %u sessions\n", MAXSESSION);
-	if (fread(session, sizeof(sessiont), MAXSESSION, f) != MAXSESSION)
-	{
-		LOG(0, 0, 0, "Error reading session data from state file\n");
-		exit(1);
-	}
-
-	for (i = 0; i < MAXSESSION; i++)
-	{
-		session[i].tbf_in = 0;
-		session[i].tbf_out = 0;
-		if (session[i].opened)
-		{
-			LOG(2, i, 0, "Loaded active session for user %s\n", session[i].user);
-			if (session[i].ip)
-				sessionsetup(session[i].tunnel, i);
-		}
-	}
-
-	fclose(f);
-	LOG(0, 0, 0, "Loaded saved state information\n");
-}
-
-static void dump_state()
-{
-	FILE *f;
-	uint32_t buf[2];
-
-	if (!config->save_state)
-		return;
-
-	do
-	{
-		if (!(f = fopen(STATEFILE, "w")))
-			break;
-
-		LOG(1, 0, 0, "Dumping state information\n");
-
-		if (fwrite(DUMP_MAGIC, sizeof(DUMP_MAGIC) - 1, 1, f) != 1)
-			break;
-
-		LOG(2, 0, 0, "Dumping %u ip addresses\n", ip_pool_size);
-		buf[0] = ip_pool_size;
-		buf[1] = sizeof(ippoolt);
-		if (fwrite(buf, sizeof(buf), 1, f) != 1)
-			break;
-		if (fwrite(ip_address_pool, sizeof(ippoolt), ip_pool_size, f) != ip_pool_size)
-			break;
-
-		LOG(2, 0, 0, "Dumping %u tunnels\n", MAXTUNNEL);
-		buf[0] = MAXTUNNEL;
-		buf[1] = sizeof(tunnelt);
-		if (fwrite(buf, sizeof(buf), 1, f) != 1)
-			break;
-		if (fwrite(tunnel, sizeof(tunnelt), MAXTUNNEL, f) != MAXTUNNEL)
-			break;
-
-		LOG(2, 0, 0, "Dumping %u sessions\n", MAXSESSION);
-		buf[0] = MAXSESSION;
-		buf[1] = sizeof(sessiont);
-		if (fwrite(buf, sizeof(buf), 1, f) != 1)
-			break;
-		if (fwrite(session, sizeof(sessiont), MAXSESSION, f) != MAXSESSION)
-			break;
-
-		if (fclose(f) == 0)
-			return ; // OK
-	}
-	while (0);
-
-	LOG(0, 0, 0, "Can't write state information: %s\n", strerror(errno));
-	unlink(STATEFILE);
 }
 
 static void build_chap_response(char *challenge, uint8_t id, uint16_t challenge_length, char **challenge_response)

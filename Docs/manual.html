@@ -191,14 +191,6 @@ user, both a primary and a secondary.  If either is set to 0.0.0.0, then that
 one will not be sent.
 </LI>
 
-<LI><B>save_state</B> (boolean)<BR>
-When l2tpns receives a STGTERM it will write out its current
-ip_address_pool, session and tunnel tables to disk prior to exiting to
-be re-loaded at startup.  The validity of this data is obviously quite
-short and the intent is to allow an sessions to be retained over a
-software upgrade.
-</LI>
-
 <LI><B>primary_radius</B> (ip address)
 <LI><B>secondary_radius</B> (ip address)<BR>
 Sets the RADIUS servers used for both authentication and accounting. 
@@ -692,14 +684,10 @@ killall -HUP l2tpns
 
 The signals understood are:
 <UL>
-<LI>SIGHUP - Reload the config from disk and re-open log file<P></LI>
-<LI>SIGTERM / SIGINT - Shut down for a restart.  This will dump the current
-state to disk (if <EM>save_state</EM> is set to true).  Upon restart, the
-process will read this saved state to resume active sessions.<P>
+<LI>SIGHUP - Reload the config from disk and re-open log file</LI>
+<LI>SIGTERM / SIGINT - Shut down.</LI>
 <LI>SIGQUIT - Shut down cleanly.  This will send a disconnect message for
-every active session and tunnel before shutting down.  This is a good idea
-when upgrading the code, as no sessions will be left with the remote end
-thinking they are open.</LI>
+every active session and tunnel before shutting down.</LI>
 </UL>
 
 <H2 ID="Throttling">Throttling</H2>

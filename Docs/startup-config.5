@@ -2,7 +2,7 @@
 .de Id
 .ds Dt \\$4 \\$5
 ..
-.Id $Id: startup-config.5,v 1.4 2005-01-10 07:17:37 bodea Exp $
+.Id $Id: startup-config.5,v 1.5 2005-02-09 00:16:21 bodea Exp $
 .TH STARTUP-CONFIG 5 "\*(Dt" L2TPNS "File Formats and Conventions"
 .SH NAME
 startup\-config \- configuration file for l2tpns
@@ -62,14 +62,6 @@ authentication.
 Whenever a PPP connection is established, DNS servers will be sent to the
 user, both a primary and a secondary.  If either is set to 0.0.0.0, then that
 one will not be sent.
-.TP
-.B save_state
-When
-.B l2tpns
-receives a STGTERM it will write out its current ip_address_pool,
-session and tunnel tables to disk prior to exiting to be re-loaded at
-startup.  The validity of this data is obviously quite short and the
-intent is to allow an sessions to be retained over a software upgrade.
 .TP
 .BR primary_radius , " secondary_radius"
 Sets the RADIUS servers used for both authentication and accounting. 
