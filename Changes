@@ -1,3 +1,27 @@
+* Mon May 24 2004 David Parrish <david@dparrish.com> 1.2.0
+- Fix SEGFAULT in garden module
+- Use multiple radius sockets to allow more concurrent authentication requests
+- Add username parameter to "show users" command
+- Fix counting tunnel rx errors as tunnel tx errors
+- Add "show throttle" command
+- Add gcc __attribute__ to logging functions
+- Fix warnings shown by __attribute__
+- Make sure regular cleanup happens regularly under high load
+- Add variable cleanup_interval for changing cleanup interval
+- Add support for reading more than one packet per fd in each processing loop
+- This is configurable with the multi_read_count variable
+- Remove segv handler so core dumps can happen
+- Use nonblocking sockets
+- Increase tun queue length
+- Fix minimum length of IP packets
+- Remove per-packet plugin hooks (they are slow)
+- Don't drop session if no free RADIUS
+- Don't expire more than 1000 sessions per cleanup interval
+- Remove -a and -c command-line options. They don't work anyway
+- Don't require file: in log_filename
+- Bump version to 1.2.0
+- Check return code when throttling users
+
 * Mon Apr 5 2004 David Parrish <david@dparrish.com> 1.1.1
 - Don't mention configure anymore, it's not used
 - Added the autosnoop and autothrottle modules
