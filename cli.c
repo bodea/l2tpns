@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.21 2004-11-02 06:45:36 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.22 2004-11-04 23:41:54 bodea Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -1202,7 +1202,7 @@ int cmd_snoop(struct cli_def *cli, char *command, char **argv, int argc)
 		return CLI_OK;
 	}
 
-	cli_print(cli, "Snooping user %s to %s:%d", argv[0], inet_toa(session[s].snoop_ip), session[s].snoop_port);
+	cli_print(cli, "Snooping user %s to %s:%d", argv[0], inet_toa(ip), port);
 	cli_session_actions[s].snoop_ip = ip;
 	cli_session_actions[s].snoop_port = port;
 	cli_session_actions[s].action |= CLI_SESS_SNOOP;
