@@ -4,7 +4,7 @@
 
 /* set up throttling based on RADIUS reply */
 
-char const *cvs_id = "$Id: autothrottle.c,v 1.11 2004-11-30 00:46:36 bodea Exp $";
+char const *cvs_id = "$Id: autothrottle.c,v 1.12 2004-11-30 05:49:47 bodea Exp $";
 
 int plugin_api_version = PLUGIN_API_VERSION;
 struct pluginfuncs *p;
@@ -13,72 +13,63 @@ struct pluginfuncs *p;
 
 int plugin_radius_response(struct param_radius_response *data)
 {
-	char *t;
-	int i = 0;
-	int rate;
-
-	if (strncmp(data->key, THROTTLE_KEY, sizeof(THROTTLE_KEY) - 1) == 0)
+	if (!strncmp(data->key, THROTTLE_KEY, sizeof(THROTTLE_KEY) - 1))
 	{
-		char *pt;
+		char *sp = strchr(data->value, ' ');
+		char type;
+		int rate;
 
-		if (strncmp(data->value, "serv", 4))
+		if (!sp || sp - data->value < 4 ||
+		    strncmp("service-policy", data->value, sp - data->value))
 			return PLUGIN_RET_OK;
 
-		pt = strdup(data->value);
-		while ((t = strsep(&pt, " ")) != NULL)
+		while (*sp == ' ') sp++;
+		data->value = sp;
+
+		if (!(sp = strchr(data->value, ' ')) ||
+		    (strncmp("input", data->value, sp - data->value) &&
+		    strncmp("output", data->value, sp - data->value)))
 		{
-			if (strcmp(t, "serv") == 0)
-				i = 1;
-			else if (strcmp(t, "o") == 0 && i == 1)
-				i = 3;
-			else if (strcmp(t, "i") == 0 && i == 1)
-				i = 2;
-			else if (i > 1 )
-			{
-				if ((rate = strtol(t, (char **)NULL, 10)) < 0 )
-				{
-					p->log(3, p->get_id_by_session(data->s), data->s->tunnel,
-						 "Syntax Error: rate is not a number %s\n", t);
-					free(pt);
-					return PLUGIN_RET_OK;
-				}
+			p->log(3, p->get_id_by_session(data->s), data->s->tunnel,
+				"         Not throttling user (invalid type %s)\n",
+				sp - data->value, data->value);
 
-				switch (i)
-				{
-					case 2: // output
-						data->s->throttle_out = rate;
-						free(pt);
-						p->log(3, p->get_id_by_session(data->s), data->s->tunnel,
-							"      Set output throttle rate %dkb/s\n", rate);
-
-						return PLUGIN_RET_OK;
-
-					case 3: //input
-						data->s->throttle_in = rate;
-						free(pt);
-						p->log(3, p->get_id_by_session(data->s), data->s->tunnel,
-							"      Set input throttle rate %dkb/s\n", rate);
-
-						return PLUGIN_RET_OK;
-
-					default:
-						p->log(1, p->get_id_by_session(data->s), data->s->tunnel,
-							"Syntax error in rate limit AV pair: %s=%s\n", data->key, data->value);
-
-						free(pt);
-						return PLUGIN_RET_OK;
-				}
-			}
+			return PLUGIN_RET_OK;
 		}
 
-		p->log(3, p->get_id_by_session(data->s), data->s->tunnel,
-			"Unknown lcp:interface-config AV pair %s=%s\n",data->key, data->value);
-		free(pt);
-		return PLUGIN_RET_OK;
-	} 
-	else if (strcmp(data->key, "throttle") == 0)
+		type = *data->value;
+
+		while (*sp == ' ') sp++;
+		data->value = sp;
+
+		if ((rate = strtol(data->value, &sp, 10)) < 0 || *sp)
+		{
+			p->log(3, p->get_id_by_session(data->s), data->s->tunnel,
+				"         Not throttling user (invalid rate %s)\n",
+				data->value);
+
+			return PLUGIN_RET_OK;
+		}
+
+		if (type == 'i')
+		{
+			data->s->throttle_in = rate;
+			p->log(3, p->get_id_by_session(data->s), data->s->tunnel,
+				"         Throttling user input to %dkb/s\n",
+				rate);
+		}
+		else
+		{
+			data->s->throttle_out = rate;
+			p->log(3, p->get_id_by_session(data->s), data->s->tunnel,
+				"         Throttling user output to %dkb/s\n",
+				rate);
+		}
+	}
+
+	if (!strcmp(data->key, "throttle"))
 	{
-		if (strcmp(data->value, "yes") == 0)
+		if (!strcmp(data->value, "yes"))
 		{
 		    	unsigned long *rate = p->getconfig("throttle_speed", UNSIGNED_LONG);
 			if (rate)
@@ -94,9 +85,9 @@ int plugin_radius_response(struct param_radius_response *data)
 			}
 			else
 				p->log(1, p->get_id_by_session(data->s), data->s->tunnel,
-					"Not throttling user (can't get throttle_speed)\n");
+					"         Not throttling user (can't get throttle_speed)\n");
 		}
-		else if (strcmp(data->value, "no") == 0)
+		else if (!strcmp(data->value, "no"))
 		{
 			p->log(3, p->get_id_by_session(data->s), data->s->tunnel,
 				"         Not throttling user\n");
@@ -104,10 +95,6 @@ int plugin_radius_response(struct param_radius_response *data)
 			data->s->throttle_in = data->s->throttle_out = 0;
 		}
 	}
-
-	p->log(4, p->get_id_by_session(data->s), data->s->tunnel,
-		"autothrottle module ignoring AV pair %s=%s\n",
-		data->key, data->value);
 
 	return PLUGIN_RET_OK;
 }

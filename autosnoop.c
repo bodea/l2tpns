@@ -4,14 +4,14 @@
 
 /* set up intercept based on RADIUS reply */
 
-char const *cvs_id = "$Id: autosnoop.c,v 1.9 2004-11-29 02:17:17 bodea Exp $";
+char const *cvs_id = "$Id: autosnoop.c,v 1.10 2004-11-30 05:49:47 bodea Exp $";
 
 int plugin_api_version = PLUGIN_API_VERSION;
 struct pluginfuncs *p;
 
 int plugin_radius_response(struct param_radius_response *data)
 {
-	if (strcmp(data->key, "intercept") == 0)
+	if (!strcmp(data->key, "intercept"))
 	{
 		char *x;
 		data->s->snoop_ip = 0;
@@ -32,6 +32,7 @@ int plugin_radius_response(struct param_radius_response *data)
 				"         Not Intercepting user (reply string should be intercept=ip:port)\n");
 		}
 	}
+
 	return PLUGIN_RET_OK;
 }
 
