@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.37 2004-11-02 04:35:04 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.38 2004-11-02 06:45:03 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -1003,7 +1003,7 @@ void throttle_session(sessionidt s, int rate_in, int rate_out)
 			free_tbf(session[s].tbf_out);
 
 		if (rate_out > 0)
-			session[s].tbf_out = new_tbf(s, bytes * 2, bytes, send_ipin);
+			session[s].tbf_out = new_tbf(s, bytes * 2, bytes, send_ipout);
 		else
 			session[s].tbf_out = 0;
 
