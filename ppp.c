@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.21 2004-11-05 04:55:27 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.22 2004-11-05 23:18:54 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -275,46 +275,45 @@ void dumplcp(u8 *p, int l)
 				else
 					LOG(4, 0, 0, 0, "    %s odd length %d\n", lcp_types[type], length);
 				break;
-			case 3: // Authentication-Protocol
+			case 2: // Async-Control-Character-Map
+				if (length == 6)
 				{
-					if (length == 4)
-					{
-						int proto = ntohs(*(u16 *)(o + 2));
-						LOG(4, 0, 0, 0, "   %s 0x%x (%s)\n", lcp_types[type], proto,
-							proto == PPPCHAP ? "CHAP" :
-							proto == PPPPAP  ? "PAP"  : "UNKNOWN");
-					}
-					else
-						LOG(4, 0, 0, 0, "   %s odd length %d\n", lcp_types[type], length);
-					break;
+					u32 asyncmap = ntohl(*(u32 *)(o + 2));
+					LOG(4, 0, 0, 0, "    %s %x\n", lcp_types[type], asyncmap);
 				}
+				else
+					LOG(4, 0, 0, 0, "   %s odd length %d\n", lcp_types[type], length);
+				break;
+			case 3: // Authentication-Protocol
+				if (length == 4)
+				{
+					int proto = ntohs(*(u16 *)(o + 2));
+					LOG(4, 0, 0, 0, "   %s 0x%x (%s)\n", lcp_types[type], proto,
+						proto == PPPCHAP ? "CHAP" :
+						proto == PPPPAP  ? "PAP"  : "UNKNOWN");
+				}
+				else
+					LOG(4, 0, 0, 0, "   %s odd length %d\n", lcp_types[type], length);
+				break;
 			case 4: // Quality-Protocol
 				{
 					u32 qp = ntohl(*(u32 *)(o + 2));
 					LOG(4, 0, 0, 0, "    %s %x\n", lcp_types[type], qp);
-					break;
 				}
+				break;
 			case 5: // Magic-Number
+				if (length == 6)
 				{
-					if (length == 6)
-					{
-						u32 magicno = ntohl(*(u32 *)(o + 2));
-						LOG(4, 0, 0, 0, "    %s %x\n", lcp_types[type], magicno);
-					}
-					else
-						LOG(4, 0, 0, 0, "   %s odd length %d\n", lcp_types[type], length);
-					break;
+					u32 magicno = ntohl(*(u32 *)(o + 2));
+					LOG(4, 0, 0, 0, "    %s %x\n", lcp_types[type], magicno);
 				}
+				else
+					LOG(4, 0, 0, 0, "   %s odd length %d\n", lcp_types[type], length);
+				break;
 			case 7: // Protocol-Field-Compression
-				{
-					LOG(4, 0, 0, 0, "    %s\n", lcp_types[type]);
-					break;
-				}
 			case 8: // Address-And-Control-Field-Compression
-				{
-					LOG(4, 0, 0, 0, "    %s\n", lcp_types[type]);
-					break;
-				}
+				LOG(4, 0, 0, 0, "    %s\n", lcp_types[type]);
+				break;
 			default:
 				LOG(2, 0, 0, 0, "    Unknown PPP LCP Option type %d\n", type);
 				break;
@@ -359,6 +358,7 @@ void processlcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 	{
 		int x = l - 4;
 		u8 *o = (p + 4);
+		u8 response = 0;
 
 		LOG(3, session[s].ip, s, t, "LCP: ConfigReq (%d bytes)...\n", l);
 		if (config->debug > 3) dumplcp(p, l);
@@ -367,97 +367,116 @@ void processlcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 		{
 			int type = o[0];
 			int length = o[1];
-			if (length == 0 || type == 0) break;
+			if (length == 0 || type == 0 || x < length) break;
 			switch (type)
 			{
 				case 1: // Maximum-Receive-Unit
 					session[s].mru = ntohs(*(u16 *)(o + 2));
 					break;
-				case 2: // asyncmap
-					LOG_HEX(2, "PPP LCP Packet", p, l);
-					LOG(2, 0, 0, 0, "PPP LCP Packet type %d (%s len %d)\n", *p, ppp_lcp_types[(int)*p], ntohs( ((u16 *) p)[1]) );
+
+				case 2: // Async-Control-Character-Map
+					if (!ntohl(*(u32 *)(o + 2))) // all bits zero is OK
+						break;
+
+					if (response && response != ConfigNak) // rej already queued
+						break;
+
+					LOG(2, session[s].ip, s, t, "    Remote requesting asyncmap.  Rejecting.\n");
+					if (!response)
+					{
+						q = makeppp(b, sizeof(b), p, l, t, s, PPPLCP);
+						if (!q)
+						{
+							LOG(2, session[s].ip, s, t, " Failed to send packet.\n");
+							break;
+						}
+						response = *q++ = ConfigNak;
+					}
+					*q++ = type;
+					*q++ = 6;
+					memset(q, 0, 4); // asyncmap 0
+					q += 4;
 					break;
+
 				case 3: // Authentication-Protocol
 					{
 						int proto = ntohs(*(u16 *)(o + 2));
-						if (proto == PPPCHAP)
-						{
-							LOG(2, session[s].ip, s, t, "    Remote end is trying to do CHAP. Rejecting it.\n");
+						char proto_name[] = "0x0000";
+						if (proto == PPPPAP)
+							break;
 
+						if (response && response != ConfigNak) // rej already queued
+							break;
+
+						if (proto == PPPCHAP)
+							strcpy(proto_name, "CHAP");
+						else
+							sprintf(proto_name, "%#4.4x", proto);
+
+						LOG(2, session[s].ip, s, t, "    Remote requesting %s authentication.  Rejecting.\n", proto_name);
+
+						if (!response)
+						{
+							q = makeppp(b, sizeof(b), p, l, t, s, PPPLCP);
 							if (!q)
 							{
-								q = makeppp(b, sizeof(b), p, l, t, s, PPPLCP);
-								if (!q) {
-									LOG(2, session[s].ip, s, t, " Failed to send packet.\n");
-									break;
-								}
-								*q++ = ConfigNak;
+								LOG(2, session[s].ip, s, t, " Failed to send packet.\n");
+								break;
 							}
-							memcpy(q, o, length);
-							*(u16 *)(q += 2) = htons(PPPPAP); // NAK -> Use PAP instead
-							q += length;
+							response = *q++ = ConfigNak;
 						}
-						break;
+						memcpy(q, o, length);
+						*(u16 *)(q += 2) = htons(PPPPAP); // NAK -> Use PAP instead
+						q += length;
 					}
+					break;
+
 				case 5: // Magic-Number
-					{
-						magicno = ntohl(*(u32 *)(o + 2));
-						break;
-					}
+					magicno = ntohl(*(u32 *)(o + 2));
+					break;
+
 				case 4: // Quality-Protocol
 				case 7: // Protocol-Field-Compression
 				case 8: // Address-And-Control-Field-Compression
-						break;
-				case 13: // CallBack option for LCP extention of win2000/routers L2TP client
-				case 17:
-				case 18:
-				{
-					// Reject LCP CallBack
-					LOG(2, session[s].ip, s, t, "    PPP LCP Option type %d, len=%d\n", type, length);
-					memcpy(p + 4, o, length);
-					*(u16 *)(p + 2) = htons(length + 4);
-					*p = ConfigRej;
-					q = makeppp(b,sizeof(b), p, length + 4, t, s, PPPLCP);
-					tunnelsend(b, 12 + length + 4, t);
-					return;
+					break;
+
+				default: // Reject any unknown options
+					LOG(2, session[s].ip, s, t, "    Rejecting PPP LCP Option type %d\n", type);
+					if (!response || response != ConfigRej) // drop nak in favour of rej
+					{
+						q = makeppp(b, sizeof(b), p, l, t, s, PPPLCP);
+						if (!q)
+						{
+							LOG(2, session[s].ip, s, t, " Failed to send packet.\n");
+							break;
+						}
+						response = *q++ = ConfigRej;
 					}
 
-				default:
-					// Reject Unknown LCP Option to stop to send it again
-					LOG(2, session[s].ip, s, t, "    Unknown PPP LCP Option type %d\n", type);
-					memcpy(p + 4, o, length);
-					*(u16 *)(p + 2) = htons(length + 4);
-					*p = ConfigRej;
-					q = makeppp(b,sizeof(b), p, length + 4, t, s, PPPLCP);
-					tunnelsend(b, 12 + length + 4, t);
-					return;
+					memcpy(q, o, length);
+					q += length;
 			}
 			x -= length;
 			o += length;
 		}
 
-		if (!(session[s].flags & SF_LCP_ACKED))
-			initlcp(t, s);
-
-		if (!q)
+		if (!response)
 		{
 			// Send back a ConfigAck
-			LOG(3, session[s].ip, s, t, "ConfigReq accepted, sending as Ack\n");
 			q = makeppp(b, sizeof(b), p, l, t, s, PPPLCP);
 			if (!q)
 			{
 				LOG(3, session[s].ip, s, t, " failed to create packet.\n");
 				return;
 			}
-			*q = ConfigAck;
-			tunnelsend(b, l + (q - b), t);
+			response = *q = ConfigAck;
 		}
-		else
-		{
-			// Already built a ConfigNak... send it
-			LOG(3, session[s].ip, s, t, "Sending ConfigNak\n");
-			tunnelsend(b, l + (q - b), t);
-		}
+
+		LOG(3, session[s].ip, s, t, "Sending %s\n", ppp_lcp_types[response]);
+		tunnelsend(b, l + (q - b), t);
+
+		if (!(session[s].flags & SF_LCP_ACKED))
+			initlcp(t, s);
 	}
 	else if (*p == ConfigNak)
 	{
@@ -469,7 +488,8 @@ void processlcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 	{
 		*p = TerminateAck;	// close
 		q = makeppp(b, sizeof(b),  p, l, t, s, PPPLCP);
-		if (!q) {
+		if (!q)
+		{
 			LOG(3, session[s].ip, s, t, "Failed to create PPP packet in processlcp.\n");
 			return;
 		}
@@ -486,7 +506,8 @@ void processlcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 		*p = EchoReply;		// reply
 		*(u32 *) (p + 4) = htonl(session[s].magic); // our magic number
 		q = makeppp(b, sizeof(b), p, l, t, s, PPPLCP);
-		if (!q) {
+		if (!q)
+		{
 			LOG(3, session[s].ip, s, t, " failed to send EchoReply.\n");
 			return;
 		}
@@ -828,7 +849,8 @@ void sendchap(tunnelidt t, sessionidt s)
 		return ;
 	}
 	q = makeppp(b, sizeof(b), 0, 0, t, s, PPPCHAP);
-	if (!q) {
+	if (!q)
+	{
 		LOG(1, 0, s, t, "failed to send CHAP challenge.\n");
 		return;
 	}
@@ -901,7 +923,8 @@ void initlcp(tunnelidt t, sessionidt s)
 	char b[500] = {0}, *q;
 
 	q = makeppp(b, sizeof(b), NULL, 0, t, s, PPPLCP);
-	if (!q) {
+	if (!q)
+	{
 		LOG(1, 0, s, t, "Failed to send LCP ConfigReq.\n");
 		return;
 	}
