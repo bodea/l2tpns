@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.35 2004-10-30 06:58:55 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.36 2004-10-30 07:17:41 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -2221,8 +2221,8 @@ int still_busy(void)
 		return 1;
 	}
 
-	// We stop waiting for radius after BUSY_WAIT_TIMEOUT 1/10th seconds
-	if (abs(TIME - start_busy_wait) > BUSY_WAIT_TIMEOUT)
+	// We stop waiting for radius after BUSY_WAIT_TIME 1/10th seconds
+	if (abs(TIME - start_busy_wait) > BUSY_WAIT_TIME)
 	{
 		log(1, 0, 0, 0, "Giving up waiting for RADIUS to be empty. Shutting down anyway.\n");
 		return 0;

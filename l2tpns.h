@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.24 2004-10-29 04:01:11 bodea Exp $
+// $Id: l2tpns.h,v 1.25 2004-10-30 07:17:41 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -40,7 +40,7 @@
 #define MAX_LOG_LENGTH	512		// Maximum size of log message
 #define ECHO_TIMEOUT	60		// Time between last packet sent and LCP ECHO generation
 #define IDLE_TIMEOUT	240		// Time between last packet sent and LCP ECHO generation
-#define BUSY_WAIT_TIMEOUT	3000	// 5 minutes in 1/10th seconds to wait for radius to cleanup on shutdown
+#define BUSY_WAIT_TIME	3000		// 5 minutes in 1/10th seconds to wait for radius to cleanup on shutdown
 
 // Constants
 #ifndef ETCDIR
@@ -496,17 +496,6 @@ void processrad(u8 *buf, int len, char socket_index);
 void radiusretry(u16 r);
 u16 radiusnew(sessionidt s);
 void radiusclear(u16 r, sessionidt s);
-
-// throttle.c
-int throttle_session(sessionidt s, int throttle);
-
-
-// rl.c
-void init_rl();
-u16 rl_create_tbf();
-u16 rl_get_tbf();
-void rl_done_tbf(u16 t);
-void rl_destroy_tbf(u16 t);
 
 
 // l2tpns.c
