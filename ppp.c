@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.23 2004-11-09 05:42:53 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.24 2004-11-09 05:48:28 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -771,7 +771,7 @@ void send_ipin(sessionidt s, u8 *buf, int len)
 	if (session[s].snoop_ip && session[s].snoop_port)
 	{
 		// Snooping this session
-		snoop_send_packet(p + 4, l - 4, session[s].snoop_ip, session[s].snoop_port);
+		snoop_send_packet(buf + 4, len - 4, session[s].snoop_ip, session[s].snoop_port);
 	}
 
 	// Increment packet counters
