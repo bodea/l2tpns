@@ -1,5 +1,5 @@
 // L2TPNS Cluster Master
-// $Id: cluster_master.c,v 1.2 2004-03-05 00:09:03 fred_nerk Exp $
+// $Id: cluster_master.c,v 1.3 2004-05-24 04:12:34 fred_nerk Exp $
 
 #include <stdio.h>
 #include <netinet/in.h>
@@ -57,7 +57,7 @@ int backup_down(slave *s);
 int return_state(slave *s);
 slave *find_slave(uint32_t address);
 #define log _log
-void _log(int level, const char *format, ...);
+void _log(int level, const char *format, ...) __attribute__((format (printf, 2, 3)));
 void log_hex(int level, const char *title, const char *data, int maxsize);
 
 /* Catch our forked processes exiting */
@@ -92,7 +92,7 @@ int main(int argc, char *argv[])
 
     signal(SIGCHLD, sigchild_handler);
 
-    log(0, "Cluster Manager $Id: cluster_master.c,v 1.2 2004-03-05 00:09:03 fred_nerk Exp $ starting\n");
+    log(0, "Cluster Manager $Id: cluster_master.c,v 1.3 2004-05-24 04:12:34 fred_nerk Exp $ starting\n");
 
     to.tv_sec = 1;
     to.tv_usec = 0;
