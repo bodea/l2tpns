@@ -4,8 +4,6 @@ set l2tp_secret "secret"
 set primary_dns 1.2.3.4
 set secondary_dns 1.2.3.5
 set save_state yes
-set snoop_host 1.2.3.4
-set snoop_port 41001
 set primary_radius 1.2.3.6
 set secondary_radius 1.2.3.7
 set radius_accounting yes
