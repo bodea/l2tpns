@@ -1,14 +1,18 @@
 // L2TPNS Command Line Interface
-// $Id: cli.c,v 1.5 2004-06-23 03:52:24 fred_nerk Exp $
 // vim: sw=4 ts=8
 
+char const *cvs_name = "$Name:  $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.6 2004-06-28 02:43:13 fred_nerk Exp $";
+
 #include <stdio.h>
+#include <stdarg.h>
 #include <sys/file.h>
 #include <sys/stat.h>
 #include <syslog.h>
 #include <malloc.h>
 #include <sched.h>
 #include <string.h>
+#include <ctype.h>
 #include <stdlib.h>
 #include <time.h>
 #include <arpa/inet.h>
@@ -17,11 +21,13 @@
 #include <sys/types.h>
 #include <signal.h>
 #include <unistd.h>
+#include <dlfcn.h>
 #include <libcli.h>
 #include "l2tpns.h"
 #include "util.h"
 #include "cluster.h"
 #include "tbf.h"
+#include "ll.h"
 #ifdef BGP
 #include "bgp.h"
 #endif
@@ -39,12 +45,9 @@ extern sessionidt *cli_session_kill;
 extern tunnelidt *cli_tunnel_kill;
 extern struct configt *config;
 extern struct config_descriptt config_values[];
-extern char hostname[];
 #ifdef RINGBUFFER
 extern struct Tringbuffer *ringbuffer;
 #endif
-
-char *rcs_id = "$Id: cli.c,v 1.5 2004-06-23 03:52:24 fred_nerk Exp $";
 
 char *debug_levels[] = {
     "CRIT",
@@ -109,71 +112,72 @@ void init_cli()
     struct sockaddr_in addr;
 
     cli = cli_init();
+    cli_set_hostname(cli, "l2tpns");
 
-    c = cli_register_command(cli, NULL, "show", NULL, NULL);
-    cli_register_command(cli, c, "banana", cmd_show_banana, "Show a banana");
+    c = cli_register_command(cli, NULL, "show", NULL, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
+    cli_register_command(cli, c, "banana", cmd_show_banana, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Show a banana");
 #ifdef BGP
-    cli_register_command(cli, c, "bgp", cmd_show_bgp, "Show BGP status");
+    cli_register_command(cli, c, "bgp", cmd_show_bgp, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Show BGP status");
 #endif /* BGP */
-    cli_register_command(cli, c, "cluster", cmd_show_cluster, "Show cluster information");
-    cli_register_command(cli, c, "ipcache", cmd_show_ipcache, "Show contents of the IP cache");
-    cli_register_command(cli, c, "plugins", cmd_show_plugins, "List all installed plugins");
-    cli_register_command(cli, c, "pool", cmd_show_pool, "Show the IP address allocation pool");
-    cli_register_command(cli, c, "radius", cmd_show_radius, "Show active radius queries");
-    cli_register_command(cli, c, "running-config", cmd_show_run, "Show the currently running configuration");
-    cli_register_command(cli, c, "session", cmd_show_session, "Show a list of sessions or details for a single session");
-    cli_register_command(cli, c, "tbf", cmd_show_tbf, "List all token bucket filters in use");
-    cli_register_command(cli, c, "throttle", cmd_show_throttle, "List all throttled sessions and associated TBFs");
-    cli_register_command(cli, c, "tunnels", cmd_show_tunnels, "Show a list of tunnels or details for a single tunnel");
-    cli_register_command(cli, c, "users", cmd_show_users, "Show a list of all connected users or details of selected user");
-    cli_register_command(cli, c, "version", cmd_show_version, "Show currently running software version");
+    cli_register_command(cli, c, "cluster", cmd_show_cluster, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Show cluster information");
+    cli_register_command(cli, c, "ipcache", cmd_show_ipcache, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Show contents of the IP cache");
+    cli_register_command(cli, c, "plugins", cmd_show_plugins, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "List all installed plugins");
+    cli_register_command(cli, c, "pool", cmd_show_pool, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Show the IP address allocation pool");
+    cli_register_command(cli, c, "radius", cmd_show_radius, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Show active radius queries");
+    cli_register_command(cli, c, "running-config", cmd_show_run, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Show the currently running configuration");
+    cli_register_command(cli, c, "session", cmd_show_session, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Show a list of sessions or details for a single session");
+    cli_register_command(cli, c, "tbf", cmd_show_tbf, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "List all token bucket filters in use");
+    cli_register_command(cli, c, "throttle", cmd_show_throttle, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "List all throttled sessions and associated TBFs");
+    cli_register_command(cli, c, "tunnels", cmd_show_tunnels, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Show a list of tunnels or details for a single tunnel");
+    cli_register_command(cli, c, "users", cmd_show_users, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Show a list of all connected users or details of selected user");
+    cli_register_command(cli, c, "version", cmd_show_version, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Show currently running software version");
 
-    c2 = cli_register_command(cli, c, "histogram", NULL, NULL);
-    cli_register_command(cli, c2, "idle", cmd_show_hist_idle, "Show histogram of session idle times");
-    cli_register_command(cli, c2, "open", cmd_show_hist_open, "Show histogram of session durations");
+    c2 = cli_register_command(cli, c, "histogram", NULL, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
+    cli_register_command(cli, c2, "idle", cmd_show_hist_idle, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Show histogram of session idle times");
+    cli_register_command(cli, c2, "open", cmd_show_hist_open, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Show histogram of session durations");
 
 #ifdef STATISTICS
-    cli_register_command(cli, c, "counters", cmd_show_counters, "Display all the internal counters and running totals");
+    cli_register_command(cli, c, "counters", cmd_show_counters, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Display all the internal counters and running totals");
 
-    c = cli_register_command(cli, NULL, "clear", NULL, NULL);
-    cli_register_command(cli, c, "counters", cmd_clear_counters, "Clear internal counters");
+    c = cli_register_command(cli, NULL, "clear", NULL, PRIVILEGE_PRIVILEGED, MODE_EXEC, NULL);
+    cli_register_command(cli, c, "counters", cmd_clear_counters, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Clear internal counters");
 #endif
 
-    cli_register_command(cli, NULL, "uptime", cmd_uptime, "Show uptime and bandwidth utilisation");
+    cli_register_command(cli, NULL, "uptime", cmd_uptime, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Show uptime and bandwidth utilisation");
 
-    c = cli_register_command(cli, NULL, "write", NULL, NULL);
-    cli_register_command(cli, c, "memory", cmd_write_memory, "Save the running config to flash");
-    cli_register_command(cli, c, "terminal", cmd_show_run, "Show the running config");
+    c = cli_register_command(cli, NULL, "write", NULL, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
+    cli_register_command(cli, c, "memory", cmd_write_memory, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Save the running config to flash");
+    cli_register_command(cli, c, "terminal", cmd_show_run, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Show the running config");
 
-    cli_register_command(cli, NULL, "snoop", cmd_snoop, "Temporarily enable interception for a user");
-    cli_register_command(cli, NULL, "throttle", cmd_throttle, "Temporarily enable throttling for a user");
-    cli_register_command(cli, NULL, "debug", cmd_debug, "Set the level of logging that is shown on the console");
+    cli_register_command(cli, NULL, "snoop", cmd_snoop, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Temporarily enable interception for a user");
+    cli_register_command(cli, NULL, "throttle", cmd_throttle, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Temporarily enable throttling for a user");
+    cli_register_command(cli, NULL, "debug", cmd_debug, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Set the level of logging that is shown on the console");
 
-    c = cli_register_command(cli, NULL, "suspend", NULL, NULL);
-    cli_register_command(cli, c, "bgp", cmd_suspend_bgp, "Withdraw routes from BGP peer");
+    c = cli_register_command(cli, NULL, "suspend", NULL, PRIVILEGE_PRIVILEGED, MODE_EXEC, NULL);
+    cli_register_command(cli, c, "bgp", cmd_suspend_bgp, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Withdraw routes from BGP peer");
 
-    c = cli_register_command(cli, NULL, "no", NULL, NULL);
-    cli_register_command(cli, c, "snoop", cmd_no_snoop, "Temporarily disable interception for a user");
-    cli_register_command(cli, c, "throttle", cmd_no_throttle, "Temporarily disable throttling for a user");
-    cli_register_command(cli, c, "debug", cmd_no_debug, "Turn off logging of a certain level of debugging");
-    c2 = cli_register_command(cli, c, "suspend", NULL, NULL);
-    cli_register_command(cli, c2, "bgp", cmd_no_suspend_bgp, "Advertise routes to BGP peer");
+    c = cli_register_command(cli, NULL, "no", NULL, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
+    cli_register_command(cli, c, "snoop", cmd_no_snoop, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Temporarily disable interception for a user");
+    cli_register_command(cli, c, "throttle", cmd_no_throttle, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Temporarily disable throttling for a user");
+    cli_register_command(cli, c, "debug", cmd_no_debug, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Turn off logging of a certain level of debugging");
+    c2 = cli_register_command(cli, c, "suspend", NULL, PRIVILEGE_PRIVILEGED, MODE_EXEC, NULL);
+    cli_register_command(cli, c2, "bgp", cmd_no_suspend_bgp, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Advertise routes to BGP peer");
 
-    c = cli_register_command(cli, NULL, "drop", NULL, NULL);
-    cli_register_command(cli, c, "user", cmd_drop_user, "Disconnect a user");
-    cli_register_command(cli, c, "tunnel", cmd_drop_tunnel, "Disconnect a tunnel and all sessions on that tunnel");
-    cli_register_command(cli, c, "session", cmd_drop_session, "Disconnect a session");
+    c = cli_register_command(cli, NULL, "drop", NULL, PRIVILEGE_PRIVILEGED, MODE_EXEC, NULL);
+    cli_register_command(cli, c, "user", cmd_drop_user, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Disconnect a user");
+    cli_register_command(cli, c, "tunnel", cmd_drop_tunnel, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Disconnect a tunnel and all sessions on that tunnel");
+    cli_register_command(cli, c, "session", cmd_drop_session, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Disconnect a session");
 
-    c = cli_register_command(cli, NULL, "restart", NULL, NULL);
-    cli_register_command(cli, c, "bgp", cmd_restart_bgp, "Restart BGP");
+    c = cli_register_command(cli, NULL, "restart", NULL, PRIVILEGE_PRIVILEGED, MODE_EXEC, NULL);
+    cli_register_command(cli, c, "bgp", cmd_restart_bgp, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Restart BGP");
 
-    c = cli_register_command(cli, NULL, "load", NULL, NULL);
-    cli_register_command(cli, c, "plugin", cmd_load_plugin, "Load a plugin");
+    c = cli_register_command(cli, NULL, "load", NULL, PRIVILEGE_PRIVILEGED, MODE_EXEC, NULL);
+    cli_register_command(cli, c, "plugin", cmd_load_plugin, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Load a plugin");
 
-    c = cli_register_command(cli, NULL, "remove", NULL, NULL);
-    cli_register_command(cli, c, "plugin", cmd_remove_plugin, "Remove a plugin");
+    c = cli_register_command(cli, NULL, "remove", NULL, PRIVILEGE_PRIVILEGED, MODE_EXEC, NULL);
+    cli_register_command(cli, c, "plugin", cmd_remove_plugin, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Remove a plugin");
 
-    cli_register_command(cli, NULL, "set", cmd_set, "Set a configuration variable");
+    cli_register_command(cli, NULL, "set", cmd_set, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Set a configuration variable");
 
     // Enable regular processing
     cli_regular(cli, regular_stuff);
@@ -193,8 +197,16 @@ void init_cli()
 	    if (!*buf) continue;
 	    if (!(p = strchr((char *)buf, ':'))) continue;
 	    *p++ = 0;
+	    if (!strcmp(buf, "enable"))
+	    {
+		cli_allow_enable(cli, p);
+		log(3, 0, 0, 0, "Setting enable password\n");
+	    }
+	    else
+	    {
 	    cli_allow_user(cli, buf, p);
 	    log(3, 0, 0, 0, "Allowing user %s to connect to the CLI\n", buf);
+	}
 	}
 	fclose(f);
     }
@@ -263,7 +275,33 @@ void cli_do(int sockfd)
 	    close(bgp_peers[i].sock);
 #endif /* BGP */
 
-    log(3, 0, 0, 0, "Accepted connection to CLI\n");
+    {
+	int require_auth = 1;
+	struct sockaddr_in addr;
+	int l = sizeof(addr);
+	if (getpeername(sockfd, (struct sockaddr *)&addr, &l) == 0)
+	{
+	    log(3, 0, 0, 0, "Accepted connection to CLI from %s\n", inet_toa(addr.sin_addr.s_addr));
+	    require_auth = addr.sin_addr.s_addr != inet_addr("127.0.0.1");
+	}
+	else
+	    log(0, 0, 0, 0, "getpeername() failed on cli socket. Requiring authentication: %s\n", strerror(errno));
+
+	if (require_auth)
+	{
+	    log(3, 0, 0, 0, "CLI is remote, requiring authentication\n");
+	    if (!cli->users) /* paranoia */
+	    {
+		log(0, 0, 0, 0, "No users for remote authentication!  Exiting CLI\n");
+		exit(0);
+	    }
+	}
+	else
+	{
+	    /* no username/pass required */
+	    cli->users = 0;
+	}
+    }
 
     debug_session = 0;
     debug_tunnel = 0;
@@ -293,14 +331,55 @@ void cli_do_file(FILE *fh)
 {
     log(3, 0, 0, 0, "Reading configuration file\n");
     cli_print_callback(cli, cli_print_log);
-    cli_file(cli, fh);
+    cli_file(cli, fh, PRIVILEGE_PRIVILEGED);
     cli_print_callback(cli, NULL);
+}
+
+int cli_arg_help(struct cli_def *cli, int cr_ok, char *entry, ...)
+{
+    va_list ap;
+    char *desc;
+    char buf[16];
+    char *p;
+
+    va_start(ap, entry);
+    while (entry)
+    {
+	/* allow one %d */
+	if ((p = strchr(entry, '%')) && !strchr(p+1, '%') && p[1] == 'd')
+	{
+	    int v = va_arg(ap, int);
+	    snprintf(buf, sizeof(buf), entry, v);
+	    p = buf;
+	}
+	else
+	    p = entry;
+
+	desc = va_arg(ap, char *);
+	if (desc && *desc)
+	    cli_print(cli, "  %-20s %s", p, desc);
+	else
+	    cli_print(cli, "  %s", p);
+
+	entry = desc ? va_arg(ap, char *) : 0;
+    }
+
+    va_end(ap);
+    if (cr_ok)
+    	cli_print(cli, "  <cr>");
+
+    return CLI_OK;
 }
 
 int cmd_show_session(struct cli_def *cli, char *command, char **argv, int argc)
 {
     int i;
     time_t time_now;
+
+    if (CLI_HELP_REQUESTED)
+	return cli_arg_help(cli, 1,
+	    "<1-%d>", MAXSESSION-1, "Show specific session by id",
+	    NULL);
 
     time(&time_now);
     if (argc > 0)
@@ -310,7 +389,7 @@ int cmd_show_session(struct cli_def *cli, char *command, char **argv, int argc)
 	{
 	    unsigned int s;
 	    s = atoi(argv[i]);
-	    if (!s || s > MAXSESSION)
+	    if (s <= 0 || s >= MAXSESSION)
 	    {
 		cli_print(cli, "Invalid session id \"%s\"", argv[i]);
 		continue;
@@ -395,6 +474,19 @@ int cmd_show_tunnels(struct cli_def *cli, char *command, char **argv, int argc)
 	"Opening",
     };
 
+    if (CLI_HELP_REQUESTED)
+    {
+	if (argc > 1)
+	    return cli_arg_help(cli, 1,
+		"<1-%d>", MAXTUNNEL-1, "Show specific tunnel by id",
+		NULL);
+
+	return cli_arg_help(cli, 1,
+	    "all", "Show all tunnels, including unused",
+	    "<1-%d>", MAXTUNNEL-1, "Show specific tunnel by id",
+	    NULL);
+    }
+
     time(&time_now);
     if (argc > 0)
     {
@@ -410,7 +502,7 @@ int cmd_show_tunnels(struct cli_def *cli, char *command, char **argv, int argc)
 		char s[65535] = {0};
 		unsigned int t;
 		t = atoi(argv[i]);
-		if (!t || t > MAXTUNNEL)
+		if (t <= 0 || t >= MAXTUNNEL)
 		{
 		    cli_print(cli, "Invalid tunnel id \"%s\"", argv[i]);
 		    continue;
@@ -464,6 +556,12 @@ int cmd_show_users(struct cli_def *cli, char *command, char **argv, int argc)
     char *sargv[32];
     int sargc = 0;
     int i;
+
+    if (CLI_HELP_REQUESTED)
+	return cli_arg_help(cli, 1,
+	    "USER", "Show details for specific username",
+	    NULL);
+
     for (i = 0; i < MAXSESSION; i++)
     {
 	if (!session[i].opened) continue;
@@ -495,6 +593,9 @@ int cmd_show_users(struct cli_def *cli, char *command, char **argv, int argc)
 
 int cmd_show_counters(struct cli_def *cli, char *command, char **argv, int argc)
 {
+    if (CLI_HELP_REQUESTED)
+	return CLI_HELP_NO_ARGS;
+
     cli_print(cli, "%-10s %-8s %-10s %-8s", "Ethernet", "Bytes", "Packets", "Errors");
     cli_print(cli, "%-10s %8lu %8lu %8lu", "RX",
 	    GET_STAT(tap_rx_bytes),
@@ -542,7 +643,7 @@ int cmd_show_counters(struct cli_def *cli, char *command, char **argv, int argc)
     cli_print(cli, "%-30s%lu", "recv_forward",		GET_STAT(recv_forward));
 
 
-#ifdef STAT_CALLS
+#ifdef STATISTICS
     cli_print(cli, "\n%-30s%-10s", "Counter", "Value");
     cli_print(cli, "-----------------------------------------");
     cli_print(cli, "%-30s%lu", "call_processtap",	GET_STAT(call_processtap));
@@ -578,8 +679,73 @@ int cmd_show_counters(struct cli_def *cli, char *command, char **argv, int argc)
 
 int cmd_show_version(struct cli_def *cli, char *command, char **argv, int argc)
 {
+    int tag = 0;
+    int file = 0;
+    int i = 0;
+
+    if (CLI_HELP_REQUESTED)
+	return cli_arg_help(cli, 1,
+	    "tag", "Include CVS release tag",
+	    "file", "Include file versions",
+	    NULL);
+
+    for (i = 0; i < argc; i++)
+	if (!strcmp(argv[i], "tag"))
+	    tag++;
+	else if (!strcmp(argv[i], "file"))
+	    file++;
+
     cli_print(cli, "L2TPNS %s", VERSION);
-    cli_print(cli, "ID: %s", rcs_id);
+    if (tag)
+    {
+	char const *p = strchr(cvs_name, ':');
+	char const *e;
+	if (p)
+	{
+	    p++;
+	    while (isspace(*p))
+		p++;
+	}
+
+	if (!p || *p == '$')
+	    p = "HEAD";
+
+	e = strpbrk(p, " \t$");
+	cli_print(cli, "Tag: %.*s", e ? e - p + 1 : strlen(p), p);
+    }
+    
+    if (file)
+    {
+	extern linked_list *loaded_plugins;
+	void *p;
+
+	cli_print(cli, "Files:");
+	cli_print(cli, "  %s", cvs_id_arp);
+#ifdef BGP
+	cli_print(cli, "  %s", cvs_id_bgp);
+#endif /* BGP */
+	cli_print(cli, "  %s", cvs_id_cli);
+	cli_print(cli, "  %s", cvs_id_cluster);
+	cli_print(cli, "  %s", cvs_id_constants);
+	cli_print(cli, "  %s", cvs_id_control);
+	cli_print(cli, "  %s", cvs_id_icmp);
+	cli_print(cli, "  %s", cvs_id_l2tpns);
+	cli_print(cli, "  %s", cvs_id_ll);
+	cli_print(cli, "  %s", cvs_id_md5);
+	cli_print(cli, "  %s", cvs_id_ppp);
+	cli_print(cli, "  %s", cvs_id_radius);
+	cli_print(cli, "  %s", cvs_id_tbf);
+	cli_print(cli, "  %s", cvs_id_util);
+
+	ll_reset(loaded_plugins);
+	while ((p = ll_next(loaded_plugins)))
+	{
+	    char const **id = dlsym(p, "cvs_id");
+	    if (id)
+		cli_print(cli, "  %s", *id);
+	}
+    }
+
     return CLI_OK;
 }
 
@@ -588,6 +754,22 @@ int cmd_show_pool(struct cli_def *cli, char *command, char **argv, int argc)
     int i;
     int used = 0, free = 0, show_all = 0;
     time_t time_now;
+
+    if (!config->cluster_iam_master)
+    {
+	cli_print(cli, "Can't do this on a slave.  Do it on %s", inet_toa(config->cluster_master_address));
+	return CLI_OK;
+    }
+
+    if (CLI_HELP_REQUESTED)
+    {
+	if (argc > 1)
+	    return cli_arg_help(cli, 1, NULL);
+
+	return cli_arg_help(cli, 1,
+	    "all", "Show all pool addresses, including unused",
+	    NULL);
+    }
 
     if (argc > 0 && strcmp(argv[0], "all") == 0)
 	show_all = 1;
@@ -632,6 +814,9 @@ void print_save_config(struct cli_def *cli, char *string)
 
 int cmd_write_memory(struct cli_def *cli, char *command, char **argv, int argc)
 {
+    if (CLI_HELP_REQUESTED)
+	return CLI_HELP_NO_ARGS;
+
     if ((save_config_fh = fopen(config->config_file, "w")))
     {
 	cli_print(cli, "Writing configuration");
@@ -650,6 +835,9 @@ int cmd_write_memory(struct cli_def *cli, char *command, char **argv, int argc)
 int cmd_show_run(struct cli_def *cli, char *command, char **argv, int argc)
 {
     int i;
+
+    if (CLI_HELP_REQUESTED)
+	return CLI_HELP_NO_ARGS;
 
     cli_print(cli, "# Current configuration:");
 
@@ -697,6 +885,16 @@ int cmd_show_radius(struct cli_def *cli, char *command, char **argv, int argc)
     int i, free = 0, used = 0, show_all = 0;
     time_t time_now;
 
+    if (CLI_HELP_REQUESTED)
+    {
+	if (argc > 1)
+	    return cli_arg_help(cli, 1, NULL);
+
+	return cli_arg_help(cli, 1,
+	    "all", "Show all RADIUS sessions, including unused",
+	    NULL);
+    }
+
     cli_print(cli, "%6s%5s%6s%9s%9s%4s", "Radius", "Sock", "State", "Session", "Retry", "Try");
 
     time(&time_now);
@@ -730,6 +928,10 @@ int cmd_show_radius(struct cli_def *cli, char *command, char **argv, int argc)
 int cmd_show_plugins(struct cli_def *cli, char *command, char **argv, int argc)
 {
     int i;
+
+    if (CLI_HELP_REQUESTED)
+	return CLI_HELP_NO_ARGS;
+
     cli_print(cli, "Plugins currently loaded:");
     for (i = 0; i < MAXPLUGINS; i++)
     {
@@ -744,6 +946,10 @@ int cmd_show_plugins(struct cli_def *cli, char *command, char **argv, int argc)
 int cmd_show_throttle(struct cli_def *cli, char *command, char **argv, int argc)
 {
     int i;
+
+    if (CLI_HELP_REQUESTED)
+	return CLI_HELP_NO_ARGS;
+
     cli_print(cli, "Token bucket filters:");
     cli_print(cli, "%-6s %8s %-4s", "ID", "Handle", "Used");
     for (i = 0; i < MAXSESSION; i++)
@@ -761,6 +967,9 @@ int cmd_show_throttle(struct cli_def *cli, char *command, char **argv, int argc)
 
 int cmd_show_banana(struct cli_def *cli, char *command, char **argv, int argc)
 {
+    if (CLI_HELP_REQUESTED)
+	return CLI_HELP_NO_ARGS;
+
     cli_print(cli, " _\n"
 		      "//\\\n"
 		      "V  \\\n"
@@ -781,6 +990,9 @@ int cmd_show_banana(struct cli_def *cli, char *command, char **argv, int argc)
 
 int cmd_clear_counters(struct cli_def *cli, char *command, char **argv, int argc)
 {
+    if (CLI_HELP_REQUESTED)
+	return CLI_HELP_NO_ARGS;
+
     cli_print(cli, "Counters cleared");
     SET_STAT(last_reset, time(NULL));
     return CLI_OK;
@@ -791,6 +1003,10 @@ int cmd_drop_user(struct cli_def *cli, char *command, char **argv, int argc)
     int i;
     sessionidt s;
 
+    if (CLI_HELP_REQUESTED)
+	return cli_arg_help(cli, argc > 1,
+	    "USER", "Username of session to drop", NULL);
+
     if (!config->cluster_iam_master)
     {
 	cli_print(cli, "Can't do this on a slave. Do it on %s", inet_toa(config->cluster_master_address));
@@ -800,14 +1016,6 @@ int cmd_drop_user(struct cli_def *cli, char *command, char **argv, int argc)
     {
 	cli_print(cli, "Specify a user to drop");
 	return CLI_OK;
-    }
-    for (i = 0; i < argc; i++)
-    {
-	if (strchr(argv[i], '?'))
-	{
-	    cli_print(cli, "username ...");
-	    return CLI_OK;
-	}
     }
 
     for (i = 0; i < argc; i++)
@@ -842,6 +1050,10 @@ int cmd_drop_tunnel(struct cli_def *cli, char *command, char **argv, int argc)
     int i;
     tunnelidt tid;
 
+    if (CLI_HELP_REQUESTED)
+	return cli_arg_help(cli, argc > 1,
+	    "<1-%d>", MAXTUNNEL-1, "Tunnel id to drop", NULL);
+
     if (!config->cluster_iam_master)
     {
 	cli_print(cli, "Can't do this on a slave. Do it on %s", inet_toa(config->cluster_master_address));
@@ -852,22 +1064,14 @@ int cmd_drop_tunnel(struct cli_def *cli, char *command, char **argv, int argc)
 	cli_print(cli, "Specify a tunnel to drop");
 	return CLI_OK;
     }
-    for (i = 0; i < argc; i++)
-    {
-	if (strchr(argv[i], '?'))
-	{
-	    cli_print(cli, "tunnel_id ...");
-	    return CLI_OK;
-	}
-    }
 
     for (i = 0; i < argc; i++)
     {
 	int x;
 
-	if ((tid = atol(argv[i])) <= 0 || (tid > MAXTUNNEL))
+	if ((tid = atol(argv[i])) <= 0 || (tid >= MAXTUNNEL))
 	{
-	    cli_print(cli, "Invalid tunnel ID (%d - %d)", 0, MAXTUNNEL);
+	    cli_print(cli, "Invalid tunnel ID (1-%d)", MAXTUNNEL-1);
 	    continue;
 	}
 
@@ -902,6 +1106,10 @@ int cmd_drop_session(struct cli_def *cli, char *command, char **argv, int argc)
     int i;
     sessionidt s;
 
+    if (CLI_HELP_REQUESTED)
+	return cli_arg_help(cli, argc > 1,
+	    "<1-%d>", MAXSESSION-1, "Session id to drop", NULL);
+
     if (!config->cluster_iam_master)
     {
 	cli_print(cli, "Can't do this on a slave. Do it on %s", inet_toa(config->cluster_master_address));
@@ -912,20 +1120,12 @@ int cmd_drop_session(struct cli_def *cli, char *command, char **argv, int argc)
 	cli_print(cli, "Specify a session id to drop");
 	return CLI_OK;
     }
-    for (i = 0; i < argc; i++)
-    {
-	if (strchr(argv[i], '?'))
-	{
-	    cli_print(cli, "session_id ...");
-	    return CLI_OK;
-	}
-    }
 
     for (i = 0; i < argc; i++)
     {
 	if ((s = atol(argv[i])) <= 0 || (s > MAXSESSION))
 	{
-	    cli_print(cli, "Invalid session ID (%d - %d)", 0, MAXSESSION);
+	    cli_print(cli, "Invalid session ID (1-%d)", MAXSESSION-1);
 	    continue;
 	}
 
@@ -953,14 +1153,38 @@ int cmd_drop_session(struct cli_def *cli, char *command, char **argv, int argc)
 
 int cmd_snoop(struct cli_def *cli, char *command, char **argv, int argc)
 {
-    int i;
     ipt ip;
     u16 port;
     sessionidt s;
 
+    if (CLI_HELP_REQUESTED)
+    {
+	switch (argc)
+	{
+	case 1:
+	    return cli_arg_help(cli, 0,
+		"USER", "Username of session to snoop", NULL);
+
+	case 2:
+	    return cli_arg_help(cli, 0,
+		"A.B.C.D", "IP address of snoop destination", NULL);
+
+	case 3:
+	    return cli_arg_help(cli, 0,
+		"N", "Port of snoop destination", NULL);
+
+	case 4:
+	    if (!argv[3][1])
+		return cli_arg_help(cli, 1, NULL);
+
+	default:
+	    return CLI_OK;
+	}
+    }
+
     if (!config->cluster_iam_master)
     {
-	cli_print(cli, "Can't do this on a slave. Do it on %s", inet_toa(config->cluster_master_address));
+	cli_print(cli, "Can't do this on a slave.  Do it on %s", inet_toa(config->cluster_master_address));
 	return CLI_OK;
     }
 
@@ -969,16 +1193,6 @@ int cmd_snoop(struct cli_def *cli, char *command, char **argv, int argc)
 	cli_print(cli, "Specify username ip port");
 	return CLI_OK;
     }
-
-    for (i = 0; i < argc; i++)
-    {
-	if (strchr(argv[i], '?'))
-	{
-	    cli_print(cli, "username ip port");
-	    return CLI_OK;
-	}
-    }
-
 
     if (!(s = sessionbyuser(argv[0])))
     {
@@ -1012,6 +1226,10 @@ int cmd_no_snoop(struct cli_def *cli, char *command, char **argv, int argc)
     int i;
     sessionidt s;
 
+    if (CLI_HELP_REQUESTED)
+	return cli_arg_help(cli, argc > 1,
+	    "USER", "Username of session to un-snoop", NULL);
+
     if (!config->cluster_iam_master)
     {
 	cli_print(cli, "Can't do this on a slave. Do it on %s", inet_toa(config->cluster_master_address));
@@ -1022,14 +1240,6 @@ int cmd_no_snoop(struct cli_def *cli, char *command, char **argv, int argc)
     {
 	cli_print(cli, "Specify a user");
 	return CLI_OK;
-    }
-    for (i = 0; i < argc; i++)
-    {
-	if (strchr(argv[i], '?'))
-	{
-	    cli_print(cli, "username ...");
-	    return CLI_OK;
-	}
     }
 
     for (i = 0; i < argc; i++)
@@ -1052,6 +1262,10 @@ int cmd_throttle(struct cli_def *cli, char *command, char **argv, int argc)
     int i;
     sessionidt s;
 
+    if (CLI_HELP_REQUESTED)
+	return cli_arg_help(cli, argc > 1,
+	    "USER", "Username of session to throttle", NULL);
+
     if (!config->cluster_iam_master)
     {
 	cli_print(cli, "Can't do this on a slave. Do it on %s", inet_toa(config->cluster_master_address));
@@ -1061,14 +1275,6 @@ int cmd_throttle(struct cli_def *cli, char *command, char **argv, int argc)
     {
 	cli_print(cli, "Specify a user");
 	return CLI_OK;
-    }
-    for (i = 0; i < argc; i++)
-    {
-	if (strchr(argv[i], '?'))
-	{
-	    cli_print(cli, "username ...");
-	    return CLI_OK;
-	}
     }
 
     for (i = 0; i < argc; i++)
@@ -1091,6 +1297,10 @@ int cmd_no_throttle(struct cli_def *cli, char *command, char **argv, int argc)
     int i;
     sessionidt s;
 
+    if (CLI_HELP_REQUESTED)
+	return cli_arg_help(cli, argc > 1,
+	    "USER", "Username of session to un-throttle", NULL);
+
     if (!config->cluster_iam_master)
     {
 	cli_print(cli, "Can't do this on a slave. Do it on %s", inet_toa(config->cluster_master_address));
@@ -1100,14 +1310,6 @@ int cmd_no_throttle(struct cli_def *cli, char *command, char **argv, int argc)
     {
 	cli_print(cli, "Specify a user");
 	return CLI_OK;
-    }
-    for (i = 0; i < argc; i++)
-    {
-	if (strchr(argv[i], '?'))
-	{
-	    cli_print(cli, "username ...");
-	    return CLI_OK;
-	}
     }
 
     for (i = 0; i < argc; i++)
@@ -1119,8 +1321,9 @@ int cmd_no_throttle(struct cli_def *cli, char *command, char **argv, int argc)
 	}
 	throttle_session(s, 0);
 
-	cli_print(cli, "unthrottling user %s", argv[i]);
+	cli_print(cli, "Unthrottling user %s", argv[i]);
     }
+
     return CLI_OK;
 }
 
@@ -1128,47 +1331,61 @@ int cmd_debug(struct cli_def *cli, char *command, char **argv, int argc)
 {
     int i;
 
+    if (CLI_HELP_REQUESTED)
+	return cli_arg_help(cli, 1,
+	    "all",      "Enable debugging for all except \"data\"",
+	    "critical", "", // FIXME: add descriptions
+	    "error",    "",
+	    "warning",  "",
+	    "info",     "",
+	    "calls",    "",
+	    "data",     "",
+	    NULL);
+
     if (!argc)
     {
-	cli_print(cli, "Currently debugging: ");
-	if (debug_flags.critical) cli_print(cli, "critical ");
-	if (debug_flags.error) cli_print(cli, "error ");
-	if (debug_flags.warning) cli_print(cli, "warning ");
-	if (debug_flags.info) cli_print(cli, "info ");
-	if (debug_flags.calls) cli_print(cli, "calls ");
-	if (debug_flags.data) cli_print(cli, "data ");
-	cli_print(cli, "");
+	char *p = (char *) &debug_flags;
+	for (i = 0; i < sizeof(debug_flags); i++)
+    {
+	    if (p[i])
+	{
+		cli_print(cli, "Currently debugging:%s%s%s%s%s%s",
+		    (debug_flags.critical) ? " critical" : "",
+		    (debug_flags.error)    ? " error"    : "",
+		    (debug_flags.warning)  ? " warning"  : "",
+		    (debug_flags.info)     ? " info"     : "",
+		    (debug_flags.calls)    ? " calls"    : "",
+		    (debug_flags.data)     ? " data"     : "");
+
+	    return CLI_OK;
+	}
+    }
+
+	cli_print(cli, "Debugging off");
 	return CLI_OK;
     }
 
     for (i = 0; i < argc; i++)
     {
-	if (*argv[i] == '?')
-	{
-	    cli_print(cli, "Possible debugging states are:");
-	    cli_print(cli, "	critical");
-	    cli_print(cli, "	error");
-	    cli_print(cli, "	warning");
-	    cli_print(cli, "	info");
-	    cli_print(cli, "	calls");
-	    cli_print(cli, "	data");
-	    return CLI_OK;
-	}
-    }
+	int len = strlen(argv[i]);
 
-    for (i = 0; i < argc; i++)
-    {
-	if (strcasecmp(argv[i], "critical") == 0) debug_flags.critical = 1;
-	if (strcasecmp(argv[i], "error") == 0) debug_flags.error = 1;
-	if (strcasecmp(argv[i], "warning") == 0) debug_flags.warning = 1;
-	if (strcasecmp(argv[i], "info") == 0) debug_flags.info = 1;
-	if (strcasecmp(argv[i], "calls") == 0) debug_flags.calls = 1;
-	if (strcasecmp(argv[i], "data") == 0) debug_flags.data = 1;
-	if (strcasecmp(argv[i], "all") == 0)
+	if (argv[i][0] == 'c' && len < 2)
+	    len = 2; /* distinguish [cr]itical from [ca]lls */
+
+	if (!strncasecmp(argv[i], "critical", len)) { debug_flags.critical = 1; continue; }
+	if (!strncasecmp(argv[i], "error",    len)) { debug_flags.error = 1;    continue; }
+	if (!strncasecmp(argv[i], "warning",  len)) { debug_flags.warning = 1;  continue; }
+	if (!strncasecmp(argv[i], "info",     len)) { debug_flags.info = 1;     continue; }
+	if (!strncasecmp(argv[i], "calls",    len)) { debug_flags.calls = 1;    continue; }
+	if (!strncasecmp(argv[i], "data",     len)) { debug_flags.data = 1;     continue; }
+	if (!strncasecmp(argv[i], "all",      len))
 	{
 	    memset(&debug_flags, 1, sizeof(debug_flags));
 	    debug_flags.data = 0;
+	    continue;
 	}
+
+	cli_print(cli, "Invalid debugging flag \"%s\"", argv[i]);
     }
 
     return CLI_OK;
@@ -1178,15 +1395,43 @@ int cmd_no_debug(struct cli_def *cli, char *command, char **argv, int argc)
 {
     int i;
 
+    if (CLI_HELP_REQUESTED)
+	return cli_arg_help(cli, 1,
+	    "all",      "Disable all debugging",
+	    "critical", "", // FIXME: add descriptions
+	    "error",    "",
+	    "warning",  "",
+	    "info",     "",
+	    "calls",    "",
+	    "data",     "",
+	    NULL);
+
+    if (!argc)
+    {
+    	memset(&debug_flags, 0, sizeof(debug_flags));
+	return CLI_OK;
+    }
+
     for (i = 0; i < argc; i++)
     {
-	if (strcasecmp(argv[i], "critical") == 0) debug_flags.critical = 0;
-	if (strcasecmp(argv[i], "error") == 0) debug_flags.error = 0;
-	if (strcasecmp(argv[i], "warning") == 0) debug_flags.warning = 0;
-	if (strcasecmp(argv[i], "info") == 0) debug_flags.info = 0;
-	if (strcasecmp(argv[i], "calls") == 0) debug_flags.calls = 0;
-	if (strcasecmp(argv[i], "data") == 0) debug_flags.data = 0;
-	if (strcasecmp(argv[i], "all") == 0) memset(&debug_flags, 0, sizeof(debug_flags));
+	int len = strlen(argv[i]);
+
+	if (argv[i][0] == 'c' && len < 2)
+	    len = 2; /* distinguish [cr]itical from [ca]lls */
+
+	if (!strncasecmp(argv[i], "critical", len)) { debug_flags.critical = 0; continue; }
+	if (!strncasecmp(argv[i], "error",    len)) { debug_flags.error = 0;    continue; }
+	if (!strncasecmp(argv[i], "warning",  len)) { debug_flags.warning = 0;  continue; }
+	if (!strncasecmp(argv[i], "info",     len)) { debug_flags.info = 0;     continue; }
+	if (!strncasecmp(argv[i], "calls",    len)) { debug_flags.calls = 0;    continue; }
+	if (!strncasecmp(argv[i], "data",     len)) { debug_flags.data = 0;     continue; }
+	if (!strncasecmp(argv[i], "all",      len))
+	{
+	    memset(&debug_flags, 0, sizeof(debug_flags));
+	    continue;
+	}
+
+	cli_print(cli, "Invalid debugging flag \"%s\"", argv[i]);
     }
 
     return CLI_OK;
@@ -1195,6 +1440,11 @@ int cmd_no_debug(struct cli_def *cli, char *command, char **argv, int argc)
 int cmd_load_plugin(struct cli_def *cli, char *command, char **argv, int argc)
 {
     int i, firstfree = 0;
+
+    if (CLI_HELP_REQUESTED)
+	return cli_arg_help(cli, argc > 1,
+	    "PLUGIN", "Name of plugin to load", NULL);
+
     if (argc != 1)
     {
 	cli_print(cli, "Specify a plugin to load");
@@ -1226,6 +1476,10 @@ int cmd_remove_plugin(struct cli_def *cli, char *command, char **argv, int argc)
 {
     int i;
 
+    if (CLI_HELP_REQUESTED)
+	return cli_arg_help(cli, argc > 1,
+	    "PLUGIN", "Name of plugin to unload", NULL);
+
     if (argc != 1)
     {
 	cli_print(cli, "Specify a plugin to remove");
@@ -1246,17 +1500,36 @@ int cmd_remove_plugin(struct cli_def *cli, char *command, char **argv, int argc)
     return CLI_OK;
 }
 
-char *duration(time_t seconds)
+char *duration(time_t secs)
 {
     static char *buf = NULL;
+    int p = 0;
+
     if (!buf) buf = calloc(64, 1);
 
-    if (seconds > 86400)
-	sprintf(buf, "%d days", (int)(seconds / 86400.0));
-    else if (seconds > 60)
-	sprintf(buf, "%02d:%02lu", (int)(seconds / 3600.0), seconds % 60);
+    if (secs >= 86400)
+    {
+	int days = secs / 86400;
+	p = sprintf(buf, "%d day%s, ", days, days > 1 ? "s" : "");
+	secs %= 86400;
+    }
+
+    if (secs >= 3600)
+    {
+	int mins = secs / 60;
+	int hrs = mins / 60;
+
+	mins %= 60;
+	sprintf(buf + p, "%d:%02d", hrs, mins);
+    }
+    else if (secs >= 60)
+    {
+	int mins = secs / 60;
+	sprintf(buf + p, "%d min%s", mins, mins > 1 ? "s" : "");
+    }
     else
-	sprintf(buf, "%lu sec", seconds);
+	sprintf(buf, "%ld sec%s", secs, secs > 1 ? "s" : "");
+
     return buf;
 }
 
@@ -1266,6 +1539,9 @@ int cmd_uptime(struct cli_def *cli, char *command, char **argv, int argc)
     char buf[100], *p = buf, *loads[3];
     int i, num_sessions = 0;
     time_t time_now;
+
+    if (CLI_HELP_REQUESTED)
+	return CLI_HELP_NO_ARGS;
 
     fh = fopen("/proc/loadavg", "r");
     fgets(buf, 100, fh);
@@ -1282,7 +1558,7 @@ int cmd_uptime(struct cli_def *cli, char *command, char **argv, int argc)
 
     cli_print(cli, "%s up %s, %d users, load average: %s, %s, %s",
 	    buf,
-	    duration(abs(time_now - config->start_time)),
+	    duration(time_now - config->start_time),
 	    num_sessions,
 	    loads[0], loads[1], loads[2]
     );
@@ -1298,9 +1574,36 @@ int cmd_set(struct cli_def *cli, char *command, char **argv, int argc)
 {
     int i;
 
+    if (CLI_HELP_REQUESTED)
+    {
+	switch (argc)
+	{
+	case 1:
+	    {
+		int len = strlen(argv[0])-1;
+		for (i = 0; config_values[i].key; i++)
+		    if (!len || !strncmp(argv[0], config_values[i].key, len))
+			cli_print(cli, "  %s", config_values[i].key);
+	    }
+
+	    return CLI_OK;
+
+	case 2:
+	    return cli_arg_help(cli, 0,
+		"VALUE", "Value for variable", NULL);
+
+	case 3:
+	    if (!argv[2][1])
+	    	return cli_arg_help(cli, 1, NULL);
+
+	default:
+	    return CLI_OK;
+	}
+    }
+
     if (argc != 2)
     {
-	cli_print(cli, "Usage: set <variable> <value>");
+	cli_print(cli, "Specify variable and value");
 	return CLI_OK;
     }
 

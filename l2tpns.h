@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.7 2004-06-23 03:52:24 fred_nerk Exp $
+// $Id: l2tpns.h,v 1.8 2004-06-28 02:43:13 fred_nerk Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -125,7 +125,6 @@ typedef struct controls         // control message
 }
 controlt;
 
-// 336 bytes per session
 typedef struct sessions
 {
 	sessionidt next;		// next session in linked list
@@ -311,7 +310,7 @@ struct Tstats
 
     unsigned long	c_forwarded;
     unsigned long	recv_forward;
-#ifdef STAT_CALLS
+#ifdef STATISTICS
     unsigned long	call_processtap;
     unsigned long	call_processarp;
     unsigned long	call_processipout;
@@ -343,11 +342,19 @@ struct Tstats
 };
 
 #ifdef STATISTICS
-#define STAT(x)		_statistics->x++
-#define INC_STAT(x,y)	_statistics->x += y
-#define GET_STAT(x)	_statistics->x
-#define SET_STAT(x, y)	_statistics->x = y
+
+#ifdef STAT_CALLS
+#define CSTAT(x)	STAT(x)
 #else
+#define CSTAT(x)
+#endif
+
+#define STAT(x)		(_statistics->x++)
+#define INC_STAT(x,y)	(_statistics->x += (y))
+#define GET_STAT(x)	(_statistics->x)
+#define SET_STAT(x, y)	(_statistics->x = (y))
+#else
+#define CSTAT(x)
 #define STAT(x)
 #define INC_STAT(x,y)
 #define GET_STAT(x)	0
@@ -359,7 +366,9 @@ struct configt
 	int		debug;				// debugging level
 	time_t		start_time;			// time when l2tpns was started
 	char		bandwidth[256];			// current bandwidth
-	clockt		current_time;
+	clockt		current_time;			// 1/10ths of a second since the process started.
+							// means that we can only run a given process
+							// for 13 years without re-starting!
 
 	char		config_file[128];
 	int		reload_config;			// flag to re-read config (set by cli)
@@ -409,6 +418,9 @@ struct configt
 	int		cluster_highest_tunnelid;
 	clockt		cluster_last_hb;		// Last time we saw a heartbeat from the master.
 	int		cluster_num_changes;		// Number of changes queued.
+
+	int		cluster_hb_interval;		// How often to send a heartbeat.
+	int		cluster_hb_timeout;		// How many missed heartbeats trigger an election.
 
 #ifdef BGP
 	u16		as_number;
@@ -516,6 +528,7 @@ int cluster_send_goodbye();
 void init_cli();
 void cli_do_file(FILE *fh);
 void cli_do(int sockfd);
+int cli_arg_help(struct cli_def *cli, int cr_ok, char *entry, ...);
 #ifdef RINGBUFFER
 void ringbuffer_dump(FILE *stream);
 #endif
@@ -561,4 +574,27 @@ extern u32 last_sid;
 extern struct Tstats *_statistics;
 extern ipt my_address;
 extern int tun_write(u8 *data, int size);
+
+
+#define TIME (config->current_time)
+
+// macros for handling help in cli commands
+#define CLI_HELP_REQUESTED	(argc > 0 && argv[argc-1][strlen(argv[argc-1])-1] == '?')
+#define CLI_HELP_NO_ARGS	(argc > 1 || argv[0][1]) ? CLI_OK : cli_arg_help(cli, 1, NULL)
+
+// CVS identifiers (for "show version file")
+extern char const *cvs_id_arp;
+extern char const *cvs_id_cli;
+extern char const *cvs_id_cluster;
+extern char const *cvs_id_constants;
+extern char const *cvs_id_control;
+extern char const *cvs_id_icmp;
+extern char const *cvs_id_l2tpns;
+extern char const *cvs_id_ll;
+extern char const *cvs_id_md5;
+extern char const *cvs_id_ppp;
+extern char const *cvs_id_radius;
+extern char const *cvs_id_tbf;
+extern char const *cvs_id_util;
+
 #endif /* __L2TPNS_H__ */

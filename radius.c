@@ -1,5 +1,6 @@
 // L2TPNS Radius Stuff
-// $Id: radius.c,v 1.4 2004-06-23 03:52:24 fred_nerk Exp $
+
+char const *cvs_id_radius = "$Id: radius.c,v 1.5 2004-06-28 02:43:13 fred_nerk Exp $";
 
 #include <time.h>
 #include <stdio.h>
@@ -57,28 +58,26 @@ void radiusclear(u16 r, sessionidt s)
 	memset(&radius[r], 0, sizeof(radius[r])); // radius[r].state = RADIUSNULL;
 }
 
-int next_radius_id = 1;
 
 static u16 new_radius()
 {
-	u16 i;
-	int loops = 0;
-	for (i = next_radius_id; ; i = (i + 1) % MAXRADIUS)
+	int count;
+	static u32 next_radius_id = 0;
+
+	for (count = MAXRADIUS; count > 0 ; --count)
 	{
-		if (radius[i].state == RADIUSNULL)
+		++next_radius_id;		// Find the next ID to check.
+		if (next_radius_id >= MAXRADIUS)
+			next_radius_id = 1;
+
+		if (radius[next_radius_id].state == RADIUSNULL)
 		{
-			next_radius_id = (next_radius_id + 1) % MAXRADIUS;
-			return i;
+			return next_radius_id;
 		}
-		if (next_radius_id == i)
-		{
-			if (++loops == 2)
-			{
+	
+		}
 				log(0, 0, 0, 0, "Can't find a free radius session! This is very bad!\n");
 				return 0;
-			}
-		}
-	}
 }
 
 u16 radiusnew(sessionidt s)
@@ -94,7 +93,7 @@ u16 radiusnew(sessionidt s)
 	session[s].radius = r;
 	radius[r].session = s;
 	radius[r].state = RADIUSWAIT;
-	radius[r].retry = config->current_time + 1200; // Wait at least 120 seconds to re-claim this.
+	radius[r].retry = TIME + 1200; // Wait at least 120 seconds to re-claim this.
 
 	log(3,0,s, session[s].tunnel, "Allocated radius %d\n", r);
 	return r;
@@ -109,9 +108,9 @@ void radiussend(u16 r, u8 state)
 	int pl;
 	u8 *p;
 	sessionidt s;
-#ifdef STAT_CALLS
-	STAT(call_radiussend);
-#endif
+
+	CSTAT(call_radiussend);
+
 	s = radius[r].session;
 	if (!config->numradiusservers)
 	{
@@ -359,9 +358,9 @@ void processrad(u8 *buf, int len, char socket_index)
 	r_code = buf[0]; // First byte in radius packet.
 	r_id = buf[1]; // radius reply indentifier.
 
-#ifdef STAT_CALLS
-	STAT(call_processrad);
-#endif
+
+	CSTAT(call_processrad);
+
 	log_hex(5, "RADIUS Response", buf, len);
 	if (len < 20 || len < ntohs(*(u16 *) (buf + 2)))
 	{
@@ -617,9 +616,9 @@ void radiusretry(u16 r)
 {
 	sessionidt s = radius[r].session;
 	tunnelidt t = 0;
-#ifdef STAT_CALLS
-	STAT(call_radiusretry);
-#endif
+
+	CSTAT(call_radiusretry);
+
 	if (s)
 		t = session[s].tunnel;
 	radius[r].retry = backoff(radius[r].try + 1);

@@ -7,6 +7,8 @@
 #include "plugin.h"
 #include "control.h"
 
+char const *cvs_id = "$Id: garden.c,v 1.7 2004-06-28 02:43:13 fred_nerk Exp $";
+
 int __plugin_api_version = 1;
 static struct pluginfuncs *p = 0;
 
@@ -19,6 +21,7 @@ char *up_commands[] = {
 	"iptables -t nat -N garden_users >/dev/null 2>&1",// Empty chain, users added/removed by garden_session
 	"iptables -t nat -F garden_users",
 	"iptables -t nat -A PREROUTING -j garden_users",	// DNAT any users on the garden_users chain
+	"sysctl -w net.ipv4.ip_conntrack_max=256000 >/dev/null",	// lots of entries
 	NULL,
 };
 
@@ -28,7 +31,10 @@ char *down_commands[] = {
 	"iptables -t nat -X garden_users",
 	"iptables -t nat -F garden",
 	"iptables -t nat -X garden",
-	"rmmod iptable_nat ip_conntrack",
+	"rmmod iptable_nat",	// Should also remove ip_conntrack, but
+				// doing so can take hours...  literally.
+				// If a master is re-started as a slave,
+				// either rmmod manually, or reboot.
 	NULL,
 };
 

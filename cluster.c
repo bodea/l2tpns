@@ -1,5 +1,6 @@
 // L2TPNS Clustering Stuff
-// $Id: cluster.c,v 1.3 2004-06-23 03:52:24 fred_nerk Exp $
+
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.4 2004-06-28 02:43:13 fred_nerk Exp $";
 
 #include <stdio.h>
 #include <sys/file.h>
@@ -134,7 +135,7 @@ int cluster_init()
 	return -1;
     }
 
-    config->cluster_last_hb = config->current_time;
+    config->cluster_last_hb = TIME;
     config->cluster_seq_number = -1;
 
     return cluster_sockfd;
@@ -435,18 +436,18 @@ void cluster_check_master(void)
 	int i, count, tcount, high_sid = 0;
 	int last_free = 0;
 	int had_peers = have_peers;
-	clockt t = config->current_time;
+	clockt t = TIME;
 
-	if (config->current_time < (config->cluster_last_hb + HB_TIMEOUT) )
+	if (TIME < (config->cluster_last_hb + config->cluster_hb_timeout) )
 		return;		// Everything's ok. return.
 
 	if (!config->cluster_iam_master)
 		log(0,0,0,0, "Master timed out! Holding election...\n");
 
-	config->cluster_last_hb = config->current_time + 1;
+	config->cluster_last_hb = TIME + 1;
 
 	for (i = have_peers = 0; i < num_peers ; ++i) {
-		if ((peers[i].timestamp + HB_TIMEOUT) < t)
+		if ((peers[i].timestamp + config->cluster_hb_timeout) < t)
 			continue;	// Stale peer! Skip them.
 
 		if (!peers[i].basetime)
@@ -721,7 +722,7 @@ void cluster_heartbeat(int highsession, int freesession, int hightunnel)
 	}
 
 	if (p > (buff + sizeof(buff))) {	// Did we somehow manage to overun the buffer?
-		log(0,0,0,0, "Overrun the heartbeat buffer! This is fatal. Exiting. (size %d)\n", p - buff);
+		log(0,0,0,0, "FATAL: Overran the heartbeat buffer! This is fatal. Exiting. (size %d)\n", p - buff);
 		kill(0, SIGTERM);
 	}
 
@@ -744,6 +745,9 @@ void cluster_heartbeat(int highsession, int freesession, int hightunnel)
 
 		//
 		// Fill out the packet with tunnels from the tunnel table...
+		// This effectively means we walk the tunnel table more quickly
+		// than the session table. This is good because stuffing up a 
+		// tunnel is a much bigger deal than stuffing up a session.
 		//
 	while ( (p + sizeof(u32) * 2 + sizeof(tunnelt) ) < (buff + MAX_HEART_SIZE) ) {
 
@@ -891,7 +895,7 @@ int cluster_add_peer(u32 peer, time_t basetime, pingt *p)
 
 		// This peer already exists. Just update the timestamp.
 		peers[i].basetime = basetime;
-		peers[i].timestamp = config->current_time;
+		peers[i].timestamp = TIME;
 		break;
 	}
 
@@ -904,7 +908,7 @@ int cluster_add_peer(u32 peer, time_t basetime, pingt *p)
 		{
 			if (peers[i].peer != peer)
 				continue;
-			if ((peers[i].timestamp + HB_TIMEOUT * 10) < config->current_time) // Stale.
+			if ((peers[i].timestamp + config->cluster_hb_timeout * 10) < TIME) // Stale.
 				break;
 		}
 
@@ -917,7 +921,7 @@ int cluster_add_peer(u32 peer, time_t basetime, pingt *p)
 
 		peers[i].peer = peer;
 		peers[i].basetime = basetime;
-		peers[i].timestamp = config->current_time;
+		peers[i].timestamp = TIME;
 		if (i == num_peers)
 			++num_peers;
 
@@ -1081,14 +1085,14 @@ static int cluster_process_heartbeat_v2(u8 * data, int size, int more, u8 * p, u
 	if (config->cluster_seq_number == -1)	// Don't have one. Just align to the master...
 		config->cluster_seq_number = h->seq;
 
-	config->cluster_last_hb = config->current_time;	// Reset to ensure that we don't become master!!
+	config->cluster_last_hb = TIME;	// Reset to ensure that we don't become master!!
 
 	if (config->cluster_seq_number != h->seq) {	// Out of sequence heartbeat!
 		log(1,0,0,0, "HB: Got seq# %d but was expecting %d. asking for resend.\n", h->seq, config->cluster_seq_number);
 
 		peer_send_message(addr, C_LASTSEEN, config->cluster_seq_number, NULL, 0);
 
-		config->cluster_last_hb = config->current_time;	// Reset to ensure that we don't become master!!
+		config->cluster_last_hb = TIME;	// Reset to ensure that we don't become master!!
 
 			// Just drop the packet. The master will resend it as part of the catchup.
 
@@ -1187,7 +1191,7 @@ static int cluster_process_heartbeat_v2(u8 * data, int size, int more, u8 * p, u
 	}
 
 	config->cluster_master_address = addr;
-	config->cluster_last_hb = config->current_time;	// Successfully received a heartbeat!
+	config->cluster_last_hb = TIME;	// Successfully received a heartbeat!
 	return 0;
 
 shortpacket:
@@ -1282,12 +1286,12 @@ int processcluster(char * data, int size, u32 addr)
 		}
 
 		if (addr != config->cluster_master_address) {
-			log(0,0,0,0, "Received a C_KILL from %s which doesn't match config->cluster_master_address (%x)",
+			log(0,0,0,0, "Received a C_KILL from %s which doesn't match config->cluster_master_address (%x)\n",
 				inet_toa(addr), config->cluster_master_address);
 			// We can only warn about it. The master might really have switched!
 		}
 
-		log(0,0,0,0, "Received a valid C_KILL: I'm going to die now.");
+		log(0,0,0,0, "Received a valid C_KILL: I'm going to die now.\n");
 		kill(0, SIGTERM);
 		exit(0);	// Lets be paranoid;
 		return -1;		// Just signalling the compiler.
@@ -1313,6 +1317,9 @@ int cmd_show_cluster(struct cli_def *cli, char *command, char **argv, int argc)
 {
 	int i;
 
+	if (CLI_HELP_REQUESTED)
+		return CLI_HELP_NO_ARGS;
+
         cli_print(cli, "Cluster status   : %s", config->cluster_iam_master ? "Master" : "Slave" );
 	cli_print(cli, "My address       : %s", inet_toa(my_address));
 	cli_print(cli, "VIP address      : %s", inet_toa(config->bind_address));
@@ -1322,7 +1329,7 @@ int cmd_show_cluster(struct cli_def *cli, char *command, char **argv, int argc)
         if (!config->cluster_iam_master) {
 		cli_print(cli, "My master        : %s (last heartbeat %.1f seconds old)",
 			config->cluster_master_address ? inet_toa(config->cluster_master_address) : "Not defined",
-			0.1 * (config->current_time - config->cluster_last_hb));
+			0.1 * (TIME - config->cluster_last_hb));
                 cli_print(cli, "Uptodate         : %s", config->cluster_iam_uptodate ? "Yes" : "No");
 		cli_print(cli, "Next sequence number expected: %d", config->cluster_seq_number);
 		cli_print(cli, "%d sessions undefined of %d", config->cluster_undefined_sessions, config->cluster_highest_sessionid);
@@ -1339,7 +1346,7 @@ int cmd_show_cluster(struct cli_def *cli, char *command, char **argv, int argc)
 		cli_print(cli, "%20s  %10s %8s", "Address", "Basetime", "Age");
 	for (i = 0; i < num_peers; ++i) {
 		cli_print(cli, "%20s  %10d %8d", inet_toa(peers[i].peer),
-			peers[i].basetime, config->current_time - peers[i].timestamp);
+			peers[i].basetime, TIME - peers[i].timestamp);
 	}
 	return CLI_OK;
 }

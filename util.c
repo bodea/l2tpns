@@ -1,5 +1,7 @@
 /* Misc util functions */
 
+char const *cvs_id_util = "$Id: util.c,v 1.2 2004-06-28 02:43:13 fred_nerk Exp $";
+
 #include "l2tpns.h"
 
 #include <sys/socket.h>

@@ -10,7 +10,7 @@
  *   nor RFC2385 (which requires a kernel patch on 2.4 kernels).
  */
 
-/* $Id: bgp.c,v 1.1 2004-06-23 03:52:24 fred_nerk Exp $ */
+char const *cvs_id_bgp = "$Id: bgp.c,v 1.2 2004-06-28 02:43:13 fred_nerk Exp $";
 
 #include <stdlib.h>
 #include <unistd.h>
@@ -1188,6 +1188,12 @@ int cmd_show_bgp(struct cli_def *cli, char *command, char **argv, int argc)
     if (!bgp_configured)
     	return CLI_OK;
 
+    if (CLI_HELP_REQUESTED)
+	return cli_arg_help(cli, 1,
+	    "A.B.C.D", "BGP peer address",
+	    "NAME",    "BGP peer name",
+	    NULL);
+
     cli_print(cli, "BGPv%d router identifier %s, local AS number %d, "
 	"hold time %ds", BGP_VERSION, inet_toa(my_address), (int) our_as,
 	BGP_HOLD_TIME);
@@ -1235,6 +1241,12 @@ int cmd_suspend_bgp(struct cli_def *cli, char *command, char **argv, int argc)
     if (!bgp_configured)
     	return CLI_OK;
 
+    if (CLI_HELP_REQUESTED)
+	return cli_arg_help(cli, 1,
+	    "A.B.C.D", "BGP peer address",
+	    "NAME",    "BGP peer name",
+	    NULL);
+
     for (i = 0; i < BGP_NUM_PEERS; i++)
     {
 	if (bgp_peers[i].state != Established)
@@ -1261,6 +1273,12 @@ int cmd_no_suspend_bgp(struct cli_def *cli, char *command, char **argv, int argc
 
     if (!bgp_configured)
     	return CLI_OK;
+
+    if (CLI_HELP_REQUESTED)
+	return cli_arg_help(cli, 1,
+	    "A.B.C.D", "BGP peer address",
+	    "NAME",    "BGP peer name",
+	    NULL);
 
     for (i = 0; i < BGP_NUM_PEERS; i++)
     {
@@ -1289,6 +1307,12 @@ int cmd_restart_bgp(struct cli_def *cli, char *command, char **argv, int argc)
 
     if (!bgp_configured)
     	return CLI_OK;
+
+    if (CLI_HELP_REQUESTED)
+	return cli_arg_help(cli, 1,
+	    "A.B.C.D", "BGP peer address",
+	    "NAME",    "BGP peer name",
+	    NULL);
 
     for (i = 0; i < BGP_NUM_PEERS; i++)
     {

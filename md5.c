@@ -1,6 +1,8 @@
 /* MD5C.C - RSA Data Security, Inc., MD5 message-digest algorithm
  */
 
+char const *cvs_id_md5 = "$Id: md5.c,v 1.2 2004-06-28 02:43:13 fred_nerk Exp $";
+
 /* Copyright (C) 1991-2, RSA Data Security, Inc. Created 1991. All
 rights reserved.
 

@@ -1,5 +1,6 @@
 // L2TPNS Linked List Stuff
-// $Id: ll.c,v 1.3 2004-06-23 03:52:24 fred_nerk Exp $
+
+char const *cvs_id_ll = "$Id: ll.c,v 1.4 2004-06-28 02:43:13 fred_nerk Exp $";
 
 #include <stdio.h>
 #include <sys/file.h>

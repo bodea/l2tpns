@@ -1,3 +1,7 @@
+// L2TPNS: constants
+
+char const *cvs_id_constants = "$Id: constants.c,v 1.3 2004-06-28 02:43:13 fred_nerk Exp $";
+
 #include "constants.h"
 #include <memory.h>
 

@@ -1,5 +1,5 @@
 /* BGPv4 (RFC1771) */
-/* $Id: bgp.h,v 1.1 2004-06-23 03:52:24 fred_nerk Exp $ */
+/* $Id: bgp.h,v 1.2 2004-06-28 02:43:13 fred_nerk Exp $ */
 
 #ifndef __BGP_H__
 #define __BGP_H__
@@ -198,5 +198,7 @@ int cmd_show_bgp(struct cli_def *cli, char *command, char **argv, int argc);
 int cmd_suspend_bgp(struct cli_def *cli, char *command, char **argv, int argc);
 int cmd_no_suspend_bgp(struct cli_def *cli, char *command, char **argv, int argc);
 int cmd_restart_bgp(struct cli_def *cli, char *command, char **argv, int argc);
+
+extern char const *cvs_id_bgp;
 
 #endif /* __BGP_H__ */

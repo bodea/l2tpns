@@ -1,9 +1,14 @@
+// L2TPNS: token bucket filters
+
+char const *cvs_id_tbf = "$Id: tbf.c,v 1.2 2004-06-28 02:43:13 fred_nerk Exp $";
+
 #include <malloc.h>
 #include <string.h>
 #include <unistd.h>
 #include <sys/mman.h>
 
 #include "l2tpns.h"
+#include "util.h"
 #include "tbf.h"
 
 // Need a time interval.
@@ -289,10 +294,10 @@ static void tbf_run_queue(int tbf_id)
 	f = &filter_list[tbf_id];
 
 		// Calculate available credit...
-	f->credit += (config->current_time - f->lasttime) * f->rate / 10; // current time is 1/10th of a second.
+	f->credit += (TIME - f->lasttime) * f->rate / 10; // current time is 1/10th of a second.
 	if (f->credit > f->max_credit)
 		f->credit = f->max_credit;
-	f->lasttime = config->current_time;
+	f->lasttime = TIME;
 
 	while (f->queued > 0 && f->credit >= f->sizes[f->oldest]) { // While we have enough credit..
 
@@ -348,7 +353,7 @@ int tbf_run_timer(void)
 	for (i = 0; i < filter_list_size; ++i) {
 		if (!filter_list[i].next)
 			continue;
-		if (filter_list[i].lasttime == config->current_time)	// Did we just run it?
+		if (filter_list[i].lasttime == TIME)	// Did we just run it?
 			continue;
 
 		log(1,0,0,0, "Missed tbf %d! Not on the timer chain?(n %d, p %d, tc %d)\n", i,
@@ -365,10 +370,14 @@ int cmd_show_tbf(struct cli_def *cli, char *command, char **argv, int argc)
 	int i;
 	int count = 0;
 
+	if (CLI_HELP_REQUESTED)
+		return CLI_HELP_NO_ARGS;
+
 	if (!config->cluster_iam_master) {
-		cli_print(cli, "Command can't be run on a slave.");
+		cli_print(cli, "Can't do this on a slave.  Do it on %s", inet_toa(config->cluster_master_address));
 		return CLI_OK;
 	}
+
 	if (!filter_list)
 		return CLI_OK;
 

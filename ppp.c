@@ -1,5 +1,6 @@
 // L2TPNS PPP Stuff
-// $Id: ppp.c,v 1.5 2004-06-23 03:52:24 fred_nerk Exp $
+
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.6 2004-06-28 02:43:13 fred_nerk Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -28,13 +29,13 @@ void processpap(tunnelidt t, sessionidt s, u8 * p, u16 l)
 	char user[129];
 	char pass[129];
 
-#ifdef STAT_CALLS
-	STAT(call_processpap);
-#endif
+
+	CSTAT(call_processpap);
+
 	log_hex(5, "PAP", p, l);
 	if (l < 4)
 	{
-		log(1, 0, s, t, "Short PAP %u bytes", l);
+		log(1, 0, s, t, "Short PAP %u bytes\n", l);
 		STAT(tunnel_rx_errors);
 		return ;
 	}
@@ -123,9 +124,9 @@ void processchap(tunnelidt t, sessionidt s, u8 * p, u16 l)
 	u16 r;
 	u16 len;
 
-#ifdef STAT_CALLS
-	STAT(call_processchap);
-#endif
+
+	CSTAT(call_processchap);
+
 	log_hex(5, "CHAP", p, l);
 	r = session[s].radius;
 	if (!r)
@@ -292,13 +293,13 @@ void processlcp(tunnelidt t, sessionidt s, u8 * p, u16 l)
 	u8 b[MAXCONTROL];
 	u8 *q = NULL;
 
-#ifdef STAT_CALLS
-	STAT(call_processlcp);
-#endif
+
+	CSTAT(call_processlcp);
+
 	log_hex(5, "LCP", p, l);
 	if (l < 4)
 	{
-		log(1, session[s].ip, s, t, "Short LCP %d bytes", l);
+		log(1, session[s].ip, s, t, "Short LCP %d bytes\n", l);
 		STAT(tunnel_rx_errors);
 		return ;
 	}
@@ -450,13 +451,13 @@ void processlcp(tunnelidt t, sessionidt s, u8 * p, u16 l)
 // Process IPCP messages
 void processipcp(tunnelidt t, sessionidt s, u8 * p, u16 l)
 {
-#ifdef STAT_CALLS
-	STAT(call_processipcp);
-#endif
+
+	CSTAT(call_processipcp);
+
 	log_hex(5, "IPCP", p, l);
 	if (l < 5)
 	{
-		log(1, 0, s, t, "Short IPCP %d bytes", l);
+		log(1, 0, s, t, "Short IPCP %d bytes\n", l);
 		STAT(tunnel_rx_errors);
 		return ;
 	}
@@ -579,9 +580,9 @@ void processipin(tunnelidt t, sessionidt s, u8 * p, u16 l)
 {
 	ipt ip;
 
-#ifdef STAT_CALLS
-	STAT(call_processipin);
-#endif
+
+	CSTAT(call_processipin);
+
 	log_hex(5, "IP", p, l);
 
 	ip = ntohl(*(u32 *)(p + 12));
@@ -667,9 +668,9 @@ void send_ipin(sessionidt s, u8 *buf, int len)
 // Process LCP messages
 void processccp(tunnelidt t, sessionidt s, u8 * p, u16 l)
 {
-#ifdef STAT_CALLS
-	STAT(call_processccp);
-#endif
+
+	CSTAT(call_processccp);
+
 	log_hex(5, "CCP", p, l);
 	if (l < 2 || (*p != ConfigReq && *p != TerminateReq))
 	{
@@ -709,9 +710,9 @@ void sendchap(tunnelidt t, sessionidt s)
 	u8 b[MAXCONTROL];
 	u16 r = session[s].radius;
 	u8 *q;
-#ifdef STAT_CALLS
-	STAT(call_sendchap);
-#endif
+
+	CSTAT(call_sendchap);
+
 	if (!r)
 	{
 		log(1, 0, s, t, "No RADIUS to send challenge\n");

@@ -1,3 +1,7 @@
+// L2TPNS: control
+
+char const *cvs_id_control = "$Id: control.c,v 1.2 2004-06-28 02:43:13 fred_nerk Exp $";
+
 #include <stdio.h>
 #include <arpa/inet.h>
 #include <errno.h>
