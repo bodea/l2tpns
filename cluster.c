@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.26.2.2 2005-01-13 07:58:54 bodea Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.26.2.3 2005-02-14 05:59:27 bodea Exp $";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -570,10 +570,13 @@ void cluster_check_master(void)
 			++count;
 		}
 
-		if (session[i].tunnel == T_FREE) { // Unused session. Add to free list.
+		if (!session[i].opened) { // Unused session. Add to free list.
+			memset(&session[i], 0, sizeof(session[i]));
+			session[i].tunnel = T_FREE;
 			session[last_free].next = i;
 			session[i].next = 0;
 			last_free = i;
+			continue;
 		}
 
 			// Reset all the idle timeouts..
@@ -592,16 +595,14 @@ void cluster_check_master(void)
 		if (session[i].unique_id >= high_unique_id)	// This is different to the index into the session table!!!
 			high_unique_id = session[i].unique_id+1;
 
-
 		session[i].tbf_in = session[i].tbf_out = 0; // Remove stale pointers from old master.
 		throttle_session(i, session[i].throttle_in, session[i].throttle_out);
 
-		if (session[i].tunnel != T_FREE && i > config->cluster_highest_sessionid)
-			config->cluster_highest_sessionid = i;
+		config->cluster_highest_sessionid = i;
 	}
 
 	session[last_free].next = 0;	// End of chain.
-	last_id = high_unique_id;		// Keep track of the highest used session ID.
+	last_id = high_unique_id;	// Keep track of the highest used session ID.
 
 	become_master();
 
@@ -649,12 +650,12 @@ static void cluster_check_sessions(int highsession, int freesession_ptr, int hig
 	config->cluster_undefined_sessions = 0;
 	for (i = 1 ; i < MAXSESSION; ++i) {
 		if (i > highsession) {
-			session[i].tunnel = 0; // Defined.
+			if (session[i].tunnel == T_UNDEF) session[i].tunnel = T_FREE; // Defined.
 			continue;
 		}
-		if (session[i].tunnel != T_UNDEF)
-			continue;
-		++config->cluster_undefined_sessions;
+
+		if (session[i].tunnel == T_UNDEF)
+			++config->cluster_undefined_sessions;
 	}
 
 		// Clear out defined tunnels, counting the number of
@@ -662,12 +663,12 @@ static void cluster_check_sessions(int highsession, int freesession_ptr, int hig
 	config->cluster_undefined_tunnels = 0;
 	for (i = 1 ; i < MAXTUNNEL; ++i) {
 		if (i > hightunnel) {
-			tunnel[i].state = TUNNELFREE; // Defined.
+			if (tunnel[i].state == TUNNELUNDEF) tunnel[i].state = TUNNELFREE; // Defined.
 			continue;
 		}
-		if (tunnel[i].state != TUNNELUNDEF)
-			continue;
-		++config->cluster_undefined_tunnels;
+
+		if (tunnel[i].state == TUNNELUNDEF)
+			++config->cluster_undefined_tunnels;
 	}
 
 
