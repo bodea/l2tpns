@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.68 2004-12-13 05:27:19 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.69 2004-12-16 03:03:41 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -2975,8 +2975,8 @@ void snoop_send_packet(char *packet, u16 size, ipt destination, u16 port)
 	snoop_addr.sin_addr.s_addr = destination;
 	snoop_addr.sin_port = ntohs(port);
 
-	LOG(5, 0, 0, "Snooping packet at %p (%d bytes) to %s:%d\n",
-		packet, size, fmtaddr(snoop_addr.sin_addr.s_addr, 0),
+	LOG(5, 0, 0, "Snooping %d byte packet to %s:%d\n", size,
+		fmtaddr(snoop_addr.sin_addr.s_addr, 0),
 		htons(snoop_addr.sin_port));
 
 	if (sendto(snoopfd, packet, size, MSG_DONTWAIT | MSG_NOSIGNAL, (void *) &snoop_addr, sizeof(snoop_addr)) < 0)
