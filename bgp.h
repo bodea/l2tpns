@@ -1,5 +1,5 @@
 /* BGPv4 (RFC1771) */
-/* $Id: bgp.h,v 1.3 2004-11-11 03:07:42 bodea Exp $ */
+/* $Id: bgp.h,v 1.4 2004-12-16 08:49:52 bodea Exp $ */
 
 #ifndef __BGP_H__
 #define __BGP_H__
@@ -17,8 +17,8 @@
 
 struct bgp_header {
     char marker[16];
-    u16 len;
-    u8 type;
+    uint16_t len;
+    uint8_t type;
 } __attribute__ ((packed));
 
 /* bgp_header.type */
@@ -33,33 +33,33 @@ struct bgp_packet {
 } __attribute__ ((packed));
 
 struct bgp_data_open {
-    u8 version;
+    uint8_t version;
 #define BGP_VERSION	4
-    u16 as;
-    u16 hold_time;
-    u32 identifier;
-    u8 opt_len;
+    uint16_t as;
+    uint16_t hold_time;
+    uint32_t identifier;
+    uint8_t opt_len;
 #define BGP_DATA_OPEN_SIZE	10 /* size of struct excluding opt_params */
     char opt_params[sizeof(((struct bgp_packet *)0)->data) - BGP_DATA_OPEN_SIZE]; /* variable */
 } __attribute__ ((packed));
 
 struct bgp_ip_prefix {
-    u8 len;
-    u32 prefix; /* variable */
+    uint8_t len;
+    uint32_t prefix; /* variable */
 } __attribute__ ((packed));
 
 #define BGP_IP_PREFIX_SIZE(p) (1 + ((p).len / 8) + ((p).len % 8 != 0))
 
 struct bgp_path_attr {
-    u8 flags;
-    u8 code;
+    uint8_t flags;
+    uint8_t code;
     union {
 	struct {
-	    u8 len;
+	    uint8_t len;
 	    char value[29];		/* semi-random size, adequate for l2tpns */
 	} __attribute__ ((packed)) s;	/* short */
 	struct {
-	    u16 len;
+	    uint16_t len;
 	    char value[28];
 	} __attribute__ ((packed)) e;	/* extended */
     } data; /* variable */
@@ -95,8 +95,8 @@ struct bgp_path_attr {
 #define BGP_COMMUNITY_NO_EXPORT_SUBCONFED	0xffffff03	/* don't advertise to any other AS */
 
 struct bgp_data_notification {
-    u8 error_code;
-    u8 error_subcode;
+    uint8_t error_code;
+    uint8_t error_subcode;
     char data[sizeof(((struct bgp_packet *)0)->data) - 2]; /* variable */
 } __attribute__ ((packed));
 
@@ -185,7 +185,9 @@ extern int bgp_configured;
 
 /* actions */
 int bgp_setup(int as);
-int bgp_start(struct bgp_peer *peer, char *name, int as, int keepalive, int hold, int enable);
+int bgp_start(struct bgp_peer *peer, char *name, int as, int keepalive,
+    int hold, int enable);
+
 void bgp_stop(struct bgp_peer *peer);
 void bgp_halt(struct bgp_peer *peer);
 int bgp_restart(struct bgp_peer *peer);

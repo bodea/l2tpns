@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.24 2004-12-15 02:56:38 bodea Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.25 2004-12-16 08:49:53 bodea Exp $";
 
 #include <stdio.h>
 #include <sys/file.h>
@@ -18,6 +18,7 @@ char const *cvs_id_cluster = "$Id: cluster.c,v 1.24 2004-12-15 02:56:38 bodea Ex
 #include <unistd.h>
 #include <stdio.h>
 #include <libcli.h>
+#include <inttypes.h>
 
 #include "l2tpns.h"
 #include "cluster.h"
@@ -40,7 +41,7 @@ char const *cvs_id_cluster = "$Id: cluster.c,v 1.24 2004-12-15 02:56:38 bodea Ex
 // Module variables.
 int cluster_sockfd = 0;		// The filedescriptor for the cluster communications port.
 
-ipt my_address = 0;		// The network address of my ethernet port.
+in_addr_t my_address = 0;		// The network address of my ethernet port.
 static int walk_session_number = 0;	// The next session to send when doing the slow table walk.
 static int walk_tunnel_number = 0;	// The next tunnel to send when doing the slow table walk.
 
@@ -60,15 +61,15 @@ static struct {
 				// we can re-transmit if needed.
 
 static struct {
-	u32 peer;
-	time_t	basetime;
-	clockt	timestamp;
-	int	uptodate;
+	in_addr_t peer;
+	time_t basetime;
+	clockt timestamp;
+	int uptodate;
 } peers[CLUSTER_MAX_SIZE];	// List of all the peers we've heard from.
 static int num_peers;		// Number of peers in list.
 
-static int rle_decompress(u8 ** src_p, int ssize, u8 *dst, int dsize);
-static int rle_compress(u8 ** src_p, int ssize, u8 *dst, int dsize);
+static int rle_decompress(uint8_t **src_p, int ssize, uint8_t *dst, int dsize);
+static int rle_compress(uint8_t **src_p, int ssize, uint8_t *dst, int dsize);
 
 //
 // Create a listening socket
@@ -177,17 +178,17 @@ static int cluster_send_data(void *data, int datalen)
 // Maintains the format. Assumes that the caller
 // has passed in a big enough buffer!
 //
-static void add_type(char ** p, int type, int more, char * data, int size)
+static void add_type(char **p, int type, int more, char *data, int size)
 {
-	* ( (u32*)(*p) ) = type;
-	*p += sizeof(u32);
+	*((uint32_t *) (*p)) = type;
+	*p += sizeof(uint32_t);
 
-	* ( (u32*)(*p) ) = more;
-	*p += sizeof(u32);
+	*((uint32_t *)(*p)) = more;
+	*p += sizeof(uint32_t);
 
 	if (data && size > 0) {
 		memcpy(*p, data, size);
-		(*p) += size;
+		*p += size;
 	}
 }
 
@@ -221,7 +222,7 @@ static void cluster_uptodate(void)
 // Send a unicast UDP packet to a peer with 'data' as the
 // contents.
 //
-static int peer_send_data(u32 peer, char * data, int size)
+static int peer_send_data(in_addr_t peer, char *data, int size)
 {
 	struct sockaddr_in addr = {0};
 
@@ -249,10 +250,10 @@ static int peer_send_data(u32 peer, char * data, int size)
 //
 // Send a structured message to a peer with a single element of type 'type'.
 //
-static int peer_send_message(u32 peer, int type, int more, char * data, int size)
+static int peer_send_message(in_addr_t peer, int type, int more, char *data, int size)
 {
 	char buf[65536];	// Vast overkill.
-	char * p = buf;
+	char *p = buf;
 
 	LOG(4, 0, 0, "Sending message to peer (type %d, more %d, size %d)\n", type, more, size);
 	add_type(&p, type, more, data, size);
@@ -266,7 +267,7 @@ static int peer_send_message(u32 peer, int type, int more, char * data, int size
 // The master just processes the payload as if it had
 // received it off the tun device.
 //
-int master_forward_packet(char *data, int size, u32 addr, int port)
+int master_forward_packet(char *data, int size, in_addr_t addr, int port)
 {
 	char buf[65536];	// Vast overkill.
 	char *p = buf;
@@ -277,12 +278,11 @@ int master_forward_packet(char *data, int size, u32 addr, int port)
 	LOG(4, 0, 0, "Forwarding packet from %s to master (size %d)\n", fmtaddr(addr, 0), size);
 
 	STAT(c_forwarded);
-	add_type(&p, C_FORWARD, addr, (char*) &port, sizeof(port) );
+	add_type(&p, C_FORWARD, addr, (char *) &port, sizeof(port));
 	memcpy(p, data, size);
 	p += size;
 
-	return peer_send_data(config->cluster_master_address, buf, (p-buf) );
-
+	return peer_send_data(config->cluster_master_address, buf, (p - buf));
 }
 
 //
@@ -337,7 +337,7 @@ int master_garden_packet(sessionidt s, char *data, int size)
 // Send a chunk of data as a heartbeat..
 // We save it in the history buffer as we do so.
 //
-static void send_heartbeat(int seq, char * data, int size)
+static void send_heartbeat(int seq, char *data, int size)
 {
 	int i;
 
@@ -426,7 +426,7 @@ void master_update_counts(void)
 
 			// Forward the data to the master.
 	LOG(4, 0, 0, "Sending byte counters to master (%d elements)\n", c);
-	peer_send_message(config->cluster_master_address, C_BYTES, c, (char*) &b, sizeof(b[0]) * c);
+	peer_send_message(config->cluster_master_address, C_BYTES, c, (char *) &b, sizeof(b[0]) * c);
 	return;
 }
 
@@ -688,9 +688,9 @@ static int hb_add_type(char **p, int type, int id)
 {
 	switch (type) {
 		case C_CSESSION: { // Compressed C_SESSION.
-			u8 c[sizeof(sessiont) * 2]; // Bigger than worst case.
-			u8 *d = (u8 *) &session[id];
-			u8 *orig = d;
+			uint8_t c[sizeof(sessiont) * 2]; // Bigger than worst case.
+			uint8_t *d = (uint8_t *) &session[id];
+			uint8_t *orig = d;
 			int size;
 
 			size = rle_compress( &d,  sizeof(sessiont), c, sizeof(c) );
@@ -698,19 +698,19 @@ static int hb_add_type(char **p, int type, int id)
 				// Did we compress the full structure, and is the size actually
 				// reduced??
 			if ( (d - orig) == sizeof(sessiont) && size < sizeof(sessiont) ) {
-				add_type(p, C_CSESSION, id, (char*) c, size);
+				add_type(p, C_CSESSION, id, (char *) c, size);
 				break;
 			}
 			// Failed to compress : Fall through.
 		}
 		case C_SESSION: add_type(p, C_SESSION, id,
-			(char*) &session[id], sizeof(sessiont));
+			(char *) &session[id], sizeof(sessiont));
 			break;
 
 		case C_CTUNNEL: { // Compressed C_TUNNEL
-			u8 c[sizeof(tunnelt) * 2]; // Bigger than worst case.
-			u8 *d = (u8 *) &tunnel[id];
-			u8 *orig = d;
+			uint8_t c[sizeof(tunnelt) * 2]; // Bigger than worst case.
+			uint8_t *d = (uint8_t *) &tunnel[id];
+			uint8_t *orig = d;
 			int size;
 
 			size = rle_compress( &d,  sizeof(tunnelt), c, sizeof(c) );
@@ -724,7 +724,7 @@ static int hb_add_type(char **p, int type, int id)
 			// Failed to compress : Fall through.
 		}
 		case C_TUNNEL: add_type(p, C_TUNNEL, id,
-			(char*) &tunnel[id], sizeof(tunnelt));
+			(char *) &tunnel[id], sizeof(tunnelt));
 			break;
 		default:
 			LOG(0, 0, 0, "Found an invalid type in heart queue! (%d)\n", type);
@@ -766,14 +766,14 @@ void cluster_heartbeat()
 	h.timeout  = config->cluster_hb_timeout;
 	h.table_version = config->cluster_table_version;
 
-	add_type(&p, C_HEARTBEAT, HB_VERSION, (char*) &h, sizeof(h));
+	add_type(&p, C_HEARTBEAT, HB_VERSION, (char *) &h, sizeof(h));
 
 	for (i = 0; i < config->cluster_num_changes; ++i) {
 		hb_add_type(&p, cluster_changes[i].type, cluster_changes[i].id);
 	}
 
 	if (p > (buff + sizeof(buff))) {	// Did we somehow manage to overun the buffer?
-		LOG(0, 0, 0, "FATAL: Overran the heartbeat buffer! This is fatal. Exiting. (size %d)\n", p - buff);
+		LOG(0, 0, 0, "FATAL: Overran the heartbeat buffer! This is fatal. Exiting. (size %d)\n", (int) (p - buff));
 		kill(0, SIGTERM);
 		exit(1);
 	}
@@ -781,7 +781,7 @@ void cluster_heartbeat()
 		//
 		// Fill out the packet with sessions from the session table...
 		// (not forgetting to leave space so we can get some tunnels in too )
-	while ( (p + sizeof(u32) * 2 + sizeof(sessiont) * 2 ) < (buff + MAX_HEART_SIZE) ) {
+	while ( (p + sizeof(uint32_t) * 2 + sizeof(sessiont) * 2 ) < (buff + MAX_HEART_SIZE) ) {
 
 		if (!walk_session_number)	// session #0 isn't valid.
 			++walk_session_number;
@@ -801,7 +801,7 @@ void cluster_heartbeat()
 		// than the session table. This is good because stuffing up a 
 		// tunnel is a much bigger deal than stuffing up a session.
 		//
-	while ( (p + sizeof(u32) * 2 + sizeof(tunnelt) ) < (buff + MAX_HEART_SIZE) ) {
+	while ( (p + sizeof(uint32_t) * 2 + sizeof(tunnelt) ) < (buff + MAX_HEART_SIZE) ) {
 
 		if (!walk_tunnel_number)	// tunnel #0 isn't valid.
 			++walk_tunnel_number;
@@ -818,16 +818,16 @@ void cluster_heartbeat()
 		//
 		// Did we do something wrong?
 	if (p > (buff + sizeof(buff))) {	// Did we somehow manage to overun the buffer?
-		LOG(0, 0, 0, "Overran the heartbeat buffer now! This is fatal. Exiting. (size %d)\n", p - buff);
+		LOG(0, 0, 0, "Overran the heartbeat buffer now! This is fatal. Exiting. (size %d)\n", (int) (p - buff));
 		kill(0, SIGTERM);
 		exit(1);
 	}
 
-	LOG(3, 0, 0, "Sending v%d heartbeat #%d, change #%llu with %d changes "
+	LOG(3, 0, 0, "Sending v%d heartbeat #%d, change #%" PRIu64 " with %d changes "
 		     "(%d x-sess, %d x-tunnels, %d highsess, %d hightun, size %d)\n",
 	    HB_VERSION, h.seq, h.table_version, config->cluster_num_changes,
 	    count, tcount, config->cluster_highest_sessionid,
-	    config->cluster_highest_tunnelid, (p-buff));
+	    config->cluster_highest_tunnelid, (int) (p - buff));
 
 	config->cluster_num_changes = 0;
 
@@ -887,7 +887,7 @@ int cluster_send_tunnel(int tid)
 // missed a packet. We'll resend it every packet since
 // the last one it's seen.
 //
-static int cluster_catchup_slave(int seq, u32 slave)
+static int cluster_catchup_slave(int seq, in_addr_t slave)
 {
 	int s;
 	int diff;
@@ -922,10 +922,10 @@ static int cluster_catchup_slave(int seq, u32 slave)
 // We've heard from another peer! Add it to the list
 // that we select from at election time.
 //
-static int cluster_add_peer(u32 peer, time_t basetime, pingt *pp, int size)
+static int cluster_add_peer(in_addr_t peer, time_t basetime, pingt *pp, int size)
 {
 	int i;
-	u32 clusterid;
+	in_addr_t clusterid;
 	pingt p;
 
 	// Allow for backward compatability.
@@ -935,8 +935,8 @@ static int cluster_add_peer(u32 peer, time_t basetime, pingt *pp, int size)
 	if (size > sizeof(p))
 		size = sizeof(p);
 
-	memset( (void*) &p, 0, sizeof(p) );
-	memcpy( (void*) &p, (void*) pp, size);
+	memset( (void *) &p, 0, sizeof(p) );
+	memcpy( (void *) &p, (void *) pp, size);
 
 	clusterid = p.addr;
 	if (clusterid != config->bind_address)
@@ -1006,11 +1006,11 @@ static int cluster_add_peer(u32 peer, time_t basetime, pingt *pp, int size)
 // Note that we don't mark the session as dirty; We rely on
 // the slow table walk to propogate this back out to the slaves.
 //
-static int cluster_handle_bytes(char * data, int size)
+static int cluster_handle_bytes(char *data, int size)
 {
-	bytest * b;
+	bytest *b;
 
-	b = (bytest*) data;
+	b = (bytest *) data;
 
 	LOG(3, 0, 0, "Got byte counter update (size %d)\n", size);
 
@@ -1043,7 +1043,7 @@ static int cluster_handle_bytes(char * data, int size)
 //
 // Handle receiving a session structure in a heartbeat packet.
 //
-static int cluster_recv_session(int more , u8 * p)
+static int cluster_recv_session(int more, uint8_t *p)
 {
 	if (more >= MAXSESSION) {
 		LOG(0, 0, 0, "DANGER: Received a heartbeat session id > MAXSESSION!\n");
@@ -1058,7 +1058,7 @@ static int cluster_recv_session(int more , u8 * p)
 		}
 	}
 
-	load_session(more, (sessiont*) p);	// Copy session into session table..
+	load_session(more, (sessiont *) p);	// Copy session into session table..
 
 	LOG(5, more, 0, "Received session update (%d undef)\n", config->cluster_undefined_sessions);
 
@@ -1068,7 +1068,7 @@ static int cluster_recv_session(int more , u8 * p)
 	return 0;
 }
 
-static int cluster_recv_tunnel(int more, u8 *p)
+static int cluster_recv_tunnel(int more, uint8_t *p)
 {
 	if (more >= MAXTUNNEL) {
 		LOG(0, 0, 0, "DANGER: Received a tunnel session id > MAXTUNNEL!\n");
@@ -1106,9 +1106,9 @@ static int cluster_recv_tunnel(int more, u8 *p)
 //
 // v3: added interval, timeout
 // v4: added table_version
-static int cluster_process_heartbeat(u8 * data, int size, int more, u8 * p, u32 addr)
+static int cluster_process_heartbeat(uint8_t *data, int size, int more, uint8_t *p, in_addr_t addr)
 {
-	heartt * h;
+	heartt *h;
 	int s = size - (p-data);
 	int i, type;
 
@@ -1126,7 +1126,7 @@ static int cluster_process_heartbeat(u8 * data, int size, int more, u8 * p, u32 
 	if (s < sizeof(*h))
 		goto shortpacket;
 
-	h = (heartt*) p;
+	h = (heartt *) p;
 	p += sizeof(*h);
 	s -= sizeof(*h);
 
@@ -1144,7 +1144,7 @@ static int cluster_process_heartbeat(u8 * data, int size, int more, u8 * p, u32 
 
 		if (more >= 4) {
 			if (h->table_version > config->cluster_table_version) {
-				LOG(0, 0, 0, "They've seen more state changes (%llu vs my %llu) so I'm gone!\n",
+				LOG(0, 0, 0, "They've seen more state changes (%" PRIu64 " vs my %" PRIu64 ") so I'm gone!\n",
 					h->table_version, config->cluster_table_version);
 
 				kill(0, SIGTERM);
@@ -1220,21 +1220,21 @@ static int cluster_process_heartbeat(u8 * data, int size, int more, u8 * p, u32 
 		// Ok. process the packet...
 	while ( s > 0) {
 
-		type = * ((u32*) p);
-		p += sizeof(u32);
-		s -= sizeof(u32);
+		type = *((uint32_t *) p);
+		p += sizeof(uint32_t);
+		s -= sizeof(uint32_t);
 
-		more = * ((u32*) p);
-		p += sizeof(u32);
-		s -= sizeof(u32);
+		more = *((uint32_t *) p);
+		p += sizeof(uint32_t);
+		s -= sizeof(uint32_t);
 
 		switch (type) {
 			case C_CSESSION: { // Compressed session structure.
-				u8 c [ sizeof(sessiont) + 2];
+				uint8_t c[ sizeof(sessiont) + 2];
 				int size;
-				u8 * orig_p = p;
+				uint8_t *orig_p = p;
 
-				size = rle_decompress((u8 **) &p, s, c, sizeof(c) );
+				size = rle_decompress((uint8_t **) &p, s, c, sizeof(c) );
 				s -= (p - orig_p);
 
 				if (size != sizeof(sessiont) ) { // Ouch! Very very bad!
@@ -1257,11 +1257,11 @@ static int cluster_process_heartbeat(u8 * data, int size, int more, u8 * p, u32 
 				break;
 
 			case C_CTUNNEL: { // Compressed tunnel structure.
-				u8 c [ sizeof(tunnelt) + 2];
+				uint8_t c[ sizeof(tunnelt) + 2];
 				int size;
-				u8 * orig_p = p;
+				uint8_t *orig_p = p;
 
-				size = rle_decompress( (u8 **) &p, s, c, sizeof(c) );
+				size = rle_decompress((uint8_t **) &p, s, c, sizeof(c));
 				s -= (p - orig_p);
 
 				if (size != sizeof(tunnelt) ) { // Ouch! Very very bad!
@@ -1310,10 +1310,10 @@ shortpacket:
 // We got a packet on the cluster port!
 // Handle pings, lastseens, and heartbeats!
 //
-int processcluster(char * data, int size, u32 addr)
+int processcluster(char *data, int size, in_addr_t addr)
 {
 	int type, more;
-	char * p = data;
+	char *p = data;
 	int s = size;
 
 	if (addr == my_address)
@@ -1327,17 +1327,17 @@ int processcluster(char * data, int size, u32 addr)
 	if (s < 8)
 		goto shortpacket;
 
-	type = * ((u32*) p);
-	p += sizeof(u32);
-	s -= sizeof(u32);
+	type = *((uint32_t *) p);
+	p += sizeof(uint32_t);
+	s -= sizeof(uint32_t);
 
-	more = * ((u32*) p);
-	p += sizeof(u32);
-	s -= sizeof(u32);
+	more = *((uint32_t *) p);
+	p += sizeof(uint32_t);
+	s -= sizeof(uint32_t);
 
 	switch (type) {
 	case C_PING:	// Update the peers table.
-		return cluster_add_peer(addr, more, (pingt*)p, s);
+		return cluster_add_peer(addr, more, (pingt *) p, s);
 
 	case C_LASTSEEN:	// Catch up a slave (slave missed a packet).
 		return cluster_catchup_slave(more, addr);
@@ -1346,7 +1346,7 @@ int processcluster(char * data, int size, u32 addr)
 		struct sockaddr_in a;
 		a.sin_addr.s_addr = more;
 
-		a.sin_port = * (int*) p;
+		a.sin_port = *(int *) p;
 		s -= sizeof(int);
 		p += sizeof(int);
 
@@ -1481,11 +1481,11 @@ int cmd_show_cluster(struct cli_def *cli, char *command, char **argv, int argc)
 //
 // Worst case is a 50% expansion in space required (trying to
 // compress { 0x00, 0x01 } * N )
-static int rle_compress(u8 ** src_p, int ssize, u8 *dst, int dsize)
+static int rle_compress(uint8_t **src_p, int ssize, uint8_t *dst, int dsize)
 {
 	int count;
 	int orig_dsize = dsize;
-	u8 * x,*src;
+	uint8_t *x, *src;
 	src = *src_p;
 
 	while (ssize > 0 && dsize > 2) {
@@ -1527,11 +1527,11 @@ static int rle_compress(u8 ** src_p, int ssize, u8 *dst, int dsize)
 // Return the number of dst bytes used.
 // Updates the 'src_p' pointer to point to the
 // first un-used byte.
-static int rle_decompress(u8 ** src_p, int ssize, u8 *dst, int dsize)
+static int rle_decompress(uint8_t **src_p, int ssize, uint8_t *dst, int dsize)
 {
 	int count;
 	int orig_dsize = dsize;
-	char * src = *src_p;
+	char *src = *src_p;
 
 	while (ssize >0 && dsize > 0) {	// While there's more to decompress, and there's room in the decompress buffer...
 		count = *src++; --ssize;  // get the count byte from the source.

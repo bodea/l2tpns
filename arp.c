@@ -1,6 +1,6 @@
 // L2TPNS: arp
 
-char const *cvs_id_arp = "$Id: arp.c,v 1.4 2004-07-08 16:19:09 bodea Exp $";
+char const *cvs_id_arp = "$Id: arp.c,v 1.5 2004-12-16 08:49:52 bodea Exp $";
 
 #include <string.h>
 #include <unistd.h>
@@ -18,12 +18,12 @@ struct arp_buf {
 
 	/* Data bit - variably sized, so not present in |struct arphdr| */
 	unsigned char ar_sha[ETH_ALEN];	/* Sender hardware address */
-	ipt ar_sip;			/* Sender IP address. */
+	in_addr_t ar_sip;		/* Sender IP address. */
 	unsigned char ar_tha[ETH_ALEN]; /* Target hardware address */
-	ipt ar_tip;			/* Target ip */
+	in_addr_t ar_tip;		/* Target ip */
 } __attribute__((packed));
 
-void sendarp(int ifr_idx, const unsigned char* mac, ipt ip)
+void sendarp(int ifr_idx, const unsigned char* mac, in_addr_t ip)
 {
 	int fd;
 	struct sockaddr_ll sll;

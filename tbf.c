@@ -1,6 +1,6 @@
 // L2TPNS: token bucket filters
 
-char const *cvs_id_tbf = "$Id: tbf.c,v 1.10 2004-11-29 02:17:18 bodea Exp $";
+char const *cvs_id_tbf = "$Id: tbf.c,v 1.11 2004-12-16 08:49:53 bodea Exp $";
 
 #include <string.h>
 #include "l2tpns.h"
@@ -91,7 +91,7 @@ int free_tbf(int tid)
 //
 // Allocate a new token bucket filter.
 //
-int new_tbf(int sid, int max_credit, int rate, void (*f)(sessionidt, u8 *, int))
+int new_tbf(int sid, int max_credit, int rate, void (*f)(sessionidt, uint8_t *, int))
 {
 	int i;
 	static int p = 0;

@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.40 2004-12-15 03:09:56 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.41 2004-12-16 08:49:52 bodea Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -1252,8 +1252,8 @@ static int cmd_drop_session(struct cli_def *cli, char *command, char **argv, int
 
 static int cmd_snoop(struct cli_def *cli, char *command, char **argv, int argc)
 {
-	ipt ip;
-	u16 port;
+	in_addr_t ip;
+	uint16_t port;
 	sessionidt s;
 
 	if (CLI_HELP_REQUESTED)
@@ -2393,7 +2393,7 @@ static int cmd_no_ip_access_list(struct cli_def *cli, char *command, char **argv
 	return access_list(cli, argv, argc, 0);
 }
 
-static int show_ip_wild(char *buf, ipt ip, ipt wild)
+static int show_ip_wild(char *buf, in_addr_t ip, in_addr_t wild)
 {
 	if (ip == INADDR_ANY && wild == INADDR_BROADCAST)
 		return sprintf(buf, " any");
@@ -2524,8 +2524,8 @@ ip_filter_rulet *access_list_rule_ext(struct cli_def *cli, char *command, char *
 
 	for (a = 1, i = 0; i < 2; i++)
 	{
-	    	ipt *ip;
-		ipt *wild;
+	    	in_addr_t *ip;
+		in_addr_t *wild;
 		ip_filter_portt *port;
 
 		if (i == 0)
@@ -2667,7 +2667,7 @@ ip_filter_rulet *access_list_rule_ext(struct cli_def *cli, char *command, char *
 
 			while (a < argc && (argv[a][0] == '+' || argv[a][0] == '-'))
 			{
-			    	u8 *f;
+			    	uint8_t *f;
 
 				f = (argv[a][0] == '+') ? &rule.tcp_sflags : &rule.tcp_cflags;
 

@@ -10,7 +10,7 @@
  *   nor RFC2385 (which requires a kernel patch on 2.4 kernels).
  */
 
-char const *cvs_id_bgp = "$Id: bgp.c,v 1.8 2004-11-29 02:17:17 bodea Exp $";
+char const *cvs_id_bgp = "$Id: bgp.c,v 1.9 2004-12-16 08:49:52 bodea Exp $";
 
 #include <stdlib.h>
 #include <unistd.h>
@@ -34,7 +34,7 @@ static struct bgp_route_list *bgp_insert_route(struct bgp_route_list *head,
     struct bgp_route_list *new);
 
 static void bgp_free_routes(struct bgp_route_list *routes);
-static char const *bgp_msg_type_str(u8 type);
+static char const *bgp_msg_type_str(uint8_t type);
 static int bgp_connect(struct bgp_peer *peer);
 static int bgp_handle_connect(struct bgp_peer *peer);
 static int bgp_write(struct bgp_peer *peer);
@@ -43,9 +43,10 @@ static int bgp_handle_input(struct bgp_peer *peer);
 static int bgp_send_open(struct bgp_peer *peer);
 static int bgp_send_keepalive(struct bgp_peer *peer);
 static int bgp_send_update(struct bgp_peer *peer);
-static int bgp_send_notification(struct bgp_peer *peer, u8 code, u8 subcode);
+static int bgp_send_notification(struct bgp_peer *peer, uint8_t code,
+    uint8_t subcode);
 
-static u16 our_as;
+static uint16_t our_as;
 static struct bgp_route_list *bgp_routes = 0;
 
 int bgp_configured = 0;
@@ -89,7 +90,8 @@ int bgp_setup(int as)
 }
 
 /* start connection with a peer */
-int bgp_start(struct bgp_peer *peer, char *name, int as, int keepalive, int hold, int enable)
+int bgp_start(struct bgp_peer *peer, char *name, int as, int keepalive,
+    int hold, int enable)
 {
     struct hostent *h;
     int ibgp;
@@ -98,8 +100,8 @@ int bgp_start(struct bgp_peer *peer, char *name, int as, int keepalive, int hold
     char path_attrs[64];
     char *p = path_attrs;
     in_addr_t ip;
-    u32 metric = htonl(BGP_METRIC);
-    u32 no_export = htonl(BGP_COMMUNITY_NO_EXPORT);
+    uint32_t metric = htonl(BGP_METRIC);
+    uint32_t no_export = htonl(BGP_COMMUNITY_NO_EXPORT);
 
     if (!our_as)
 	return 0;
@@ -170,9 +172,9 @@ int bgp_start(struct bgp_peer *peer, char *name, int as, int keepalive, int hold
     {
 	/* just our AS */
 	struct {
-	    u8 type;
-	    u8 len;
-	    u16 value;
+	    uint8_t type;
+	    uint8_t len;
+	    uint16_t value;
 	} as_path = {
 	    BGP_PATH_ATTR_CODE_AS_PATH_AS_SEQUENCE,
 	    1,
@@ -204,7 +206,7 @@ int bgp_start(struct bgp_peer *peer, char *name, int as, int keepalive, int hold
 
     if (ibgp)
     {
-	u32 local_pref = htonl(BGP_LOCAL_PREF);
+	uint32_t local_pref = htonl(BGP_LOCAL_PREF);
 
 	/* LOCAL_PREF */
 	a.flags = BGP_PATH_ATTR_FLAG_TRANS;
@@ -324,7 +326,7 @@ static void bgp_set_retry(struct bgp_peer *peer)
 static void bgp_cidr(in_addr_t ip, in_addr_t mask, struct bgp_ip_prefix *pfx)
 {
     int i;
-    u32 b;
+    uint32_t b;
 
     /* convert to prefix notation */
     pfx->len = 32;
@@ -641,7 +643,7 @@ char const *bgp_state_str(enum bgp_state state)
     return "?";
 }
 
-static char const *bgp_msg_type_str(u8 type)
+static char const *bgp_msg_type_str(uint8_t type)
 {
     switch (type)
     {
@@ -987,7 +989,7 @@ static int bgp_handle_input(struct bgp_peer *peer)
 static int bgp_send_open(struct bgp_peer *peer)
 {
     struct bgp_data_open data;
-    u16 len = sizeof(peer->outbuf->packet.header);
+    uint16_t len = sizeof(peer->outbuf->packet.header);
 
     memset(peer->outbuf->packet.header.marker, 0xff,
 	sizeof(peer->outbuf->packet.header.marker));
@@ -1029,9 +1031,9 @@ static int bgp_send_keepalive(struct bgp_peer *peer)
 /* send/buffer UPDATE message */
 static int bgp_send_update(struct bgp_peer *peer)
 {
-    u16 unf_len = 0;
-    u16 attr_len;
-    u16 len = sizeof(peer->outbuf->packet.header);
+    uint16_t unf_len = 0;
+    uint16_t attr_len;
+    uint16_t len = sizeof(peer->outbuf->packet.header);
     struct bgp_route_list *have = peer->routes;
     struct bgp_route_list *want = peer->routing ? bgp_routes : 0;
     struct bgp_route_list *e = 0;
@@ -1169,10 +1171,11 @@ static int bgp_send_update(struct bgp_peer *peer)
 }
 
 /* send/buffer NOTIFICATION message */
-static int bgp_send_notification(struct bgp_peer *peer, u8 code, u8 subcode)
+static int bgp_send_notification(struct bgp_peer *peer, uint8_t code,
+    uint8_t subcode)
 {
     struct bgp_data_notification data;
-    u16 len = 0;
+    uint16_t len = 0;
 
     data.error_code = code;
     len += sizeof(data.error_code);

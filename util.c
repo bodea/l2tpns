@@ -1,6 +1,6 @@
 /* Misc util functions */
 
-char const *cvs_id_util = "$Id: util.c,v 1.7 2004-11-29 02:17:18 bodea Exp $";
+char const *cvs_id_util = "$Id: util.c,v 1.8 2004-12-16 08:49:53 bodea Exp $";
 
 #include <unistd.h>
 #include <errno.h>
@@ -18,7 +18,7 @@ char const *cvs_id_util = "$Id: util.c,v 1.7 2004-11-29 02:17:18 bodea Exp $";
 
 // format ipv4 addr as a dotted-quad; n chooses one of 4 static buffers
 // to use
-char *fmtaddr(ipt addr, int n)
+char *fmtaddr(in_addr_t addr, int n)
 {
 	static char addrs[4][16];
 	struct in_addr in;

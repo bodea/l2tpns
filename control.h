@@ -27,27 +27,27 @@
 #define NSCTL_MAX_PKT_SZ	4096
 
 struct nsctl_packet {
-    u16 magic;
-    u8 type;
-    u8 argc;
+    uint16_t magic;
+    uint8_t type;
+    uint8_t argc;
     char argv[NSCTL_MAX_PKT_SZ - 4];
 } __attribute__ ((packed));
 
 #define NSCTL_MAX_ARG_SZ	512
 
 struct nsctl_args {
-    u8 len;
+    uint8_t len;
     char value[NSCTL_MAX_ARG_SZ - 1];
 } __attribute__ ((packed));
 
 /* parsed packet */
 struct nsctl {
-    u8 type;
-    u8 argc;
+    uint8_t type;
+    uint8_t argc;
     char *argv[0xff];
 };
 
-int pack_control(char *data, int len, u8 type, int argc, char *argv[]);
+int pack_control(char *data, int len, uint8_t type, int argc, char *argv[]);
 int unpack_control(struct nsctl *packet, char *data, int len);
 void dump_control(struct nsctl *control, FILE *stream);
 

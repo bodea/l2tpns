@@ -1,6 +1,6 @@
 // L2TPNS: icmp
 
-char const *cvs_id_icmp = "$Id: icmp.c,v 1.5 2004-11-16 07:54:32 bodea Exp $";
+char const *cvs_id_icmp = "$Id: icmp.c,v 1.6 2004-12-16 08:49:53 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -17,9 +17,9 @@ char const *cvs_id_icmp = "$Id: icmp.c,v 1.5 2004-11-16 07:54:32 bodea Exp $";
 
 #include "l2tpns.h"
 
-static __u16 _checksum(unsigned char *addr, int count);
+static uint16_t _checksum(unsigned char *addr, int count);
 
-void host_unreachable(ipt destination, u16 id, ipt source, char *packet, int packet_len)
+void host_unreachable(in_addr_t destination, uint16_t id, in_addr_t source, char *packet, int packet_len)
 {
 	char buf[128] = {0};
 	struct iphdr *iph;
@@ -60,21 +60,21 @@ void host_unreachable(ipt destination, u16 id, ipt source, char *packet, int pac
 
 	icmp->type = ICMP_DEST_UNREACH;
 	icmp->code = ICMP_HOST_UNREACH;
-	icmp->checksum = _checksum((char *)icmp, sizeof(struct icmphdr) + ((packet_len < 64) ? packet_len : 64));
+	icmp->checksum = _checksum((char *) icmp, sizeof(struct icmphdr) + ((packet_len < 64) ? packet_len : 64));
 
-	iph->check = _checksum((char *)iph, sizeof(struct iphdr));
+	iph->check = _checksum((char *) iph, sizeof(struct iphdr));
 
 	sendto(icmp_socket, (char *)buf, len, 0, (struct sockaddr *)&whereto, sizeof(struct sockaddr));
 	close(icmp_socket);
 }
 
-static __u16 _checksum(unsigned char *addr, int count)
+static uint16_t _checksum(unsigned char *addr, int count)
 {
 	register long sum = 0;
 
 	for (; count > 1; count -= 2)
 	{
-		sum += ntohs(*(u32 *)addr);
+		sum += ntohs(*(uint32_t *) addr);
 		addr += 2;
 	}
 
@@ -87,5 +87,5 @@ static __u16 _checksum(unsigned char *addr, int count)
 	// one's complement the result
 	sum = ~sum;
 
-	return htons((u16) sum);
+	return htons((uint16_t) sum);
 }

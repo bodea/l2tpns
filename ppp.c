@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.38 2004-11-30 19:34:57 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.39 2004-12-16 08:49:53 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -19,18 +19,18 @@ extern sessiont *session;
 extern radiust *radius;
 extern int tunfd;
 extern char hostname[];
-extern u32 eth_tx;
+extern uint32_t eth_tx;
 extern time_t time_now;
 extern configt *config;
 
 static void initccp(tunnelidt t, sessionidt s);
 
 // Process PAP messages
-void processpap(tunnelidt t, sessionidt s, u8 *p, u16 l)
+void processpap(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 {
 	char user[129];
 	char pass[129];
-	u16 hl;
+	uint16_t hl;
 
 	CSTAT(call_processpap);
 
@@ -42,7 +42,7 @@ void processpap(tunnelidt t, sessionidt s, u8 *p, u16 l)
 		return ;
 	}
 
-	if ((hl = ntohs(*(u16 *) (p + 2))) > l)
+	if ((hl = ntohs(*(uint16_t *) (p + 2))) > l)
 	{
 		LOG(1, s, t, "Length mismatch PAP %u/%u\n", hl, l);
 		STAT(tunnel_rx_errors);
@@ -58,7 +58,7 @@ void processpap(tunnelidt t, sessionidt s, u8 *p, u16 l)
 	}
 
 	{
-		u8 *b = p;
+		uint8_t *b = p;
 		b += 4;
 		if (*b && *b < sizeof(user))
 			memcpy(user, b + 1, *b);
@@ -72,18 +72,18 @@ void processpap(tunnelidt t, sessionidt s, u8 *p, u16 l)
 	if (session[s].ip || !session[s].radius)
 	{
 		// respond now, either no RADIUS available or already authenticated
-		u8 b[MAXCONTROL];
-		u8 id = p[1];
-		u8 *p = makeppp(b, sizeof(b), 0, 0, t, s, PPPPAP);
+		uint8_t b[MAXCONTROL];
+		uint8_t id = p[1];
+		uint8_t *p = makeppp(b, sizeof(b), 0, 0, t, s, PPPPAP);
 		if (!p) return;
 
 		if (session[s].ip)
-			*p = 2;			// ACK
+			*p = 2;				// ACK
 		else
-			*p = 3;			// cant authorise
+			*p = 3;				// cant authorise
 		p[1] = id;
-		*(u16 *) (p + 2) = htons(5);	// length
-		p[4] = 0;			// no message
+		*(uint16_t *) (p + 2) = htons(5);	// length
+		p[4] = 0;				// no message
 		if (session[s].ip)
 		{
 			LOG(3, s, t, "Already an IP allocated: %s (%d)\n",
@@ -101,7 +101,7 @@ void processpap(tunnelidt t, sessionidt s, u8 *p, u16 l)
 	else
 	{
 		// set up RADIUS request
-		u16 r = session[s].radius;
+		uint16_t r = session[s].radius;
 
 		// Run PRE_AUTH plugins
 		struct param_pre_auth packet = { &tunnel[t], &session[s], strdup(user), strdup(pass), PPPPAP, 1 };
@@ -127,10 +127,10 @@ void processpap(tunnelidt t, sessionidt s, u8 *p, u16 l)
 }
 
 // Process CHAP messages
-void processchap(tunnelidt t, sessionidt s, u8 *p, u16 l)
+void processchap(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 {
-	u16 r;
-	u16 hl;
+	uint16_t r;
+	uint16_t hl;
 
 	CSTAT(call_processchap);
 
@@ -153,7 +153,7 @@ void processchap(tunnelidt t, sessionidt s, u8 *p, u16 l)
 		return ;
 	}
 
-	if ((hl = ntohs(*(u16 *) (p + 2))) > l)
+	if ((hl = ntohs(*(uint16_t *) (p + 2))) > l)
 	{
 		LOG(1, s, t, "Length mismatch CHAP %u/%u\n", hl, l);
 		STAT(tunnel_rx_errors);
@@ -240,13 +240,13 @@ static char *ppp_lcp_types[] = {
 	"IdentRequest",
 };
 
-static void dumplcp(u8 *p, int l)
+static void dumplcp(uint8_t *p, int l)
 {
 	int x = l - 4;
-	u8 *o = (p + 4);
+	uint8_t *o = (p + 4);
 
 	LOG_HEX(5, "PPP LCP Packet", p, l);
-	LOG(4, 0, 0, "PPP LCP Packet type %d (%s len %d)\n", *p, ppp_lcp_types[(int)*p], ntohs( ((u16 *) p)[1]) );
+	LOG(4, 0, 0, "PPP LCP Packet type %d (%s len %d)\n", *p, ppp_lcp_types[(int)*p], ntohs( ((uint16_t *) p)[1]) );
 	LOG(4, 0, 0, "Length: %d\n", l);
 	if (*p != ConfigReq && *p != ConfigRej && *p != ConfigAck)
 		return;
@@ -271,14 +271,14 @@ static void dumplcp(u8 *p, int l)
 		{
 			case 1: // Maximum-Receive-Unit
 				if (length == 4)
-					LOG(4, 0, 0, "    %s %d\n", lcp_types[type], ntohs(*(u16 *)(o + 2)));
+					LOG(4, 0, 0, "    %s %d\n", lcp_types[type], ntohs(*(uint16_t *)(o + 2)));
 				else
 					LOG(4, 0, 0, "    %s odd length %d\n", lcp_types[type], length);
 				break;
 			case 2: // Async-Control-Character-Map
 				if (length == 6)
 				{
-					u32 asyncmap = ntohl(*(u32 *)(o + 2));
+					uint32_t asyncmap = ntohl(*(uint32_t *)(o + 2));
 					LOG(4, 0, 0, "    %s %x\n", lcp_types[type], asyncmap);
 				}
 				else
@@ -287,7 +287,7 @@ static void dumplcp(u8 *p, int l)
 			case 3: // Authentication-Protocol
 				if (length == 4)
 				{
-					int proto = ntohs(*(u16 *)(o + 2));
+					int proto = ntohs(*(uint16_t *)(o + 2));
 					LOG(4, 0, 0, "   %s 0x%x (%s)\n", lcp_types[type], proto,
 						proto == PPPCHAP ? "CHAP" :
 						proto == PPPPAP  ? "PAP"  : "UNKNOWN");
@@ -297,14 +297,14 @@ static void dumplcp(u8 *p, int l)
 				break;
 			case 4: // Quality-Protocol
 				{
-					u32 qp = ntohl(*(u32 *)(o + 2));
+					uint32_t qp = ntohl(*(uint32_t *)(o + 2));
 					LOG(4, 0, 0, "    %s %x\n", lcp_types[type], qp);
 				}
 				break;
 			case 5: // Magic-Number
 				if (length == 6)
 				{
-					u32 magicno = ntohl(*(u32 *)(o + 2));
+					uint32_t magicno = ntohl(*(uint32_t *)(o + 2));
 					LOG(4, 0, 0, "    %s %x\n", lcp_types[type], magicno);
 				}
 				else
@@ -324,12 +324,12 @@ static void dumplcp(u8 *p, int l)
 }
 
 // Process LCP messages
-void processlcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
+void processlcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 {
-	u8 b[MAXCONTROL];
-	u8 *q = NULL;
-	u32 magicno = 0;
-	u16 hl;
+	uint8_t b[MAXCONTROL];
+	uint8_t *q = NULL;
+	uint32_t magicno = 0;
+	uint16_t hl;
 
 	CSTAT(call_processlcp);
 
@@ -341,7 +341,7 @@ void processlcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 		return ;
 	}
 
-	if ((hl = ntohs(*(u16 *) (p + 2))) > l)
+	if ((hl = ntohs(*(uint16_t *) (p + 2))) > l)
 	{
 		LOG(1, s, t, "Length mismatch LCP %u/%u\n", hl, l);
 		STAT(tunnel_rx_errors);
@@ -357,8 +357,8 @@ void processlcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 	else if (*p == ConfigReq)
 	{
 		int x = l - 4;
-		u8 *o = (p + 4);
-		u8 *response = 0;
+		uint8_t *o = (p + 4);
+		uint8_t *response = 0;
 
 		LOG(3, s, t, "LCP: ConfigReq (%d bytes)...\n", l);
 		if (config->debug > 3) dumplcp(p, l);
@@ -372,11 +372,11 @@ void processlcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 			switch (type)
 			{
 				case 1: // Maximum-Receive-Unit
-					session[s].mru = ntohs(*(u16 *)(o + 2));
+					session[s].mru = ntohs(*(uint16_t *)(o + 2));
 					break;
 
 				case 2: // Async-Control-Character-Map
-					if (!ntohl(*(u32 *)(o + 2))) // all bits zero is OK
+					if (!ntohl(*(uint32_t *)(o + 2))) // all bits zero is OK
 						break;
 
 					if (response && *response != ConfigNak) // rej already queued
@@ -401,12 +401,12 @@ void processlcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 					*q++ = 6;
 					memset(q, 0, 4); // asyncmap 0
 					q += 4;
-					*((u16 *) (response + 2)) = htons(q - response); // LCP header length
+					*((uint16_t *) (response + 2)) = htons(q - response); // LCP header length
 					break;
 
 				case 3: // Authentication-Protocol
 					{
-						int proto = ntohs(*(u16 *)(o + 2));
+						int proto = ntohs(*(uint16_t *)(o + 2));
 						char proto_name[] = "0x0000";
 						if (proto == PPPPAP)
 							break;
@@ -436,14 +436,14 @@ void processlcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 						}
 
 						memcpy(q, o, length);
-						*(u16 *)(q += 2) = htons(PPPPAP); // NAK -> Use PAP instead
+						*(uint16_t *)(q += 2) = htons(PPPPAP); // NAK -> Use PAP instead
 						q += length;
-						*((u16 *) (response + 2)) = htons(q - response);
+						*((uint16_t *) (response + 2)) = htons(q - response);
 					}
 					break;
 
 				case 5: // Magic-Number
-					magicno = ntohl(*(u32 *)(o + 2));
+					magicno = ntohl(*(uint32_t *)(o + 2));
 					break;
 
 				case 4: // Quality-Protocol
@@ -469,7 +469,7 @@ void processlcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 
 					memcpy(q, o, length);
 					q += length;
-					*((u16 *) (response + 2)) = htons(q - response); // LCP header length
+					*((uint16_t *) (response + 2)) = htons(q - response); // LCP header length
 			}
 			x -= length;
 			o += length;
@@ -512,7 +512,7 @@ void processlcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 	{
 		LOG(5, s, t, "LCP: Received EchoReq.  Sending EchoReply\n");
 		*p = EchoReply;		// reply
-		*(u32 *) (p + 4) = htonl(session[s].magic); // our magic number
+		*(uint32_t *) (p + 4) = htonl(session[s].magic); // our magic number
 		q = makeppp(b, sizeof(b), p, l, t, s, PPPLCP);
 		if (!q) return;
 		tunnelsend(b, l + (q - b), t); // send it
@@ -543,9 +543,9 @@ void processlcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 }
 
 // find a PPP option, returns point to option, or 0 if not found
-static u8 *findppp(u8 *b, u8 mtype)
+static uint8_t *findppp(uint8_t *b, uint8_t mtype)
 {
-	u16 l = ntohs(*(u16 *) (b + 2));
+	uint16_t l = ntohs(*(uint16_t *) (b + 2));
 	if (l < 4)
 		return 0;
 	b += 4;
@@ -563,9 +563,9 @@ static u8 *findppp(u8 *b, u8 mtype)
 }
 
 // Process IPCP messages
-void processipcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
+void processipcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 {
-	u16 hl;
+	uint16_t hl;
 
 	CSTAT(call_processipcp);
 
@@ -577,7 +577,7 @@ void processipcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 		return ;
 	}
 
-	if ((hl = ntohs(*(u16 *) (p + 2))) > l)
+	if ((hl = ntohs(*(uint16_t *) (p + 2))) > l)
 	{
 		LOG(1, s, t, "Length mismatch IPCP %u/%u\n", hl, l);
 		STAT(tunnel_rx_errors);
@@ -588,7 +588,7 @@ void processipcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 	if (*p == ConfigAck)
 	{
 		// happy with our IPCP
-		u16 r = session[s].radius;
+		uint16_t r = session[s].radius;
 		if ((!r || radius[r].state == RADIUSIPCP) && !session[s].walled_garden)
 		{
 			if (!r)
@@ -620,9 +620,8 @@ void processipcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 	}
 	// form a config reply quoting the IP in the session
 	{
-		u8 b[MAXCONTROL];
-		u8 *i,
-		*q;
+		uint8_t b[MAXCONTROL];
+		uint8_t *i, *q;
 
 		q = p + 4;
 		i = p + l;
@@ -635,7 +634,7 @@ void processipcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 		if (q < i)
 		{
 			// reject
-			u16 n = 4;
+			uint16_t n = 4;
 			i = p + l;
 			if (!(q = makeppp(b, sizeof(b), p, l, t, s, PPPIPCP)))
 				return;
@@ -652,7 +651,7 @@ void processipcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 				}
 				p += p[1];
 			}
-			*(u16 *) (q + 2) = htons(n);
+			*(uint16_t *) (q + 2) = htons(n);
 			LOG(4, s, t, "Sending ConfigRej\n");
 			tunnelsend(b, n + (q - b), t); // send it
 		}
@@ -662,9 +661,9 @@ void processipcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 			*p = ConfigAck;
 			if ((i = findppp(p, 0x81))) // Primary DNS address
 			{
-				if (*(u32 *) (i + 2) != htonl(session[s].dns1))
+				if (*(uint32_t *) (i + 2) != htonl(session[s].dns1))
 				{
-					*(u32 *) (i + 2) = htonl(session[s].dns1);
+					*(uint32_t *) (i + 2) = htonl(session[s].dns1);
 					*p = ConfigNak;
 					LOG(5, s, t, "   DNS1 = %s\n",
 						fmtaddr(htonl(session[s].dns1), 0));
@@ -672,9 +671,9 @@ void processipcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 			}
 			if ((i = findppp(p, 0x83))) // Secondary DNS address (TBA, is it)
 			{
-				if (*(u32 *) (i + 2) != htonl(session[s].dns2))
+				if (*(uint32_t *) (i + 2) != htonl(session[s].dns2))
 				{
-					*(u32 *) (i + 2) = htonl(session[s].dns2);
+					*(uint32_t *) (i + 2) = htonl(session[s].dns2);
 					*p = ConfigNak;
 					LOG(5, s, t, "   DNS2 = %s\n",
 						fmtaddr(htonl(session[s].dns2), 0));
@@ -687,9 +686,9 @@ void processipcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 				STAT(tunnel_rx_errors);
 				return ;
 			}
-			if (*(u32 *) (i + 2) != htonl(session[s].ip))
+			if (*(uint32_t *) (i + 2) != htonl(session[s].ip))
 			{
-				*(u32 *) (i + 2) = htonl(session[s].ip);
+				*(uint32_t *) (i + 2) = htonl(session[s].ip);
 				*p = ConfigNak;
 				LOG(4, s, t, " No, a ConfigNak, client is requesting IP - sending %s\n",
 						fmtaddr(htonl(session[s].ip), 0));
@@ -706,15 +705,15 @@ void processipcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 //
 // This MUST be called with at least 4 byte behind 'p'.
 // (i.e. this routine writes to p[-4]).
-void processipin(tunnelidt t, sessionidt s, u8 *p, u16 l)
+void processipin(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 {
-	ipt ip;
+	in_addr_t ip;
 
 	CSTAT(call_processipin);
 
 	LOG_HEX(5, "IP", p, l);
 
-	ip = ntohl(*(u32 *)(p + 12));
+	ip = ntohl(*(uint32_t *)(p + 12));
 
 	if (l > MAXETHER)
 	{
@@ -736,7 +735,7 @@ void processipin(tunnelidt t, sessionidt s, u8 *p, u16 l)
 
 	// Add on the tun header
 	p -= 4;
-	*(u32 *)p = htonl(0x00000800);
+	*(uint32_t *) p = htonl(0x00000800);
 	l += 4;
 
 	if (session[s].tbf_in && !config->cluster_iam_master) { // Are we throttled and a slave?
@@ -780,7 +779,7 @@ void processipin(tunnelidt t, sessionidt s, u8 *p, u16 l)
 // Helper routine for the TBF filters.
 // Used to send queued data in from the user.
 //
-void send_ipin(sessionidt s, u8 *buf, int len)
+void send_ipin(sessionidt s, uint8_t *buf, int len)
 {
 	LOG_HEX(5, "IP in throttled", buf, len);
 
@@ -813,10 +812,10 @@ void send_ipin(sessionidt s, u8 *buf, int len)
 
 
 // Process CCP messages
-void processccp(tunnelidt t, sessionidt s, u8 *p, u16 l)
+void processccp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 {
-	u8 b[MAXCONTROL];
-	u8 *q;
+	uint8_t b[MAXCONTROL];
+	uint8_t *q;
 
 	CSTAT(call_processccp);
 
@@ -866,9 +865,9 @@ void processccp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 // send a CHAP PP packet
 void sendchap(tunnelidt t, sessionidt s)
 {
-	u8 b[MAXCONTROL];
-	u16 r = session[s].radius;
-	u8 *q;
+	uint8_t b[MAXCONTROL];
+	uint16_t r = session[s].radius;
+	uint8_t *q;
 
 	CSTAT(call_sendchap);
 
@@ -905,14 +904,14 @@ void sendchap(tunnelidt t, sessionidt s)
 	q[4] = 16;				// length
 	memcpy(q + 5, radius[r].auth, 16);	// challenge
 	strcpy(q + 21, hostname);		// our name
-	*(u16 *) (q + 2) = htons(strlen(hostname) + 21); // length
+	*(uint16_t *) (q + 2) = htons(strlen(hostname) + 21); // length
 	tunnelsend(b, strlen(hostname) + 21 + (q - b), t); // send it
 }
 
 // fill in a L2TP message with a PPP frame,
 // copies existing PPP message and changes magic number if seen
 // returns start of PPP frame
-u8 *makeppp(u8 *b, int size, u8 *p, int l, tunnelidt t, sessionidt s, u16 mtype)
+uint8_t *makeppp(uint8_t *b, int size, uint8_t *p, int l, tunnelidt t, sessionidt s, uint16_t mtype)
 {
 	if (size < 12) // Need more space than this!!
 	{
@@ -922,20 +921,20 @@ u8 *makeppp(u8 *b, int size, u8 *p, int l, tunnelidt t, sessionidt s, u16 mtype)
 		return NULL;
 	}
 
-	*(u16 *) (b + 0) = htons(0x0002); // L2TP with no options
-	*(u16 *) (b + 2) = htons(tunnel[t].far); // tunnel
-	*(u16 *) (b + 4) = htons(session[s].far); // session
+	*(uint16_t *) (b + 0) = htons(0x0002); // L2TP with no options
+	*(uint16_t *) (b + 2) = htons(tunnel[t].far); // tunnel
+	*(uint16_t *) (b + 4) = htons(session[s].far); // session
 	b += 6;
 	if (mtype == PPPLCP || !(session[s].l2tp_flags & SESSIONACFC))
 	{
-		*(u16 *) b = htons(0xFF03); // HDLC header
+		*(uint16_t *) b = htons(0xFF03); // HDLC header
 		b += 2;
 	}
 	if (mtype < 0x100 && session[s].l2tp_flags & SESSIONPFC)
 		*b++ = mtype;
 	else
 	{
-		*(u16 *) b = htons(mtype);
+		*(uint16_t *) b = htons(mtype);
 		b += 2;
 	}
 
@@ -963,14 +962,14 @@ void initlcp(tunnelidt t, sessionidt s)
 
 	LOG(4, s, t, "Sending LCP ConfigReq for PAP\n");
 	*q = ConfigReq;
-	*(u8 *)(q + 1) = (time_now % 255) + 1; // ID
-	*(u16 *)(q + 2) = htons(14); // Length
-	*(u8 *)(q + 4) = 5;
-	*(u8 *)(q + 5) = 6;
-	*(u32 *)(q + 6) = htonl(session[s].magic);
-	*(u8 *)(q + 10) = 3;
-	*(u8 *)(q + 11) = 4;
-	*(u16 *)(q + 12) = htons(PPPPAP); // PAP
+	*(uint8_t *)(q + 1) = (time_now % 255) + 1; // ID
+	*(uint16_t *)(q + 2) = htons(14); // Length
+	*(uint8_t *)(q + 4) = 5;
+	*(uint8_t *)(q + 5) = 6;
+	*(uint32_t *)(q + 6) = htonl(session[s].magic);
+	*(uint8_t *)(q + 10) = 3;
+	*(uint8_t *)(q + 11) = 4;
+	*(uint16_t *)(q + 12) = htons(PPPPAP); // PAP
 
 	LOG_HEX(5, "PPPLCP", q, 14);
 	tunnelsend(b, (q - b) + 14, t);
@@ -986,8 +985,8 @@ static void initccp(tunnelidt t, sessionidt s)
 
 	LOG(4, s, t, "Sending CCP ConfigReq for no compression\n");
 	*q = ConfigReq;
-	*(u8 *)(q + 1) = (time_now % 255) + 1; // ID
-	*(u16 *)(q + 2) = htons(4); // Length
+	*(uint8_t *)(q + 1) = (time_now % 255) + 1; // ID
+	*(uint16_t *)(q + 2) = htons(4); // Length
 
 	LOG_HEX(5, "PPPCCP", q, 4);
 	tunnelsend(b, (q - b) + 4 , t);

@@ -5,7 +5,7 @@
 
 /* snoop control */
 
-char const *cvs_id = "$Id: snoopctl.c,v 1.3 2004-11-18 06:41:03 bodea Exp $";
+char const *cvs_id = "$Id: snoopctl.c,v 1.4 2004-12-16 08:49:53 bodea Exp $";
 
 int plugin_api_version = PLUGIN_API_VERSION;
 static struct pluginfuncs *p = 0;
@@ -77,8 +77,8 @@ int plugin_control(struct param_control *data)
 
 	if (flag)
 	{
-		ipt ip = inet_addr(data->argv[2]);
-		u16 port = atoi(data->argv[3]);
+		in_addr_t ip = inet_addr(data->argv[2]);
+		uint16_t port = atoi(data->argv[3]);
 
 		if (!ip || ip == INADDR_NONE)
 		{

@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.69 2004-12-16 03:03:41 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.70 2004-12-16 08:49:53 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -64,11 +64,11 @@ int *radfds = NULL;		// RADIUS requests file handles
 int ifrfd = -1;			// File descriptor for routing, etc
 time_t basetime = 0;		// base clock
 char hostname[1000] = "";	// us.
-static u32 sessionid = 0;	// session id for radius accounting
+static uint32_t sessionid = 0;	// session id for radius accounting
 static int syslog_log = 0;	// are we logging to syslog
 static FILE *log_stream = NULL;	// file handle for direct logging (i.e. direct into file, not via syslog).
 extern int cluster_sockfd;	// Intra-cluster communications socket.
-u32 last_id = 0;		// Last used PPP SID. Can I kill this?? -- mo
+uint32_t last_id = 0;		// Last used PPP SID. Can I kill this?? -- mo
 
 struct cli_session_actions *cli_session_actions = NULL;	// Pending session changes requested by CLI
 struct cli_tunnel_actions *cli_tunnel_actions = NULL;	// Pending tunnel changes required by CLI
@@ -76,11 +76,11 @@ struct cli_tunnel_actions *cli_tunnel_actions = NULL;	// Pending tunnel changes 
 static void *ip_hash[256];	// Mapping from IP address to session structures.
 
 // Traffic counters.
-static u32 udp_rx = 0, udp_rx_pkt = 0, udp_tx = 0;
-static u32 eth_rx = 0, eth_rx_pkt = 0;
-u32 eth_tx = 0;
+static uint32_t udp_rx = 0, udp_rx_pkt = 0, udp_tx = 0;
+static uint32_t eth_rx = 0, eth_rx_pkt = 0;
+uint32_t eth_tx = 0;
 
-static u32 ip_pool_size = 1;		// Size of the pool of addresses used for dynamic address allocation.
+static uint32_t ip_pool_size = 1;	// Size of the pool of addresses used for dynamic address allocation.
 time_t time_now = 0;			// Current time in seconds since epoch.
 static char time_now_string[64] = {0};	// Current time as a string.
 static char main_quit = 0;		// True if we're in the process of exiting.
@@ -157,8 +157,8 @@ struct Tstats *_statistics = NULL;
 struct Tringbuffer *ringbuffer = NULL;
 #endif
 
-static void cache_ipmap(ipt ip, int s);
-static void uncache_ipmap(ipt ip);
+static void cache_ipmap(in_addr_t ip, int s);
+static void uncache_ipmap(in_addr_t ip);
 static void free_ip_address(sessionidt s);
 static void dump_acct_info(int all);
 static void sighup_handler(int sig);
@@ -168,16 +168,16 @@ static void sigquit_handler(int sig);
 static void sigchild_handler(int sig);
 static void read_state(void);
 static void dump_state(void);
-static void build_chap_response(char *challenge, u8 id, u16 challenge_length, char **challenge_response);
+static void build_chap_response(char *challenge, uint8_t id, uint16_t challenge_length, char **challenge_response);
 static void update_config(void);
 static void read_config_file(void);
 static void initplugins(void);
 static int add_plugin(char *plugin_name);
 static int remove_plugin(char *plugin_name);
 static void plugins_done(void);
-static void processcontrol(u8 * buf, int len, struct sockaddr_in *addr, int alen);
+static void processcontrol(uint8_t *buf, int len, struct sockaddr_in *addr, int alen);
 static tunnelidt new_tunnel(void);
-static int unhide_avp(u8 *avp, tunnelidt t, sessionidt s, u16 length);
+static int unhide_avp(uint8_t *avp, tunnelidt t, sessionidt s, uint16_t length);
 
 // return internal time (10ths since process startup)
 static clockt now(void)
@@ -190,7 +190,7 @@ static clockt now(void)
 // work out a retry time based on try number
 // This is a straight bounded exponential backoff.
 // Maximum re-try time is 32 seconds. (2^5).
-clockt backoff(u8 try)
+clockt backoff(uint8_t try)
 {
 	if (try > 5) try = 5;                  // max backoff
 	return now() + 10 * (1 << try);
@@ -245,7 +245,7 @@ void _log(int level, sessionidt s, tunnelidt t, const char *format, ...)
 void _log_hex(int level, const char *title, const char *data, int maxsize)
 {
 	int i, j;
-	const u8 *d = (const u8 *)data;
+	const uint8_t *d = (const uint8_t *) data;
 
 	if (config->debug < level) return;
 
@@ -302,7 +302,7 @@ void _log_hex(int level, const char *title, const char *data, int maxsize)
 //
 // 'ip' and 'mask' must be in _host_ order.
 //
-static void routeset(sessionidt s, ipt ip, ipt mask, ipt gw, u8 add)
+static void routeset(sessionidt s, in_addr_t ip, in_addr_t mask, in_addr_t gw, int add)
 {
 	struct rtentry r;
 	int i;
@@ -314,11 +314,11 @@ static void routeset(sessionidt s, ipt ip, ipt mask, ipt gw, u8 add)
 	memset(&r, 0, sizeof(r));
 	r.rt_dev = config->tundevice;
 	r.rt_dst.sa_family = AF_INET;
-	*(u32 *) & (((struct sockaddr_in *) &r.rt_dst)->sin_addr.s_addr) = htonl(ip);
+	*(uint32_t *) & (((struct sockaddr_in *) &r.rt_dst)->sin_addr.s_addr) = htonl(ip);
 	r.rt_gateway.sa_family = AF_INET;
-	*(u32 *) & (((struct sockaddr_in *) &r.rt_gateway)->sin_addr.s_addr) = htonl(gw);
+	*(uint32_t *) & (((struct sockaddr_in *) &r.rt_gateway)->sin_addr.s_addr) = htonl(gw);
 	r.rt_genmask.sa_family = AF_INET;
-	*(u32 *) & (((struct sockaddr_in *) &r.rt_genmask)->sin_addr.s_addr) = htonl(mask);
+	*(uint32_t *) & (((struct sockaddr_in *) &r.rt_genmask)->sin_addr.s_addr) = htonl(mask);
 	r.rt_flags = (RTF_UP | RTF_STATIC);
 	if (gw)
 		r.rt_flags |= RTF_GATEWAY;
@@ -461,27 +461,26 @@ static void initudp(void)
 // IP address.
 //
 
-static int lookup_ipmap(ipt ip)
+static int lookup_ipmap(in_addr_t ip)
 {
-	u8 *a = (u8 *)&ip;
-	char **d = (char **) ip_hash;
-	int s;
+	uint8_t *a = (uint8_t *) &ip;
+	uint8_t **d = (uint8_t **) ip_hash;
 
-	if (!(d = (char **) d[(size_t) *a++])) return 0;
-	if (!(d = (char **) d[(size_t) *a++])) return 0;
-	if (!(d = (char **) d[(size_t) *a++])) return 0;
+	if (!(d = (uint8_t **) d[(size_t) *a++])) return 0;
+	if (!(d = (uint8_t **) d[(size_t) *a++])) return 0;
+	if (!(d = (uint8_t **) d[(size_t) *a++])) return 0;
 
-	s = (ipt) d[(size_t) *a];
-	return s;
+	return (int) (intptr_t) d[(size_t) *a];
 }
 
-sessionidt sessionbyip(ipt ip)
+sessionidt sessionbyip(in_addr_t ip)
 {
 	int s = lookup_ipmap(ip);
 	CSTAT(call_sessionbyip);
 
 	if (s > 0 && s < MAXSESSION && session[s].tunnel)
-		return s;
+		return (sessionidt) s;
+
 	return 0;
 }
 
@@ -491,25 +490,25 @@ sessionidt sessionbyip(ipt ip)
 //
 // (It's actually cached in network order)
 //
-static void cache_ipmap(ipt ip, int s)
+static void cache_ipmap(in_addr_t ip, int s)
 {
-	ipt nip = htonl(ip);		// MUST be in network order. I.e. MSB must in be ((char*)(&ip))[0]
-	u8 *a = (u8 *) &nip;
-	char **d = (char **) ip_hash;
+	in_addr_t nip = htonl(ip);	// MUST be in network order. I.e. MSB must in be ((char *) (&ip))[0]
+	uint8_t *a = (uint8_t *) &nip;
+	uint8_t **d = (uint8_t **) ip_hash;
 	int i;
 
 	for (i = 0; i < 3; i++)
 	{
 		if (!d[(size_t) a[i]])
 		{
-			if (!(d[(size_t) a[i]] = calloc(256, sizeof (void *))))
+			if (!(d[(size_t) a[i]] = calloc(256, sizeof(void *))))
 				return;
 		}
 
-		d = (char **) d[(size_t) a[i]];
+		d = (uint8_t **) d[(size_t) a[i]];
 	}
 
-	d[(size_t) a[3]] = (char *)((int)s);
+	d[(size_t) a[3]] = (uint8_t *) (intptr_t) s;
 
 	if (s > 0)
 		LOG(4, s, session[s].tunnel, "Caching ip address %s\n", fmtaddr(nip, 0));
@@ -519,7 +518,7 @@ static void cache_ipmap(ipt ip, int s)
 	// else a map to an ip pool index.
 }
 
-static void uncache_ipmap(ipt ip)
+static void uncache_ipmap(in_addr_t ip)
 {
 	cache_ipmap(ip, 0);	// Assign it to the NULL session.
 }
@@ -542,22 +541,22 @@ int cmd_show_ipcache(struct cli_def *cli, char *command, char **argv, int argc)
 	{
 		if (!d[i])
 			continue;
-		e = (char**) d[i];
+		e = (char **) d[i];
 		for (j = 0; j < 256; ++j)
 		{
 			if (!e[j])
 				continue;
-			f = (char**) e[j];
+			f = (char **) e[j];
 			for (k = 0; k < 256; ++k)
 			{
 				if (!f[k])
 					continue;
-				g = (char**)f[k];
+				g = (char **)f[k];
 				for (l = 0; l < 256; ++l)
 				{
 					if (!g[l])
 						continue;
-					cli_print(cli, "%7d %d.%d.%d.%d", (int) g[l], i, j, k, l);
+					cli_print(cli, "%7d %d.%d.%d.%d", (int) (intptr_t) g[l], i, j, k, l);
 					++count;
 				}
 			}
@@ -591,11 +590,11 @@ sessionidt sessionbyuser(char *username)
 	return 0;	// Not found.
 }
 
-void send_garp(ipt ip)
+void send_garp(in_addr_t ip)
 {
 	int s;
 	struct ifreq ifr;
-	u8 mac[6];
+	uint8_t mac[6];
 
 	s = socket(PF_INET, SOCK_DGRAM, 0);
 	if (s < 0)
@@ -637,7 +636,7 @@ static sessionidt sessionidtbysessiont(sessiont *s)
 }
 
 // actually send a control message for a specific tunnel
-void tunnelsend(u8 * buf, u16 l, tunnelidt t)
+void tunnelsend(uint8_t * buf, uint16_t l, tunnelidt t)
 {
 	struct sockaddr_in addr;
 
@@ -663,11 +662,11 @@ void tunnelsend(u8 * buf, u16 l, tunnelidt t)
 
 	memset(&addr, 0, sizeof(addr));
 	addr.sin_family = AF_INET;
-	*(u32 *) & addr.sin_addr = htonl(tunnel[t].ip);
+	*(uint32_t *) & addr.sin_addr = htonl(tunnel[t].ip);
 	addr.sin_port = htons(tunnel[t].port);
 
 	// sequence expected, if sequence in message
-	if (*buf & 0x08) *(u16 *) (buf + ((*buf & 0x40) ? 10 : 8)) = htons(tunnel[t].nr);
+	if (*buf & 0x08) *(uint16_t *) (buf + ((*buf & 0x40) ? 10 : 8)) = htons(tunnel[t].nr);
 
 	// If this is a control message, deal with retries
 	if (*buf & 0x80)
@@ -683,7 +682,7 @@ void tunnelsend(u8 * buf, u16 l, tunnelidt t)
 
 	if (sendto(udpfd, buf, l, 0, (void *) &addr, sizeof(addr)) < 0)
 	{
-		LOG(0, ntohs((*(u16 *) (buf + 6))), t, "Error sending data out tunnel: %s (udpfd=%d, buf=%p, len=%d, dest=%s)\n",
+		LOG(0, ntohs((*(uint16_t *) (buf + 6))), t, "Error sending data out tunnel: %s (udpfd=%d, buf=%p, len=%d, dest=%s)\n",
 				strerror(errno), udpfd, buf, l, inet_ntoa(addr.sin_addr));
 		STAT(tunnel_tx_errors);
 		return;
@@ -698,24 +697,24 @@ void tunnelsend(u8 * buf, u16 l, tunnelidt t)
 // Tiny helper function to write data to
 // the 'tun' device.
 //
-int tun_write(u8 * data, int size)
+int tun_write(uint8_t * data, int size)
 {
 	return write(tunfd, data, size);
 }
 
 // process outgoing (to tunnel) IP
 //
-static void processipout(u8 * buf, int len)
+static void processipout(uint8_t * buf, int len)
 {
 	sessionidt s;
 	sessiont *sp;
 	tunnelidt t;
-	ipt ip;
+	in_addr_t ip;
 
 	char * data = buf;	// Keep a copy of the originals.
 	int size = len;
 
-	u8 b[MAXETHER + 20];
+	uint8_t b[MAXETHER + 20];
 
 	CSTAT(call_processipout);
 
@@ -737,13 +736,13 @@ static void processipout(u8 * buf, int len)
 	len -= 4;
 
 	// Got an IP header now
-	if (*(u8 *)(buf) >> 4 != 4)
+	if (*(uint8_t *)(buf) >> 4 != 4)
 	{
 		LOG(1, 0, 0, "IP: Don't understand anything except IPv4\n");
 		return;
 	}
 
-	ip = *(u32 *)(buf + 16);
+	ip = *(uint32_t *)(buf + 16);
 	if (!(s = sessionbyip(ip)))
 	{
 		// Is this a packet for a session that doesn't exist?
@@ -758,8 +757,8 @@ static void processipout(u8 * buf, int len)
 
 		if (rate++ < config->icmp_rate) // Only send a max of icmp_rate per second.
 		{
-			LOG(4, 0, 0, "IP: Sending ICMP host unreachable to %s\n", fmtaddr(*(u32 *)(buf + 12), 0));
-			host_unreachable(*(u32 *)(buf + 12), *(u16 *)(buf + 4), ip, buf, (len < 64) ? 64 : len);
+			LOG(4, 0, 0, "IP: Sending ICMP host unreachable to %s\n", fmtaddr(*(in_addr_t *)(buf + 12), 0));
+			host_unreachable(*(in_addr_t *)(buf + 12), *(uint16_t *)(buf + 4), ip, buf, (len < 64) ? 64 : len);
 		}
 		return;
 	}
@@ -790,7 +789,7 @@ static void processipout(u8 * buf, int len)
 
 	// Add on L2TP header
 	{
-		u8 *p = makeppp(b, sizeof(b), buf, len, t, s, PPPIP);
+		uint8_t *p = makeppp(b, sizeof(b), buf, len, t, s, PPPIP);
 		if (!p) return;
 		tunnelsend(b, len + (p-b), t); // send it...
 	}
@@ -810,13 +809,13 @@ static void processipout(u8 * buf, int len)
 // Helper routine for the TBF filters.
 // Used to send queued data in to the user!
 //
-static void send_ipout(sessionidt s, u8 *buf, int len)
+static void send_ipout(sessionidt s, uint8_t *buf, int len)
 {
 	sessiont *sp;
 	tunnelidt t;
-	ipt ip;
+	in_addr_t ip;
 
-	u8 b[MAXETHER + 20];
+	uint8_t b[MAXETHER + 20];
 
 	if (len < 0 || len > MAXETHER)
 	{
@@ -828,7 +827,7 @@ static void send_ipout(sessionidt s, u8 *buf, int len)
 	buf += 4;
 	len -= 4;
 
-	ip = *(u32 *)(buf + 16);
+	ip = *(in_addr_t *)(buf + 16);
 
 	if (!session[s].ip)
 		return;
@@ -840,7 +839,7 @@ static void send_ipout(sessionidt s, u8 *buf, int len)
 
 	// Add on L2TP header
 	{
-		u8 *p = makeppp(b, sizeof(b),  buf, len, t, s, PPPIP);
+		uint8_t *p = makeppp(b, sizeof(b),  buf, len, t, s, PPPIP);
 		if (!p) return;
 		tunnelsend(b, len + (p-b), t); // send it...
 	}
@@ -857,51 +856,51 @@ static void send_ipout(sessionidt s, u8 *buf, int len)
 }
 
 // add an AVP (16 bit)
-static void control16(controlt * c, u16 avp, u16 val, u8 m)
+static void control16(controlt * c, uint16_t avp, uint16_t val, uint8_t m)
 {
-	u16 l = (m ? 0x8008 : 0x0008);
-	*(u16 *) (c->buf + c->length + 0) = htons(l);
-	*(u16 *) (c->buf + c->length + 2) = htons(0);
-	*(u16 *) (c->buf + c->length + 4) = htons(avp);
-	*(u16 *) (c->buf + c->length + 6) = htons(val);
+	uint16_t l = (m ? 0x8008 : 0x0008);
+	*(uint16_t *) (c->buf + c->length + 0) = htons(l);
+	*(uint16_t *) (c->buf + c->length + 2) = htons(0);
+	*(uint16_t *) (c->buf + c->length + 4) = htons(avp);
+	*(uint16_t *) (c->buf + c->length + 6) = htons(val);
 	c->length += 8;
 }
 
 // add an AVP (32 bit)
-static void control32(controlt * c, u16 avp, u32 val, u8 m)
+static void control32(controlt * c, uint16_t avp, uint32_t val, uint8_t m)
 {
-	u16 l = (m ? 0x800A : 0x000A);
-	*(u16 *) (c->buf + c->length + 0) = htons(l);
-	*(u16 *) (c->buf + c->length + 2) = htons(0);
-	*(u16 *) (c->buf + c->length + 4) = htons(avp);
-	*(u32 *) (c->buf + c->length + 6) = htonl(val);
+	uint16_t l = (m ? 0x800A : 0x000A);
+	*(uint16_t *) (c->buf + c->length + 0) = htons(l);
+	*(uint16_t *) (c->buf + c->length + 2) = htons(0);
+	*(uint16_t *) (c->buf + c->length + 4) = htons(avp);
+	*(uint32_t *) (c->buf + c->length + 6) = htonl(val);
 	c->length += 10;
 }
 
 // add an AVP (32 bit)
-static void controls(controlt * c, u16 avp, char *val, u8 m)
+static void controls(controlt * c, uint16_t avp, char *val, uint8_t m)
 {
-	u16 l = ((m ? 0x8000 : 0) + strlen(val) + 6);
-	*(u16 *) (c->buf + c->length + 0) = htons(l);
-	*(u16 *) (c->buf + c->length + 2) = htons(0);
-	*(u16 *) (c->buf + c->length + 4) = htons(avp);
+	uint16_t l = ((m ? 0x8000 : 0) + strlen(val) + 6);
+	*(uint16_t *) (c->buf + c->length + 0) = htons(l);
+	*(uint16_t *) (c->buf + c->length + 2) = htons(0);
+	*(uint16_t *) (c->buf + c->length + 4) = htons(avp);
 	memcpy(c->buf + c->length + 6, val, strlen(val));
 	c->length += 6 + strlen(val);
 }
 
 // add a binary AVP
-static void controlb(controlt * c, u16 avp, char *val, unsigned int len, u8 m)
+static void controlb(controlt * c, uint16_t avp, char *val, unsigned int len, uint8_t m)
 {
-	u16 l = ((m ? 0x8000 : 0) + len + 6);
-	*(u16 *) (c->buf + c->length + 0) = htons(l);
-	*(u16 *) (c->buf + c->length + 2) = htons(0);
-	*(u16 *) (c->buf + c->length + 4) = htons(avp);
+	uint16_t l = ((m ? 0x8000 : 0) + len + 6);
+	*(uint16_t *) (c->buf + c->length + 0) = htons(l);
+	*(uint16_t *) (c->buf + c->length + 2) = htons(0);
+	*(uint16_t *) (c->buf + c->length + 4) = htons(avp);
 	memcpy(c->buf + c->length + 6, val, len);
 	c->length += 6 + len;
 }
 
 // new control connection
-static controlt *controlnew(u16 mtype)
+static controlt *controlnew(uint16_t mtype)
 {
 	controlt *c;
 	if (!controlfree)
@@ -913,7 +912,7 @@ static controlt *controlnew(u16 mtype)
 	}
 	assert(c);
 	c->next = 0;
-	*(u16 *) (c->buf + 0) = htons(0xC802); // flags/ver
+	*(uint16_t *) (c->buf + 0) = htons(0xC802); // flags/ver
 	c->length = 12;
 	control16(c, 0, mtype, 1);
 	return c;
@@ -923,26 +922,26 @@ static controlt *controlnew(u16 mtype)
 // (ZLB send).
 static void controlnull(tunnelidt t)
 {
-	u8 buf[12];
+	uint8_t buf[12];
 	if (tunnel[t].controlc)	// Messages queued; They will carry the ack.
 		return;
 
-	*(u16 *) (buf + 0) = htons(0xC802); // flags/ver
-	*(u16 *) (buf + 2) = htons(12); // length
-	*(u16 *) (buf + 4) = htons(tunnel[t].far); // tunnel
-	*(u16 *) (buf + 6) = htons(0); // session
-	*(u16 *) (buf + 8) = htons(tunnel[t].ns); // sequence
-	*(u16 *) (buf + 10) = htons(tunnel[t].nr); // sequence
+	*(uint16_t *) (buf + 0) = htons(0xC802); // flags/ver
+	*(uint16_t *) (buf + 2) = htons(12); // length
+	*(uint16_t *) (buf + 4) = htons(tunnel[t].far); // tunnel
+	*(uint16_t *) (buf + 6) = htons(0); // session
+	*(uint16_t *) (buf + 8) = htons(tunnel[t].ns); // sequence
+	*(uint16_t *) (buf + 10) = htons(tunnel[t].nr); // sequence
 	tunnelsend(buf, 12, t);
 }
 
 // add a control message to a tunnel, and send if within window
 static void controladd(controlt * c, tunnelidt t, sessionidt s)
 {
-	*(u16 *) (c->buf + 2) = htons(c->length); // length
-	*(u16 *) (c->buf + 4) = htons(tunnel[t].far); // tunnel
-	*(u16 *) (c->buf + 6) = htons(s ? session[s].far : 0); // session
-	*(u16 *) (c->buf + 8) = htons(tunnel[t].ns); // sequence
+	*(uint16_t *) (c->buf + 2) = htons(c->length); // length
+	*(uint16_t *) (c->buf + 4) = htons(tunnel[t].far); // tunnel
+	*(uint16_t *) (c->buf + 6) = htons(s ? session[s].far : 0); // session
+	*(uint16_t *) (c->buf + 8) = htons(tunnel[t].ns); // sequence
 	tunnel[t].ns++;              // advance sequence
 	// link in message in to queue
 	if (tunnel[t].controlc)
@@ -1070,7 +1069,7 @@ void sessionshutdown(sessionidt s, char *reason)
 	if (session[s].opened && !walled_garden && !session[s].die)
 	{
 		// RADIUS Stop message
-		u16 r = session[s].radius;
+		uint16_t r = session[s].radius;
 		if (!r)
 		{
 			if (!(r = radiusnew(s)))
@@ -1139,9 +1138,9 @@ void sessionshutdown(sessionidt s, char *reason)
 
 void sendipcp(tunnelidt t, sessionidt s)
 {
-	u8 buf[MAXCONTROL];
-	u16 r = session[s].radius;
-	u8 *q;
+	uint8_t buf[MAXCONTROL];
+	uint16_t r = session[s].radius;
+	uint8_t *q;
 
 	CSTAT(call_sendipcp);
 
@@ -1167,12 +1166,12 @@ void sendipcp(tunnelidt t, sessionidt s)
 
 	*q = ConfigReq;
 	q[1] = r << RADIUS_SHIFT;                    // ID, dont care, we only send one type of request
-	*(u16 *) (q + 2) = htons(10);
+	*(uint16_t *) (q + 2) = htons(10);
 	q[4] = 3;
 	q[5] = 6;
-	*(u32 *) (q + 6) = config->peer_address ? config->peer_address :
-	    		   config->bind_address ? config->bind_address :
-			   my_address; // send my IP
+	*(in_addr_t *) (q + 6) = config->peer_address ? config->peer_address :
+				 config->bind_address ? config->bind_address :
+				 my_address; // send my IP
 
 	tunnelsend(buf, 10 + (q - buf), t); // send it
 	session[s].flags &= ~SF_IPCP_ACKED;	// Clear flag.
@@ -1270,11 +1269,11 @@ static void tunnelshutdown(tunnelidt t, char *reason)
 }
 
 // read and process packet on tunnel (UDP)
-void processudp(u8 * buf, int len, struct sockaddr_in *addr)
+void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 {
 	char *chapresponse = NULL;
-	u16 l = len, t = 0, s = 0, ns = 0, nr = 0;
-	u8 *p = buf + 2;
+	uint16_t l = len, t = 0, s = 0, ns = 0, nr = 0;
+	uint8_t *p = buf + 2;
 
 
 	CSTAT(call_processudp);
@@ -1298,12 +1297,12 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 	}
 	if (*buf & 0x40)
 	{                          // length
-		l = ntohs(*(u16 *) p);
+		l = ntohs(*(uint16_t *) p);
 		p += 2;
 	}
-	t = ntohs(*(u16 *) p);
+	t = ntohs(*(uint16_t *) p);
 	p += 2;
-	s = ntohs(*(u16 *) p);
+	s = ntohs(*(uint16_t *) p);
 	p += 2;
 	if (s >= MAXSESSION)
 	{
@@ -1319,36 +1318,36 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 	}
 	if (*buf & 0x08)
 	{                          // ns/nr
-		ns = ntohs(*(u16 *) p);
+		ns = ntohs(*(uint16_t *) p);
 		p += 2;
-		nr = ntohs(*(u16 *) p);
+		nr = ntohs(*(uint16_t *) p);
 		p += 2;
 	}
 	if (*buf & 0x02)
 	{                          // offset
-		u16 o = ntohs(*(u16 *) p);
+		uint16_t o = ntohs(*(uint16_t *) p);
 		p += o + 2;
 	}
 	if ((p - buf) > l)
 	{
-		LOG(1, s, t, "Bad length %d>%d\n", (p - buf), l);
+		LOG(1, s, t, "Bad length %d>%d\n", (int) (p - buf), l);
 		STAT(tunnel_rx_errors);
 		return;
 	}
 	l -= (p - buf);
 	if (*buf & 0x80)
 	{                          // control
-		u16 message = 0xFFFF; // message type
-		u8 fatal = 0;
-		u8 mandatorymessage = 0;
-		u8 chap = 0;      // if CHAP being used
-		u16 asession = 0;  // assigned session
-		u32 amagic = 0;    // magic number
-		u8 aflags = 0;    // flags from last LCF
-		u16 version = 0x0100; // protocol version (we handle 0.0 as well and send that back just in case)
-		int requestchap = 0;	// do we request PAP instead of original CHAP request?
-		char called[MAXTEL] = ""; // called number
-		char calling[MAXTEL] = ""; // calling number
+		uint16_t message = 0xFFFF;	// message type
+		uint8_t fatal = 0;
+		uint8_t mandatorymessage = 0;
+		uint8_t chap = 0;		// if CHAP being used
+		uint16_t asession = 0;		// assigned session
+		uint32_t amagic = 0;		// magic number
+		uint8_t aflags = 0;		// flags from last LCF
+		uint16_t version = 0x0100;	// protocol version (we handle 0.0 as well and send that back just in case)
+		int requestchap = 0;		// do we request PAP instead of original CHAP request?
+		char called[MAXTEL] = "";	// called number
+		char calling[MAXTEL] = "";	// calling number
 
 		if (!config->cluster_iam_master)
 		{
@@ -1374,7 +1373,7 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 			for (i = 1; i <= config->cluster_highest_tunnelid ; ++i)
 			{
 				if (tunnel[i].state != TUNNELOPENING ||
-					tunnel[i].ip != ntohl(*(ipt *) & addr->sin_addr) ||
+					tunnel[i].ip != ntohl(*(in_addr_t *) & addr->sin_addr) ||
 					tunnel[i].port != ntohs(addr->sin_port) )
 					continue;
 				t = i;
@@ -1396,7 +1395,7 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 				return;
 			}
 			tunnelclear(t);
-			tunnel[t].ip = ntohl(*(ipt *) & addr->sin_addr);
+			tunnel[t].ip = ntohl(*(in_addr_t *) & addr->sin_addr);
 			tunnel[t].port = ntohs(addr->sin_port);
 			tunnel[t].window = 4; // default window
 			STAT(tunnel_created);
@@ -1469,10 +1468,10 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 			// process AVPs
 			while (l && !(fatal & 0x80))
 			{
-				u16 n = (ntohs(*(u16 *) p) & 0x3FF);
-				u8 *b = p;
-				u8 flags = *p;
-				u16 mtype;
+				uint16_t n = (ntohs(*(uint16_t *) p) & 0x3FF);
+				uint8_t *b = p;
+				uint8_t flags = *p;
+				uint16_t mtype;
 				p += n;       // next
 				if (l < n)
 				{
@@ -1513,14 +1512,14 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 					continue; // next
 				}
 				b += 2;
-				if (*(u16 *) (b))
+				if (*(uint16_t *) (b))
 				{
-					LOG(2, s, t, "Unknown AVP vendor %d\n", ntohs(*(u16 *) (b)));
+					LOG(2, s, t, "Unknown AVP vendor %d\n", ntohs(*(uint16_t *) (b)));
 					fatal = flags;
 					continue; // next
 				}
 				b += 2;
-				mtype = ntohs(*(u16 *) (b));
+				mtype = ntohs(*(uint16_t *) (b));
 				b += 2;
 				n -= 6;
 
@@ -1528,13 +1527,13 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 				switch (mtype)
 				{
 				case 0:     // message type
-					message = ntohs(*(u16 *) b);
+					message = ntohs(*(uint16_t *) b);
 					LOG(4, s, t, "   Message type = %d (%s)\n", *b, l2tp_message_types[message]);
 					mandatorymessage = flags;
 					break;
 				case 1:     // result code
 					{
-						u16 rescode = ntohs(*(u16 *)(b));
+						uint16_t rescode = ntohs(*(uint16_t *) b);
 						const char* resdesc = "(unknown)";
 						if (message == 4)
 						{ /* StopCCN */
@@ -1550,7 +1549,7 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 						LOG(4, s, t, "   Result Code %d: %s\n", rescode, resdesc);
 						if (n >= 4)
 						{
-							u16 errcode = ntohs(*(u16 *)(b + 2));
+							uint16_t errcode = ntohs(*(uint16_t *)(b + 2));
 							const char* errdesc = "(unknown)";
 							if (errcode <= MAX_ERROR_CODE)
 								errdesc = error_codes[errcode];
@@ -1564,7 +1563,7 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 					break;
 				case 2:     // protocol version
 					{
-						version = ntohs(*(u16 *) (b));
+						version = ntohs(*(uint16_t *) (b));
 						LOG(4, s, t, "   Protocol version = %d\n", version);
 						if (version && version != 0x0100)
 						{   // allow 0.0 and 1.0
@@ -1599,11 +1598,11 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 					LOG(4, s, t, "   Vendor name = \"%s\"\n", tunnel[t].vendor);
 					break;
 				case 9:     // assigned tunnel
-					tunnel[t].far = ntohs(*(u16 *) (b));
+					tunnel[t].far = ntohs(*(uint16_t *) (b));
 					LOG(4, s, t, "   Remote tunnel id = %d\n", tunnel[t].far);
 					break;
 				case 10:    // rx window
-					tunnel[t].window = ntohs(*(u16 *) (b));
+					tunnel[t].window = ntohs(*(uint16_t *) (b));
 					if (!tunnel[t].window)
 						tunnel[t].window = 1; // window of 0 is silly
 					LOG(4, s, t, "   rx window = %d\n", tunnel[t].window);
@@ -1620,18 +1619,18 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 					break;
 
 				case 14:    // assigned session
-					asession = session[s].far = ntohs(*(u16 *) (b));
+					asession = session[s].far = ntohs(*(uint16_t *) (b));
 					LOG(4, s, t, "   assigned session = %d\n", asession);
 					break;
 				case 15:    // call serial number
-					LOG(4, s, t, "   call serial number = %d\n", ntohl(*(u32 *)b));
+					LOG(4, s, t, "   call serial number = %d\n", ntohl(*(uint32_t *)b));
 					break;
 				case 18:    // bearer type
-					LOG(4, s, t, "   bearer type = %d\n", ntohl(*(u32 *)b));
+					LOG(4, s, t, "   bearer type = %d\n", ntohl(*(uint32_t *)b));
 					// TBA - for RADIUS
 					break;
 				case 19:    // framing type
-					LOG(4, s, t, "   framing type = %d\n", ntohl(*(u32 *)b));
+					LOG(4, s, t, "   framing type = %d\n", ntohl(*(uint32_t *)b));
 					// TBA
 					break;
 				case 21:    // called number
@@ -1649,7 +1648,7 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 				case 24:    // tx connect speed
 					if (n == 4)
 					{
-						session[s].tx_connect_speed = ntohl(*(u32 *)b);
+						session[s].tx_connect_speed = ntohl(*(uint32_t *)b);
 					}
 					else
 					{
@@ -1663,7 +1662,7 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 				case 38:    // rx connect speed
 					if (n == 4)
 					{
-						session[s].rx_connect_speed = ntohl(*(u32 *)b);
+						session[s].rx_connect_speed = ntohl(*(uint32_t *)b);
 					}
 					else
 					{
@@ -1676,13 +1675,13 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 					break;
 				case 25:    // Physical Channel ID
 					{
-						u32 tmp = ntohl(*(u32 *)b);
+						uint32_t tmp = ntohl(*(uint32_t *) b);
 						LOG(4, s, t, "   Physical Channel ID <%X>\n", tmp);
 						break;
 					}
 				case 29:    // Proxy Authentication Type
 					{
-						u16 authtype = ntohs(*(u16 *)b);
+						uint16_t authtype = ntohs(*(uint16_t *)b);
 						LOG(4, s, t, "   Proxy Auth Type %d (%s)\n", authtype, authtypes[authtype]);
 						requestchap = (authtype == 2);
 						break;
@@ -1703,7 +1702,7 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 					}
 				case 32:    // Proxy Authentication ID
 					{
-						u16 authid = ntohs(*(u16 *)(b));
+						uint16_t authid = ntohs(*(uint16_t *)(b));
 						LOG(4, s, t, "   Proxy Auth ID (%d)\n", authid);
 						if (session[s].radius)
 							radius[session[s].radius].id = authid;
@@ -1718,12 +1717,12 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 					}
 				case 27:    // last send lcp
 					{        // find magic number
-						u8 *p = b, *e = p + n;
+						uint8_t *p = b, *e = p + n;
 						while (p + 1 < e && p[1] && p + p[1] <= e)
 						{
 							if (*p == 5 && p[1] == 6) // Magic-Number
-								amagic = ntohl(*(u32 *) (p + 2));
-							else if (*p == 3 && p[1] == 5 && *(u16 *) (p + 2) == htons(PPPCHAP) && p[4] == 5) // Authentication-Protocol
+								amagic = ntohl(*(uint32_t *) (p + 2));
+							else if (*p == 3 && p[1] == 5 && *(uint16_t *) (p + 2) == htons(PPPCHAP) && p[4] == 5) // Authentication-Protocol
 								chap = 1;
 							else if (*p == 7) // Protocol-Field-Compression
 								aflags |= SESSIONPFC;
@@ -1801,7 +1800,7 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 					}
 					else
 					{
-						u16 r;
+						uint16_t r;
 						controlt *c;
 
 						s = sessionfree;
@@ -1878,7 +1877,7 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 	}
 	else
 	{                          // data
-		u16 prot;
+		uint16_t prot;
 
 		LOG_HEX(5, "Receive Tunnel Data", p, l);
 		if (l > 2 && p[0] == 0xFF && p[1] == 0x03)
@@ -1899,7 +1898,7 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 		}
 		else
 		{
-			prot = ntohs(*(u16 *) p);
+			prot = ntohs(*(uint16_t *) p);
 			p += 2;
 			l -= 2;
 		}
@@ -1977,7 +1976,7 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 }
 
 // read and process packet on tun
-static void processtun(u8 * buf, int len)
+static void processtun(uint8_t * buf, int len)
 {
 	LOG_HEX(5, "Receive TUN Data", buf, len);
 	STAT(tun_rx_packets);
@@ -1994,7 +1993,7 @@ static void processtun(u8 * buf, int len)
 		return;
 	}
 
-	if (*(u16 *) (buf + 2) == htons(PKTIP)) // IP
+	if (*(uint16_t *) (buf + 2) == htons(PKTIP)) // IP
 		processipout(buf, len);
 	// Else discard.
 }
@@ -2010,7 +2009,7 @@ static int regular_cleanups(void)
 	static sessionidt s = 0;	// Next session to check for actions on.
 	tunnelidt t;
 	int count=0,i;
-	u16 r;
+	uint16_t r;
 	static clockt next_acct = 0;
 	static clockt next_shut_acct = 0;
 	int a;
@@ -2044,7 +2043,7 @@ static int regular_cleanups(void)
 			if (tunnel[t].retry <= TIME)
 			{
 				controlt *c = tunnel[t].controls;
-				u8 w = tunnel[t].window;
+				uint8_t w = tunnel[t].window;
 				tunnel[t].try++; // another try
 				if (tunnel[t].try > 5)
 					tunnelkill(t, "Timeout on control message"); // game over
@@ -2114,15 +2113,15 @@ static int regular_cleanups(void)
 		// No data in IDLE_TIMEOUT seconds, send LCP ECHO
 		if (session[s].user[0] && (time_now - session[s].last_packet >= ECHO_TIMEOUT))
 		{
-			u8 b[MAXCONTROL] = {0};
+			uint8_t b[MAXCONTROL] = {0};
 
-			u8 *q = makeppp(b, sizeof(b), 0, 0, session[s].tunnel, s, PPPLCP);
+			uint8_t *q = makeppp(b, sizeof(b), 0, 0, session[s].tunnel, s, PPPLCP);
 			if (!q) continue;
 
 			*q = EchoReq;
-			*(u8 *)(q + 1) = (time_now % 255); // ID
-			*(u16 *)(q + 2) = htons(8); // Length
-			*(u32 *)(q + 4) = 0; // Magic Number (not supported)
+			*(uint8_t *)(q + 1) = (time_now % 255); // ID
+			*(uint16_t *)(q + 2) = htons(8); // Length
+			*(uint32_t *)(q + 4) = 0; // Magic Number (not supported)
 
 			LOG(4, s, session[s].tunnel, "No data in %d seconds, sending LCP ECHO\n",
 					(int)(time_now - session[s].last_packet));
@@ -2283,7 +2282,7 @@ static int readset_n = 0;
 static void mainloop(void)
 {
 	int i;
-	u8 buf[65536];
+	uint8_t buf[65536];
 	struct timeval to;
 	clockt next_cluster_ping = 0;	// send initial ping immediately
 	time_t next_clean = time_now + config->cleanup_interval;
@@ -2362,6 +2361,9 @@ static void mainloop(void)
 		{
 			struct sockaddr_in addr;
 			int alen, c, s;
+			int udp_pkts = 0;
+			int tun_pkts = 0;
+			int cluster_pkts = 0;
 
 			// nsctl commands
 			if (FD_ISSET(controlfd, &r))
@@ -2421,6 +2423,7 @@ static void mainloop(void)
 					if ((s = recvfrom(udpfd, buf, sizeof(buf), 0, (void *) &addr, &alen)) > 0)
 					{
 						processudp(buf, s, &addr);
+						udp_pkts++;
 					}
 					else
 					{
@@ -2435,6 +2438,7 @@ static void mainloop(void)
 					if ((s = read(tunfd, buf, sizeof(buf))) > 0)
 					{
 						processtun(buf, s);
+					    	tun_pkts++;
 					}
 					else
 					{
@@ -2450,6 +2454,7 @@ static void mainloop(void)
 					if ((s = recvfrom(cluster_sockfd, buf, sizeof(buf), MSG_WAITALL, (void *) &addr, &alen)) > 0)
 					{
 						processcluster(buf, s, addr.sin_addr.s_addr);
+						cluster_pkts++;
 					}
 					else
 					{
@@ -2458,6 +2463,10 @@ static void mainloop(void)
 					}
 				}
 			}
+
+			if (c >= config->multi_read_count)
+				LOG(3, 0, 0, "Reached multi_read_count (%d); processed %d udp, %d tun and %d cluster packets\n",
+					udp_pkts, tun_pkts, cluster_pkts);
 		}
 
 			// Runs on every machine (master and slaves).
@@ -2705,7 +2714,7 @@ memset(ip_filters, 0, sizeof(ip_filtert) * MAXFILTER);
 
 static int assign_ip_address(sessionidt s)
 {
-	u32 i;
+	uint32_t i;
 	int best = -1;
 	time_t best_time = time_now;
 	char *u = session[s].user;
@@ -2866,7 +2875,7 @@ static void fix_address_pool(int sid)
 //
 // Add a block of addresses to the IP pool to hand out.
 //
-static void add_to_ip_pool(u32 addr, u32 mask)
+static void add_to_ip_pool(in_addr_t addr, in_addr_t mask)
 {
 	int i;
 	if (mask == 0)
@@ -2917,7 +2926,7 @@ static void initippool()
 		if ((p = (char *)strrchr(buf, '\n'))) *p = 0;
 		if ((p = (char *)strchr(buf, ':')))
 		{
-			ipt src;
+			in_addr_t src;
 			*p = '\0';
 			src = inet_addr(buf);
 			if (src == INADDR_NONE)
@@ -2935,7 +2944,7 @@ static void initippool()
 		{
 			// It's a range
 			int numbits = 0;
-			u32 start = 0, mask = 0;
+			in_addr_t start = 0, mask = 0;
 
 			LOG(2, 0, 0, "Adding IP address range %s\n", buf);
 			*p++ = 0;
@@ -2945,7 +2954,7 @@ static void initippool()
 				continue;
 			}
 			start = ntohl(inet_addr(pool));
-			mask = (u32)(pow(2, numbits) - 1) << (32 - numbits);
+			mask = (in_addr_t) (pow(2, numbits) - 1) << (32 - numbits);
 
 			// Add a static route for this pool
 			LOG(5, 0, 0, "Adding route for address pool %s/%u\n",
@@ -2965,7 +2974,7 @@ static void initippool()
 	LOG(1, 0, 0, "IP address pool is %d addresses\n", ip_pool_size - 1);
 }
 
-void snoop_send_packet(char *packet, u16 size, ipt destination, u16 port)
+void snoop_send_packet(char *packet, uint16_t size, in_addr_t destination, uint16_t port)
 {
 	struct sockaddr_in snoop_addr = {0};
 	if (!destination || !port || snoopfd <= 0 || size <= 0 || !packet)
@@ -3021,8 +3030,8 @@ static int dump_session(FILE **f, sessiont *s)
 		s->user,						// username
 		fmtaddr(htonl(s->ip), 0),				// ip
 		(s->throttle_in || s->throttle_out) ? 2 : 1,		// qos
-		(u32) s->cin,						// uptxoctets
-		(u32) s->cout);						// downrxoctets
+		(uint32_t) s->cin,					// uptxoctets
+		(uint32_t) s->cout);					// downrxoctets
 
 	s->pin = s->cin = 0;
 	s->pout = s->cout = 0;
@@ -3308,7 +3317,7 @@ static void read_state()
 	ippoolt itmp;
 	FILE *f;
 	char magic[sizeof(DUMP_MAGIC) - 1];
-	u32 buf[2];
+	uint32_t buf[2];
 
 	if (!config->save_state)
 	{
@@ -3429,7 +3438,7 @@ static void read_state()
 static void dump_state()
 {
 	FILE *f;
-	u32 buf[2];
+	uint32_t buf[2];
 
 	if (!config->save_state)
 		return;
@@ -3477,7 +3486,7 @@ static void dump_state()
 	unlink(STATEFILE);
 }
 
-static void build_chap_response(char *challenge, u8 id, u16 challenge_length, char **challenge_response)
+static void build_chap_response(char *challenge, uint8_t id, uint16_t challenge_length, char **challenge_response)
 {
 	MD5_CTX ctx;
 	*challenge_response = NULL;
@@ -3672,7 +3681,7 @@ static void read_config_file()
 int sessionsetup(tunnelidt t, sessionidt s)
 {
 	// A session now exists, set it up
-	ipt ip;
+	in_addr_t ip;
 	char *user;
 	sessionidt i;
 	int r;
@@ -3881,8 +3890,8 @@ int load_session(sessionidt s, sessiont *new)
 					// for walking the sessions to forward byte counts to the master.
 		config->cluster_highest_sessionid = s;
 
-	// TEMP: old session struct used a u32 to define the throttle
-	// speed for both up/down, new uses a u16 for each.  Deal with
+	// TEMP: old session struct used a uint32_t to define the throttle
+	// speed for both up/down, new uses a uint16_t for each.  Deal with
 	// sessions from an old master for migration.
 	if (new->throttle_out == 0 && new->tbf_out)
 		new->throttle_out = new->throttle_in;
@@ -4071,7 +4080,7 @@ static void plugins_done()
 		run_plugin_done(p);
 }
 
-static void processcontrol(u8 * buf, int len, struct sockaddr_in *addr, int alen)
+static void processcontrol(uint8_t * buf, int len, struct sockaddr_in *addr, int alen)
 {
 	struct nsctl request;
 	struct nsctl response;
@@ -4383,16 +4392,16 @@ int cmd_show_hist_open(struct cli_def *cli, char *command, char **argv, int argc
  *
  * Based on code from rp-l2tpd by Roaring Penguin Software Inc.
  */
-static int unhide_avp(u8 *avp, tunnelidt t, sessionidt s, u16 length)
+static int unhide_avp(uint8_t *avp, tunnelidt t, sessionidt s, uint16_t length)
 {
 	MD5_CTX ctx;
-	u8 *cursor;
-	u8 digest[16];
-	u8 working_vector[16];
+	uint8_t *cursor;
+	uint8_t digest[16];
+	uint8_t working_vector[16];
 	uint16_t hidden_length;
-	u8 type[2];
+	uint8_t type[2];
 	size_t done, todo;
-	u8 *output;
+	uint8_t *output;
 
 	// Find the AVP type.
 	type[0] = *(avp + 4);
@@ -4447,7 +4456,7 @@ static int unhide_avp(u8 *avp, tunnelidt t, sessionidt s, u16 length)
 	return hidden_length + 6;
 }
 
-static int ip_filter_port(ip_filter_portt *p, portt port)
+static int ip_filter_port(ip_filter_portt *p, uint16_t port)
 {
 	switch (p->op)
 	{
@@ -4461,7 +4470,7 @@ static int ip_filter_port(ip_filter_portt *p, portt port)
 	return 0;
 }
 
-static int ip_filter_flag(u8 op, u8 sflags, u8 cflags, u8 flags)
+static int ip_filter_flag(uint8_t op, uint8_t sflags, uint8_t cflags, uint8_t flags)
 {
 	switch (op)
 	{
@@ -4478,15 +4487,15 @@ static int ip_filter_flag(u8 op, u8 sflags, u8 cflags, u8 flags)
 	return 0;
 }
 
-int ip_filter(u8 *buf, int len, u8 filter)
+int ip_filter(uint8_t *buf, int len, uint8_t filter)
 {
-	u16 frag_offset;
-	u8 proto;
-    	ipt src_ip;
-	ipt dst_ip;
-	portt src_port = 0;
-	portt dst_port = 0;
-	u8 flags = 0;
+	uint16_t frag_offset;
+	uint8_t proto;
+    	in_addr_t src_ip;
+	in_addr_t dst_ip;
+	uint16_t src_port = 0;
+	uint16_t dst_port = 0;
+	uint8_t flags = 0;
 	ip_filter_rulet *rule;
 
     	if (len < 20) // up to end of destination address
@@ -4495,10 +4504,10 @@ int ip_filter(u8 *buf, int len, u8 filter)
 	if ((*buf >> 4) != 4) // IPv4
 		return 0;
 
-	frag_offset = ntohs(*(u16 *) (buf + 6)) & 0x1fff;
+	frag_offset = ntohs(*(uint16_t *) (buf + 6)) & 0x1fff;
 	proto = buf[9];
-	src_ip = *(u32 *) (buf + 12);
-	dst_ip = *(u32 *) (buf + 16);
+	src_ip = *(in_addr_t *) (buf + 12);
+	dst_ip = *(in_addr_t *) (buf + 16);
 
 	if (frag_offset == 0 && (proto == IPPROTO_TCP || proto == IPPROTO_UDP))
 	{
@@ -4506,8 +4515,8 @@ int ip_filter(u8 *buf, int len, u8 filter)
 		if (len < l + 4) // ports
 			return 0;
 
-		src_port = ntohs(*(u16 *) (buf + l));
-		dst_port = ntohs(*(u16 *) (buf + l + 2));
+		src_port = ntohs(*(uint16_t *) (buf + l));
+		dst_port = ntohs(*(uint16_t *) (buf + l + 2));
 		if (proto == IPPROTO_TCP)
 		{
 		    	if (len < l + 14) // flags

@@ -1,5 +1,5 @@
 // L2TPNS Clustering Stuff
-// $Id: cluster.h,v 1.8 2004-12-03 06:40:02 bodea Exp $
+// $Id: cluster.h,v 1.9 2004-12-16 08:49:53 bodea Exp $
 
 #ifndef __CLUSTER_H__
 #define __CLUSTER_H__
@@ -34,44 +34,44 @@
 #define DEFAULT_MCAST_INTERFACE	"eth0"
 
 typedef struct {
-	u32	version;	// protocol version.
-	u32	seq;		// Sequence number for this heatbeat.
-	u32	basetime;	// What time I started
-	u32	clusterid;	// Id for this cluster?
+	uint32_t version;	// protocol version.
+	uint32_t seq;		// Sequence number for this heatbeat.
+	uint32_t basetime;	// What time I started
+	uint32_t clusterid;	// Id for this cluster?
 
-	u32	highsession;	// Id of the highest in-use session.
-	u32	freesession;	// Id of the first free session.
-	u32	hightunnel;	// Id of the highest used tunnel.
-	u32	size_sess;	// Size of the session structure.
+	uint32_t highsession;	// Id of the highest in-use session.
+	uint32_t freesession;	// Id of the first free session.
+	uint32_t hightunnel;	// Id of the highest used tunnel.
+	uint32_t size_sess;	// Size of the session structure.
 
-	u32	size_tunn;	// size of the tunnel structure.
-	u32	interval;	// ping/heartbeat interval
-	u32	timeout;	// heartbeat timeout
+	uint32_t size_tunn;	// size of the tunnel structure.
+	uint32_t interval;	// ping/heartbeat interval
+	uint32_t timeout;	// heartbeat timeout
 
-	u64	table_version;	// # state changes processed by cluster
+	uint64_t table_version;	// # state changes processed by cluster
 
-	char reserved[128 - 13*sizeof(u32)];	// Pad out to 128 bytes.
+	char reserved[128 - 13*sizeof(uint32_t)];	// Pad out to 128 bytes.
 } heartt;
 
 typedef struct {		/* Used to update byte counters on the */
 				/* master. */
-	u32        sid;
-	u32        in;
-	u32        out;
+	uint32_t sid;
+	uint32_t in;
+	uint32_t out;
 } bytest;
 
 typedef struct {
-	u32	addr;		//
-	u32	ver;		// version of structure.
-	u32	undef;		// Number of undefined structures. 0 if up-to-date.
-	u32	basetime;	// start time of this peer.
+	in_addr_t addr;		// peer address
+	uint32_t ver;		// version of structure.
+	uint32_t undef;		// Number of undefined structures. 0 if up-to-date.
+	uint32_t basetime;	// start time of this peer.
 } pingt;
 
 int cluster_init(void);
-int processcluster(char *buf, int size, u32 addr);
+int processcluster(char *buf, int size, in_addr_t addr);
 int cluster_send_session(int sid);
 int cluster_send_tunnel(int tid);
-int master_forward_packet(char *data, int size, u32 addr, int port);
+int master_forward_packet(char *data, int size, in_addr_t addr, int port);
 int master_throttle_packet(int tid, char *data, int size);
 int master_garden_packet(sessionidt s, char *data, int size);
 void master_update_counts(void);

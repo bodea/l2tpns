@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.46 2004-12-13 02:27:31 bodea Exp $
+// $Id: l2tpns.h,v 1.47 2004-12-16 08:49:53 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -108,22 +108,16 @@ enum
 };
 
 // Types
-typedef unsigned short u16;
-typedef unsigned int u32;
-typedef unsigned long long u64;
-typedef unsigned char u8;
-typedef u32 ipt;
-typedef u16 portt;
-typedef u16 sessionidt;
-typedef u16 tunnelidt;
-typedef u32 clockt;
-typedef u8 hasht[16];
+typedef uint16_t sessionidt;
+typedef uint16_t tunnelidt;
+typedef uint32_t clockt;
+typedef uint8_t hasht[16];
 
 // CLI actions
 struct cli_session_actions {
 	char action;
-	ipt snoop_ip;
-	u16 snoop_port;
+	in_addr_t snoop_ip;
+	uint16_t snoop_port;
 	int throttle_in;
 	int throttle_out;
 	int filter_in;
@@ -150,16 +144,16 @@ struct cli_tunnel_actions {
 // structures
 typedef struct			// route
 {
-	ipt ip;
-	ipt mask;
+	in_addr_t ip;
+	in_addr_t mask;
 }
 routet;
 
-typedef struct controls         // control message
+typedef struct controls		// control message
 {
-	struct controls *next;  // next in queue
-	u16 length;             // length
-	u8 buf[MAXCONTROL];
+	struct controls *next;	// next in queue
+	uint16_t length;	// length
+	uint8_t buf[MAXCONTROL];
 }
 controlt;
 
@@ -168,45 +162,45 @@ typedef struct
 	sessionidt next;		// next session in linked list
 	sessionidt far;			// far end session ID
 	tunnelidt tunnel;		// near end tunnel ID
-	ipt ip;				// IP of session set by RADIUS response (host byte order).
+	in_addr_t ip;			// IP of session set by RADIUS response (host byte order).
 	int ip_pool_index;		// index to IP pool
 	unsigned long unique_id;	// unique session id
-	u16 nr;				// next receive
-	u16 ns;				// next send
-	u32 magic;			// ppp magic number
-	u32 cin, cout;			// byte counts
-	u32 pin, pout;			// packet counts
-	u32 total_cin;			// This counter is never reset while a session is open
-	u32 total_cout;			// This counter is never reset while a session is open
-	u32 id;				// session id
-	u16 throttle_in;		// upstream throttle rate (kbps)
-	u16 throttle_out;		// downstream throttle rate
+	uint16_t nr;			// next receive
+	uint16_t ns;			// next send
+	uint32_t magic;			// ppp magic number
+	uint32_t cin, cout;		// byte counts
+	uint32_t pin, pout;		// packet counts
+	uint32_t total_cin;		// This counter is never reset while a session is open
+	uint32_t total_cout;		// This counter is never reset while a session is open
+	uint32_t id;			// session id
+	uint16_t throttle_in;		// upstream throttle rate (kbps)
+	uint16_t throttle_out;		// downstream throttle rate
 	clockt opened;			// when started
 	clockt die;			// being closed, when to finally free
 	time_t last_packet;		// Last packet from the user (used for idle timeouts)
-	ipt dns1, dns2;			// DNS servers
+	in_addr_t dns1, dns2;		// DNS servers
 	routet route[MAXROUTE];		// static routes
-	u16 radius;			// which radius session is being used (0 for not waiting on authentication)
-	u16 mru;			// maximum receive unit
-	u16 tbf_in;			// filter bucket for throttling in from the user.
-	u16 tbf_out;			// filter bucket for throttling out to the user.
-	u8 l2tp_flags;			// various bit flags from the ICCN on the l2tp tunnel.
-	u8 reserved_old_snoop;		// No longer used - remove at some time
-	u8 walled_garden;		// is this session gardened?
-	u8 flags1;			// additional flags (currently unused);
+	uint16_t radius;		// which radius session is being used (0 for not waiting on authentication)
+	uint16_t mru;			// maximum receive unit
+	uint16_t tbf_in;		// filter bucket for throttling in from the user.
+	uint16_t tbf_out;		// filter bucket for throttling out to the user.
+	uint8_t l2tp_flags;		// various bit flags from the ICCN on the l2tp tunnel.
+	uint8_t reserved_old_snoop;	// No longer used - remove at some time
+	uint8_t walled_garden;		// is this session gardened?
+	uint8_t flags1;			// additional flags (currently unused);
 	char random_vector[MAXTEL];
 	int random_vector_length;
 	char user[129];			// user (needed in seesion for radius stop messages) (can we reduce this? --mo)
 	char called[MAXTEL];		// called number
 	char calling[MAXTEL];		// calling number
-	u32 tx_connect_speed;
-	u32 rx_connect_speed;
-	u32 flags;			// Various session flags.
-	ipt snoop_ip;			// Interception destination IP
-	u16 snoop_port;			// Interception destination port
-	u16 sid;			// near end session id.
-	u8 filter_in;			// input filter index (to ip_filters[N-1]; 0 if none)
-	u8 filter_out;			// output filter index
+	uint32_t tx_connect_speed;
+	uint32_t rx_connect_speed;
+	uint32_t flags;			// Various session flags.
+	in_addr_t snoop_ip;		// Interception destination IP
+	uint16_t snoop_port;		// Interception destination port
+	uint16_t sid;			// near end session id.
+	uint8_t filter_in;		// input filter index (to ip_filters[N-1]; 0 if none)
+	uint8_t filter_out;		// output filter index
 	char reserved[18];		// Space to expand structure without changing HB_VERSION
 }
 sessiont;
@@ -217,8 +211,8 @@ sessiont;
 
 typedef struct
 {
-	u32	cin;
-	u32	cout;
+	uint32_t cin;
+	uint32_t cout;
 } sessioncountt;
 
 #define	SESSIONPFC	1	// PFC negotiated flags
@@ -228,11 +222,11 @@ typedef struct
 typedef struct
 {
 	tunnelidt far;		// far end tunnel ID
-	ipt ip;			// Ip for far end
-	portt port;		// port for far end
-	u16 window;		// Rx window
-	u16 nr;			// next receive
-	u16 ns;			// next send
+	in_addr_t ip;		// Ip for far end
+	uint16_t port;		// port for far end
+	uint16_t window;	// Rx window
+	uint16_t nr;		// next receive
+	uint16_t ns;		// next send
 	int state;		// current state (tunnelstate enum)
 	clockt last;		// when last control message sent (used for resend timeout)
 	clockt retry;		// when to try resenting pending control
@@ -240,8 +234,8 @@ typedef struct
 	clockt lastrec;		// when the last control message was received
 	char hostname[128];	// tunnel hostname
 	char vendor[128];	// LAC vendor
-	u8 try;			// number of retrys on a control message
-	u16 controlc;		// outstaind messages in queue
+	uint8_t try;		// number of retrys on a control message
+	uint16_t controlc;	// outstaind messages in queue
 	controlt *controls;	// oldest message
 	controlt *controle;	// newest message
 }
@@ -255,16 +249,16 @@ typedef struct			// outstanding RADIUS requests
 	clockt retry;		// when to try next
 	char calling[MAXTEL];	// calling number
 	char pass[129];		// password
-	u8 id;			// ID for PPP response
-	u8 try;			// which try we are on
-	u8 state;		// state of radius requests
-	u8 chap;		// set if CHAP used (is CHAP identifier)
+	uint8_t id;		// ID for PPP response
+	uint8_t try;		// which try we are on
+	uint8_t state;		// state of radius requests
+	uint8_t chap;		// set if CHAP used (is CHAP identifier)
 }
 radiust;
 
 typedef struct
 {
-	ipt		address;	// Host byte order..
+	in_addr_t	address;	// Host byte order..
 	char		assigned;	// 1 if assigned, 0 if free
 	sessionidt	session;
 	clockt		last;		// last used
@@ -423,20 +417,20 @@ typedef struct
 
 	char		radiussecret[64];
 	int		radius_accounting;
-	ipt		radiusserver[MAXRADSERVER];	// radius servers
-	u16		radiusport[MAXRADSERVER];	// radius base ports
-	u8		numradiusservers;		// radius server count
+	in_addr_t	radiusserver[MAXRADSERVER];	// radius servers
+	uint16_t	radiusport[MAXRADSERVER];	// radius base ports
+	uint8_t		numradiusservers;		// radius server count
 	short		num_radfds;			// Number of radius filehandles allocated
 
-	ipt		default_dns1, default_dns2;
+	in_addr_t	default_dns1, default_dns2;
 
 	unsigned long	rl_rate;			// default throttle rate
 	int		num_tbfs;			// number of throttle buckets
 
 	int		save_state;
 	char		accounting_dir[128];
-	ipt		bind_address;
-	ipt		peer_address;
+	in_addr_t	bind_address;
+	in_addr_t	peer_address;
 	int		send_garp;			// Set to true to garp for vip address on startup
 
 	int		target_uid;
@@ -449,12 +443,12 @@ typedef struct
 	int		lock_pages;			// Lock pages into memory.
 	int		icmp_rate;			// Max number of ICMP unreachable per second to send>
 
-	u32		cluster_address;		// Multicast address of cluster.
+	in_addr_t	cluster_address;		// Multicast address of cluster.
 							// Send to this address to have everyone hear.
 	char		cluster_interface[64];		// Which interface to listen for multicast on.
 	int		cluster_iam_master;		// Are we the cluster master???
 	int		cluster_iam_uptodate;		// Set if we've got a full set of state from the master.
-	u32		cluster_master_address;		// The network address of the cluster master.
+	in_addr_t	cluster_master_address;		// The network address of the cluster master.
 							// Zero if i am the cluster master.
 	int		cluster_seq_number;		// Sequence number of the next heartbeat we'll send out
 							// (or the seq number we're next expecting if we're a slave).
@@ -467,17 +461,17 @@ typedef struct
 
 	int		cluster_hb_interval;		// How often to send a heartbeat.
 	int		cluster_hb_timeout;		// How many missed heartbeats trigger an election.
-	u64		cluster_table_version;		// # state changes processed by cluster
+	uint64_t	cluster_table_version;		// # state changes processed by cluster
 
 #ifdef BGP
 #define BGP_NUM_PEERS	2
-	u16		as_number;
+	uint16_t as_number;
 	struct {
-		char	name[64];
-	    	u16	as;
-		int	keepalive;
-		int	hold;
-	}		neighbour[BGP_NUM_PEERS];
+		char name[64];
+	    	uint16_t as;
+		int keepalive;
+		int hold;
+	} neighbour[BGP_NUM_PEERS];
 #endif
 } configt;
 
@@ -492,15 +486,15 @@ typedef struct
 
 typedef struct
 {
-	u8 op;		// operation
+	uint8_t op;	// operation
 #define FILTER_PORT_OP_NONE	0 // all ports match
 #define FILTER_PORT_OP_EQ	1
 #define FILTER_PORT_OP_NEQ	2
 #define FILTER_PORT_OP_GT	3
 #define FILTER_PORT_OP_LT	4
 #define FILTER_PORT_OP_RANGE	5
-	portt port;	// port (host byte order)
-	portt port2;	// range
+	uint16_t port;	// port (host byte order)
+	uint16_t port2;	// range
 } ip_filter_portt;
 
 typedef struct
@@ -508,21 +502,21 @@ typedef struct
 	int action;		// permit/deny
 #define FILTER_ACTION_DENY	1
 #define FILTER_ACTION_PERMIT	2
-	u8 proto;		// protocol: IPPROTO_* (netinet/in.h)
-	ipt src_ip;		// source ip (network byte order)
-	ipt src_wild;
+	uint8_t proto;		// protocol: IPPROTO_* (netinet/in.h)
+	in_addr_t src_ip;	// source ip (network byte order)
+	in_addr_t src_wild;
 	ip_filter_portt src_ports;
-	ipt dst_ip;		// dest ip
-	ipt dst_wild;
+	in_addr_t dst_ip;	// dest ip
+	in_addr_t dst_wild;
 	ip_filter_portt dst_ports;
-	u8 frag;		// apply to non-initial fragments
-	u8 tcp_flag_op;		// match type: any, all, established
+	uint8_t frag;		// apply to non-initial fragments
+	uint8_t tcp_flag_op;	// match type: any, all, established
 #define FILTER_FLAG_OP_ANY	1
 #define FILTER_FLAG_OP_ALL	2
 #define FILTER_FLAG_OP_EST	3
-	u8 tcp_sflags;		// flags set
-	u8 tcp_cflags;		// flags clear
-	u32 counter;		// match count
+	uint8_t tcp_sflags;	// flags set
+	uint8_t tcp_cflags;	// flags clear
+	uint32_t counter;	// match count
 } ip_filter_rulet;
 
 #define TCP_FLAG_FIN	0x01
@@ -543,42 +537,42 @@ typedef struct
 } ip_filtert;
 
 // arp.c
-void sendarp(int ifr_idx, const unsigned char* mac, ipt ip);
+void sendarp(int ifr_idx, const unsigned char* mac, in_addr_t ip);
 
 
 // ppp.c
-void processpap(tunnelidt t, sessionidt s, u8 * p, u16 l);
-void processchap(tunnelidt t, sessionidt s, u8 * p, u16 l);
-void processlcp(tunnelidt t, sessionidt s, u8 * p, u16 l);
-void processipcp(tunnelidt t, sessionidt s, u8 * p, u16 l);
-void processipin(tunnelidt t, sessionidt s, u8 * p, u16 l);
-void processccp(tunnelidt t, sessionidt s, u8 * p, u16 l);
+void processpap(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l);
+void processchap(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l);
+void processlcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l);
+void processipcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l);
+void processipin(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l);
+void processccp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l);
 void sendchap(tunnelidt t, sessionidt s);
-u8 *makeppp(u8 * b, int size, u8 * p, int l, tunnelidt t, sessionidt s, u16 mtype);
+uint8_t *makeppp(uint8_t *b, int size, uint8_t *p, int l, tunnelidt t, sessionidt s, uint16_t mtype);
 void initlcp(tunnelidt t, sessionidt s);
-void send_ipin(sessionidt s, u8 * buf, int len);
+void send_ipin(sessionidt s, uint8_t *buf, int len);
 
 
 // radius.c
 void initrad(void);
-void radiussend(u16 r, u8 state);
-void processrad(u8 *buf, int len, char socket_index);
-void radiusretry(u16 r);
-u16 radiusnew(sessionidt s);
-void radiusclear(u16 r, sessionidt s);
+void radiussend(uint16_t r, uint8_t state);
+void processrad(uint8_t *buf, int len, char socket_index);
+void radiusretry(uint16_t r);
+uint16_t radiusnew(sessionidt s);
+void radiusclear(uint16_t r, sessionidt s);
 
 
 // l2tpns.c
-clockt backoff(u8 try);
-sessionidt sessionbyip(ipt ip);
+clockt backoff(uint8_t try);
+sessionidt sessionbyip(in_addr_t ip);
 sessionidt sessionbyuser(char *username);
 void sessionshutdown(sessionidt s, char *reason);
-void send_garp(ipt ip);
-void tunnelsend(u8 * buf, u16 l, tunnelidt t);
+void send_garp(in_addr_t ip);
+void tunnelsend(uint8_t *buf, uint16_t l, tunnelidt t);
 void sendipcp(tunnelidt t, sessionidt s);
-void processudp(u8 * buf, int len, struct sockaddr_in *addr);
-void snoop_send_packet(char *packet, u16 size, ipt destination, u16 port);
-int ip_filter(u8 *buf, int len, u8 filter);
+void processudp(uint8_t *buf, int len, struct sockaddr_in *addr);
+void snoop_send_packet(char *packet, uint16_t size, in_addr_t destination, uint16_t port);
+int ip_filter(uint8_t *buf, int len, uint8_t filter);
 int cmd_show_ipcache(struct cli_def *cli, char *command, char **argv, int argc);
 int cmd_show_hist_idle(struct cli_def *cli, char *command, char **argv, int argc);
 int cmd_show_hist_open(struct cli_def *cli, char *command, char **argv, int argc);
@@ -607,7 +601,7 @@ int cli_arg_help(struct cli_def *cli, int cr_ok, char *entry, ...);
 
 
 // icmp.c
-void host_unreachable(ipt destination, u16 id, ipt source, char *packet, int packet_len);
+void host_unreachable(in_addr_t destination, uint16_t id, in_addr_t source, char *packet, int packet_len);
 
 
 extern tunnelt *tunnel;
@@ -635,10 +629,10 @@ if (count++ < max) { \
 extern configt *config;
 extern time_t basetime;		// Time when this process started.
 extern time_t time_now;		// Seconds since EPOCH.
-extern u32 last_id;
+extern uint32_t last_id;
 extern struct Tstats *_statistics;
-extern ipt my_address;
-extern int tun_write(u8 *data, int size);
+extern in_addr_t my_address;
+extern int tun_write(uint8_t *data, int size);
 extern int clifd;
 
 

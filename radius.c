@@ -1,6 +1,6 @@
 // L2TPNS Radius Stuff
 
-char const *cvs_id_radius = "$Id: radius.c,v 1.19 2004-11-30 06:50:26 bodea Exp $";
+char const *cvs_id_radius = "$Id: radius.c,v 1.20 2004-12-16 08:49:53 bodea Exp $";
 
 #include <time.h>
 #include <stdio.h>
@@ -21,7 +21,6 @@ char const *cvs_id_radius = "$Id: radius.c,v 1.19 2004-11-30 06:50:26 bodea Exp 
 extern radiust *radius;
 extern sessiont *session;
 extern tunnelt *tunnel;
-extern u32 sessionid;
 extern configt *config;
 extern int *radfds;
 extern ip_filtert *ip_filters;
@@ -53,17 +52,17 @@ void initrad(void)
 	}
 }
 
-void radiusclear(u16 r, sessionidt s)
+void radiusclear(uint16_t r, sessionidt s)
 {
 	if (s) session[s].radius = 0;
 	memset(&radius[r], 0, sizeof(radius[r])); // radius[r].state = RADIUSNULL;
 }
 
 
-static u16 get_free_radius()
+static uint16_t get_free_radius()
 {
 	int count;
-	static u32 next_radius_id = 0;
+	static uint32_t next_radius_id = 0;
 
 	for (count = MAXRADIUS; count > 0 ; --count)
 	{
@@ -81,9 +80,9 @@ static u16 get_free_radius()
 	return 0;
 }
 
-u16 radiusnew(sessionidt s)
+uint16_t radiusnew(sessionidt s)
 {
-	u16 r = session[s].radius;
+	uint16_t r = session[s].radius;
 
 	/* re-use */
 	if (r)
@@ -110,13 +109,13 @@ u16 radiusnew(sessionidt s)
 }
 
 // Send a RADIUS request
-void radiussend(u16 r, u8 state)
+void radiussend(uint16_t r, uint8_t state)
 {
 	struct sockaddr_in addr;
-	u8 b[4096];            // RADIUS packet
+	uint8_t b[4096];            // RADIUS packet
 	char pass[129];
 	int pl;
-	u8 *p;
+	uint8_t *p;
 	sessionidt s;
 
 	CSTAT(call_radiussend);
@@ -246,7 +245,7 @@ void radiussend(u16 r, u8 state)
 	{                          // accounting
 		*p = 40;                // accounting type
 		p[1] = 6;
-		*(u32 *) (p + 2) = htonl((state == RADIUSSTART) ? 1 : 2);
+		*(uint32_t *) (p + 2) = htonl((state == RADIUSSTART) ? 1 : 2);
 		p += p[1];
 		if (s)
 		{
@@ -258,30 +257,30 @@ void radiussend(u16 r, u8 state)
 			{                // stop
 				*p = 42;      // input octets
 				p[1] = 6;
-				*(u32 *) (p + 2) = htonl(session[s].cin);
+				*(uint32_t *) (p + 2) = htonl(session[s].cin);
 				p += p[1];
 				*p = 43;      // output octets
 				p[1] = 6;
-				*(u32 *) (p + 2) = htonl(session[s].cout);
+				*(uint32_t *) (p + 2) = htonl(session[s].cout);
 				p += p[1];
 				*p = 46;      // session time
 				p[1] = 6;
-				*(u32 *) (p + 2) = htonl(time(NULL) - session[s].opened);
+				*(uint32_t *) (p + 2) = htonl(time(NULL) - session[s].opened);
 				p += p[1];
 				*p = 47;      // input packets
 				p[1] = 6;
-				*(u32 *) (p + 2) = htonl(session[s].pin);
+				*(uint32_t *) (p + 2) = htonl(session[s].pin);
 				p += p[1];
 				*p = 48;      // output spackets
 				p[1] = 6;
-				*(u32 *) (p + 2) = htonl(session[s].pout);
+				*(uint32_t *) (p + 2) = htonl(session[s].pout);
 				p += p[1];
 			}
 			else
 			{                // start
 				*p = 41;      // delay
 				p[1] = 6;
-				*(u32 *) (p + 2) = htonl(time(NULL) - session[s].opened);
+				*(uint32_t *) (p + 2) = htonl(time(NULL) - session[s].opened);
 				p += p[1];
 			}
 		}
@@ -290,14 +289,14 @@ void radiussend(u16 r, u8 state)
 	{
 		*p = 5; // NAS-Port
 		p[1] = 6;
-		*(u32 *) (p + 2) = htonl(s);
+		*(uint32_t *) (p + 2) = htonl(s);
 		p += p[1];
 	}
 	if (s && session[s].ip)
 	{
 		*p = 8;			// Framed-IP-Address
 		p[1] = 6;
-		*(u32 *) (p + 2) = htonl(session[s].ip);
+		*(uint32_t *) (p + 2) = htonl(session[s].ip);
 		p += p[1];
 	}
 	if (*session[s].called)
@@ -324,11 +323,11 @@ void radiussend(u16 r, u8 state)
 	// NAS-IP-Address
 	*p = 4;
 	p[1] = 6;
-	*(u32 *)(p + 2) = config->bind_address;
+	*(uint32_t *)(p + 2) = config->bind_address;
 	p += p[1];
 
 	// All AVpairs added
-	*(u16 *) (b + 2) = htons(p - b);
+	*(uint16_t *) (b + 2) = htons(p - b);
 	if (state != RADIUSAUTH)
 	{
 	    // Build auth for accounting packet
@@ -346,14 +345,14 @@ void radiussend(u16 r, u8 state)
 	}
 	memset(&addr, 0, sizeof(addr));
 	addr.sin_family = AF_INET;
-	*(u32 *) & addr.sin_addr = config->radiusserver[(radius[r].try - 1) % config->numradiusservers];
+	*(uint32_t *) & addr.sin_addr = config->radiusserver[(radius[r].try - 1) % config->numradiusservers];
 	{
-	    // get radius port
-	    u16	port = config->radiusport[(radius[r].try - 1) % config->numradiusservers];
-	    // no need to define the accounting port for itself:
-	    //  the accounting port is as far as I know always one more
-	    //  than the auth port    JK 20040713
-	    addr.sin_port = htons((state == RADIUSAUTH) ? port : port+1);
+		// get radius port
+		uint16_t port = config->radiusport[(radius[r].try - 1) % config->numradiusservers];
+		// no need to define the accounting port for itself:
+		//  the accounting port is as far as I know always one more
+		//  than the auth port    JK 20040713
+		addr.sin_port = htons((state == RADIUSAUTH) ? port : port+1);
 	}
 
 	LOG_HEX(5, "RADIUS Send", b, (p - b));
@@ -361,15 +360,15 @@ void radiussend(u16 r, u8 state)
 }
 
 // process RADIUS response
-void processrad(u8 *buf, int len, char socket_index)
+void processrad(uint8_t *buf, int len, char socket_index)
 {
-	u8 b[MAXCONTROL];
+	uint8_t b[MAXCONTROL];
 	MD5_CTX ctx;
-	u16 r;
+	uint16_t r;
 	sessionidt s;
 	tunnelidt t = 0;
 	hasht hash;
-	u8 routes = 0;
+	uint8_t routes = 0;
 
 	int r_code, r_id ; // Radius code.
 
@@ -380,12 +379,12 @@ void processrad(u8 *buf, int len, char socket_index)
 	CSTAT(call_processrad);
 
 	LOG_HEX(5, "RADIUS Response", buf, len);
-	if (len < 20 || len < ntohs(*(u16 *) (buf + 2)))
+	if (len < 20 || len < ntohs(*(uint16_t *) (buf + 2)))
 	{
 		LOG(1, 0, 0, "Duff RADIUS response length %d\n", len);
 		return ;
 	}
-	len = ntohs(*(u16 *) (buf + 2));
+	len = ntohs(*(uint16_t *) (buf + 2));
 	r = socket_index | (r_id << RADIUS_SHIFT);
 	s = radius[r].session;
 	LOG(3, s, session[s].tunnel, "Received %s, radius %d response for session %u (code %d, id %d)\n",
@@ -427,7 +426,7 @@ void processrad(u8 *buf, int len, char socket_index)
 			if (radius[r].chap)
 			{
 				// CHAP
-				u8 *p = makeppp(b, sizeof(b), 0, 0, t, s, PPPCHAP);
+				uint8_t *p = makeppp(b, sizeof(b), 0, 0, t, s, PPPCHAP);
 				if (!p) return;	// Abort!
 
 				{
@@ -440,13 +439,13 @@ void processrad(u8 *buf, int len, char socket_index)
 						(*buf == 2) ? "allowed" : "denied");
 				*p = (*buf == 2) ? 3 : 4;     // ack/nak
 				p[1] = radius[r].id;
-				*(u16 *) (p + 2) = ntohs(4); // no message
+				*(uint16_t *) (p + 2) = ntohs(4); // no message
 				tunnelsend(b, (p - b) + 4, t); // send it
 			}
 			else
 			{
 				// PAP
-				u8 *p = makeppp(b, sizeof(b), 0, 0, t, s, PPPPAP);
+				uint8_t *p = makeppp(b, sizeof(b), 0, 0, t, s, PPPPAP);
 				if (!p) return;		// Abort!
 
 				{
@@ -460,7 +459,7 @@ void processrad(u8 *buf, int len, char socket_index)
 				// ack/nak
 				*p = *buf;
 				p[1] = radius[r].id;
-				*(u16 *) (p + 2) = ntohs(5);
+				*(uint16_t *) (p + 2) = ntohs(5);
 				p[4] = 0; // no message
 				tunnelsend(b, (p - b) + 5, t); // send it
 			}
@@ -469,15 +468,15 @@ void processrad(u8 *buf, int len, char socket_index)
 			{
 				// Login successful
 				// Extract IP, routes, etc
-				u8 *p = buf + 20;
-				u8 *e = buf + len;
+				uint8_t *p = buf + 20;
+				uint8_t *e = buf + len;
 				for (; p + 2 <= e && p[1] && p + p[1] <= e; p += p[1])
 				{
 					if (*p == 8)
 					{
 						// Framed-IP-Address
 					    	if (p[1] < 6) continue;
-						session[s].ip = ntohl(*(u32 *) (p + 2));
+						session[s].ip = ntohl(*(uint32_t *) (p + 2));
 						session[s].ip_pool_index = -1;
 						LOG(3, s, session[s].tunnel, "   Radius reply contains IP address %s\n",
 							fmtaddr(htonl(session[s].ip), 0));
@@ -486,7 +485,7 @@ void processrad(u8 *buf, int len, char socket_index)
 					{
 						// DNS address
 					    	if (p[1] < 6) continue;
-						session[s].dns1 = ntohl(*(u32 *) (p + 2));
+						session[s].dns1 = ntohl(*(uint32_t *) (p + 2));
 						LOG(3, s, session[s].tunnel, "   Radius reply contains primary DNS address %s\n",
 							fmtaddr(htonl(session[s].dns1), 0));
 					}
@@ -494,18 +493,18 @@ void processrad(u8 *buf, int len, char socket_index)
 					{
 						// DNS address
 					    	if (p[1] < 6) continue;
-						session[s].dns2 = ntohl(*(u32 *) (p + 2));
+						session[s].dns2 = ntohl(*(uint32_t *) (p + 2));
 						LOG(3, s, session[s].tunnel, "   Radius reply contains secondary DNS address %s\n",
 							fmtaddr(htonl(session[s].dns2), 0));
 					}
 					else if (*p == 22)
 					{
 						// Framed-Route
-						ipt ip = 0, mask = 0;
-						u8 u = 0;
-						u8 bits = 0;
-						u8 *n = p + 2;
-						u8 *e = p + p[1];
+						in_addr_t ip = 0, mask = 0;
+						uint8_t u = 0;
+						uint8_t bits = 0;
+						uint8_t *n = p + 2;
+						uint8_t *e = p + p[1];
 						while (n < e && (isdigit(*n) || *n == '.'))
 						{
 							if (*n == '.')
@@ -552,7 +551,7 @@ void processrad(u8 *buf, int len, char socket_index)
 					    	char *filter = p + 2;
 						int l = p[1] - 2;
 						char *suffix;
-						u8 *f = 0;
+						uint8_t *f = 0;
 						int i;
 
 						LOG(3, s, session[s].tunnel, "   Radius reply contains Filter-Id \"%.*s\"\n", l, filter);
@@ -667,7 +666,7 @@ void processrad(u8 *buf, int len, char socket_index)
 }
 
 // Send a retry for RADIUS/CHAP message
-void radiusretry(u16 r)
+void radiusretry(uint16_t r)
 {
 	sessionidt s = radius[r].session;
 	tunnelidt t = 0;

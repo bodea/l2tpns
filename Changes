@@ -1,4 +1,4 @@
-* Mon Dec 13 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.13
+* Thu Dec 16 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.13
 - Better cluster master collision resolution: keep a counter of state
   changes, propagated in the heartbeats; the master with the highest #
   of changes (that has kept in contact with the LAC through the
@@ -12,6 +12,7 @@
   attempt to avoid losing the cluster in high load (DoS) conditions.
 - Compress logs.
 - Retain counters of shutdown sessions to dump once per minute.
+- Use standard uintN_t types for portability.
 
 * Wed Dec 1 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.12
 - The "This time, for sure!" release.

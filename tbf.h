@@ -10,33 +10,33 @@
 #define TBF_RATE        360     // 360 bytes per 1/10th of a second.
 
 typedef struct {
-        int             credit;
-        int             lasttime;
-        int             queued;
-        int             oldest; // Position of packet in the ring buffer.
-        sessionidt      sid;    // associated session ID.
-        int             max_credit; // Maximum amount of credit available (burst size).
-        int             rate;   // How many bytes of credit per second we get? (sustained rate)
-        void            (*send)(sessionidt s, u8 *, int);       // Routine to actually send out the data.
-        int             prev;   // Timer chain position.
-        int             next;   // Timer chain position.
+	int		credit;
+	int		lasttime;
+	int		queued;
+	int		oldest;		// Position of packet in the ring buffer.
+	sessionidt	sid;		// associated session ID.
+	int		max_credit;	// Maximum amount of credit available (burst size).
+	int		rate;		// How many bytes of credit per second we get? (sustained rate)
+	void		(*send)(sessionidt s, uint8_t *, int); // Routine to actually send out the data.
+	int		prev;		// Timer chain position.
+	int		next;		// Timer chain position.
 
-        u32     b_queued;       // Total bytes sent through this TBF
-        u32     b_sent;         // Total bytes sucessfully made it to the network.
-        u32     p_queued;       // ditto packets.
-        u32     p_sent;         // ditto packets.
-        u32     b_dropped;      // Total bytes dropped.
-        u32     p_dropped;      // Total packets dropped.
-        u32     p_delayed;      // Total packets not sent immediately.
+	uint32_t	b_queued;	// Total bytes sent through this TBF
+	uint32_t	b_sent;		// Total bytes sucessfully made it to the network.
+	uint32_t	p_queued;	// ditto packets.
+	uint32_t	p_sent;		// ditto packets.
+	uint32_t	b_dropped;	// Total bytes dropped.
+	uint32_t	p_dropped;	// Total packets dropped.
+	uint32_t	p_delayed;	// Total packets not sent immediately.
 
-        int             sizes[TBF_MAX_QUEUE];
-        char            packets[TBF_MAX_QUEUE][TBF_MAX_SIZE];
+	int		sizes[TBF_MAX_QUEUE];
+	char		packets[TBF_MAX_QUEUE][TBF_MAX_SIZE];
 } tbft;
 
 void init_tbf(int num_tbfs);
 int tbf_run_timer(void);
 int tbf_queue_packet(int tbf_id, char * data, int size);
-int new_tbf(int sid, int max_credit, int rate, void (*f)(sessionidt, u8 *, int));
+int new_tbf(int sid, int max_credit, int rate, void (*f)(sessionidt, uint8_t *, int));
 int free_tbf(int tid);
 void fsck_tbfs(void);
 
