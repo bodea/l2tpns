@@ -17,6 +17,8 @@
 - Show time since last counter reset in "show counters".
 - Remove "save_state" option.  Not maintained anymore; use clustering
   to retain state across restarts.
+- Fix off-by-one in session/tunnel table initialisation.
+- Bump MAXSESSION to 60K.
 
 * Fri Dec 17 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.13
 - Better cluster master collision resolution: keep a counter of state

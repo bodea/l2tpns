@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.55 2005-02-09 00:16:19 bodea Exp $
+// $Id: l2tpns.h,v 1.56 2005-02-09 02:39:05 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -19,7 +19,7 @@
 
 // Limits
 #define MAXTUNNEL	500		// could be up to 65535
-#define MAXSESSION	50000		// could be up to 65535
+#define MAXSESSION	60000		// could be up to 65535
 #define MAXTBFS		6000		// Maximum token bucket filters. Might need up to 2 * session.
 
 #define RADIUS_SHIFT	5
