@@ -5,7 +5,7 @@
 
 /* throttle control */
 
-char const *cvs_id = "$Id: throttlectl.c,v 1.4 2004-12-01 03:37:20 bodea Exp $";
+char const *cvs_id = "$Id: throttlectl.c,v 1.5 2004-12-01 04:35:09 bodea Exp $";
 
 int plugin_api_version = PLUGIN_API_VERSION;
 static struct pluginfuncs *p = 0;
@@ -48,7 +48,7 @@ int plugin_control(struct param_control *data)
 
 	if (flag)
 	{
-		if (data->argc < 2 || data->argc > 4)
+		if (data->argc < 2 || data->argc > 5)
 		{
 			data->response = NSCTL_RES_ERR;
 			data->additional = "requires username or session id and optional rate(s)";
