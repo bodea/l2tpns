@@ -68,7 +68,7 @@ int plugin_control(struct param_control *data)
 		sprintf((data->response + data->response_length), "%s", errormsg);
 		data->response_length += strlen(errormsg) + 1;
 
-		p.log(3, 0, 0, 0, "Unknown session %s\n", session);
+		p.log(3, 0, 0, 0, "Unknown session %d\n", session);
 		return PLUGIN_RET_STOP;
 	}
 	*(short *)(data->response + 2) = ntohs(PKT_RESP_OK);
