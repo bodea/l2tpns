@@ -1,6 +1,6 @@
 // L2TPNS Radius Stuff
 
-char const *cvs_id_radius = "$Id: radius.c,v 1.22 2005-01-05 14:35:01 bodea Exp $";
+char const *cvs_id_radius = "$Id: radius.c,v 1.23 2005-01-25 04:19:06 bodea Exp $";
 
 #include <time.h>
 #include <stdio.h>
@@ -619,12 +619,38 @@ void processrad(uint8_t *buf, int len, char socket_index)
 						} while (newp);
 						free(avpair);
 					}
+					else if (*p == 99)
+					{
+						// Framed-IPv6-Route
+						struct in6_addr r6;
+						int prefixlen;
+						uint8_t *n = p + 2;
+						uint8_t *e = p + p[1];
+						uint8_t *m = strchr(n, '/');
+
+						*m++ = 0;
+						inet_pton(AF_INET6, n, &r6);
+
+						prefixlen = 0;
+						while (m < e && isdigit(*m)) {
+							prefixlen = prefixlen * 10 + *m++ - '0';
+						}
+
+						if (prefixlen)
+						{
+							LOG(3, s, session[s].tunnel,
+								"   Radius reply contains route for %s/%d\n",
+								n, prefixlen);
+							session[s].ipv6route = r6;
+							session[s].ipv6prefixlen = prefixlen;
+						}
+					}
 				}
 			}
 			else if (r_code == AccessReject)
 			{
 				LOG(2, s, session[s].tunnel, "   Authentication denied for %s\n", session[s].user);
-//FIXME: We should tear down the session here!
+				sessionshutdown(s, "Authentication denied");
 				break;
 			}
 

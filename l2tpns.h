@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.53 2005-01-13 07:57:39 bodea Exp $
+// $Id: l2tpns.h,v 1.54 2005-01-25 04:19:05 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -213,7 +213,9 @@ typedef struct
 	uint16_t sid;			// near end session id.
 	uint8_t filter_in;		// input filter index (to ip_filters[N-1]; 0 if none)
 	uint8_t filter_out;		// output filter index
-	char reserved[18];		// Space to expand structure without changing HB_VERSION
+	struct in6_addr ipv6route;	// Static IPv6 route
+	uint8_t ipv6prefixlen;		// IPv6 route prefix length
+	char reserved[1];		// Space to expand structure without changing HB_VERSION
 }
 sessiont;
 
@@ -222,6 +224,7 @@ sessiont;
 #define SF_CCP_ACKED	4	// CCP negotiated
 #define SF_IPV6CP_ACKED	8	// IPv6 negotiated
 #define SF_IPV6_NACKED	16	// IPv6 rejected
+#define SF_IPV6_ROUTED	32	// advertised v6 route
 
 #define AUTHPAP		1	// allow PAP
 #define AUTHCHAP	2	// allow CHAP
@@ -377,11 +380,14 @@ struct Tstats
 #ifdef STATISTICS
     uint32_t	call_processtun;
     uint32_t	call_processipout;
+    uint32_t	call_processipv6out;
     uint32_t	call_processudp;
     uint32_t	call_sessionbyip;
+    uint32_t	call_sessionbyipv6;
     uint32_t	call_sessionbyuser;
     uint32_t	call_sendarp;
     uint32_t	call_sendipcp;
+    uint32_t	call_processipv6cp;
     uint32_t	call_tunnelsend;
     uint32_t	call_sessionkill;
     uint32_t	call_sessionshutdown;
@@ -396,6 +402,7 @@ struct Tstats
     uint32_t	call_processlcp;
     uint32_t	call_processipcp;
     uint32_t	call_processipin;
+    uint32_t	call_processipv6in;
     uint32_t	call_processccp;
     uint32_t	call_sendchap;
     uint32_t	call_processrad;
@@ -500,6 +507,8 @@ typedef struct
 	int		cluster_hb_timeout;		// How many missed heartbeats trigger an election.
 	uint64_t	cluster_table_version;		// # state changes processed by cluster
 
+	struct in6_addr ipv6_prefix;			// Our IPv6 network pool.
+
 #ifdef BGP
 #define BGP_NUM_PEERS	2
 	uint16_t as_number;
@@ -582,7 +591,9 @@ void processpap(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l);
 void processchap(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l);
 void processlcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l);
 void processipcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l);
+void processipv6cp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l);
 void processipin(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l);
+void processipv6in(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l);
 void processccp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l);
 void sendchap(tunnelidt t, sessionidt s);
 uint8_t *makeppp(uint8_t *b, int size, uint8_t *p, int l, tunnelidt t, sessionidt s, uint16_t mtype);
@@ -601,7 +612,10 @@ void radiusclear(uint16_t r, sessionidt s);
 
 // l2tpns.c
 clockt backoff(uint8_t try);
+void send_ipv6_ra(tunnelidt t, sessionidt s, struct in6_addr *ip);
+void route6set(sessionidt s, struct in6_addr ip, int prefixlen, int add);
 sessionidt sessionbyip(in_addr_t ip);
+sessionidt sessionbyipv6(struct in6_addr ip);
 sessionidt sessionbyuser(char *username);
 void random_data(uint8_t *buf, int len);
 void sessionshutdown(sessionidt s, char *reason);

@@ -1,6 +1,6 @@
 /* Misc util functions */
 
-char const *cvs_id_util = "$Id: util.c,v 1.9 2004-12-20 07:23:53 bodea Exp $";
+char const *cvs_id_util = "$Id: util.c,v 1.10 2005-01-25 04:19:07 bodea Exp $";
 
 #include <unistd.h>
 #include <errno.h>
@@ -40,7 +40,7 @@ void *shared_malloc(unsigned int size)
 }
 
 extern int forked;
-extern int udpfd, controlfd, tunfd, snoopfd, ifrfd, cluster_sockfd;
+extern int udpfd, controlfd, tunfd, snoopfd, ifrfd, ifr6fd, cluster_sockfd;
 extern int *radfds;
 
 pid_t fork_and_close()
@@ -78,6 +78,7 @@ pid_t fork_and_close()
 	if (controlfd != -1)      close(controlfd);
 	if (snoopfd != -1)        close(snoopfd);
 	if (ifrfd != -1)          close(ifrfd);
+	if (ifr6fd != -1)         close(ifr6fd);
 	if (cluster_sockfd != -1) close(cluster_sockfd);
 	if (clifd != -1)          close(clifd);
 

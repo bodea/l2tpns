@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.51 2005-01-13 08:26:25 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.52 2005-01-25 04:19:05 bodea Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -478,7 +478,7 @@ static int cmd_show_session(struct cli_def *cli, char *command, char **argv, int
 	}
 
 	// Show Summary
-	cli_print(cli, "%5s %4s %-32s %-15s %s %s %s %10s %10s %10s %4s %-15s %s",
+	cli_print(cli, "%5s %4s %-32s %-15s %s %s %s %s %10s %10s %10s %4s %-15s %s",
 			"SID",
 			"TID",
 			"Username",
@@ -486,6 +486,7 @@ static int cmd_show_session(struct cli_def *cli, char *command, char **argv, int
 			"I",
 			"T",
 			"G",
+			"6",
 			"opened",
 			"downloaded",
 			"uploaded",
@@ -496,7 +497,7 @@ static int cmd_show_session(struct cli_def *cli, char *command, char **argv, int
 	for (i = 1; i < MAXSESSION; i++)
 	{
 		if (!session[i].opened) continue;
-		cli_print(cli, "%5d %4d %-32s %-15s %s %s %s %10u %10lu %10lu %4u %-15s %s",
+		cli_print(cli, "%5d %4d %-32s %-15s %s %s %s %s %10u %10lu %10lu %4u %-15s %s",
 				i,
 				session[i].tunnel,
 				session[i].user[0] ? session[i].user : "*",
@@ -504,6 +505,7 @@ static int cmd_show_session(struct cli_def *cli, char *command, char **argv, int
 				(session[i].snoop_ip && session[i].snoop_port) ? "Y" : "N",
 				(session[i].throttle_in || session[i].throttle_out) ? "Y" : "N",
 				(session[i].walled_garden) ? "Y" : "N",
+				(session[i].flags & SF_IPV6CP_ACKED) ? "Y" : "N",
 				abs(time_now - (unsigned long)session[i].opened),
 				(unsigned long)session[i].total_cout,
 				(unsigned long)session[i].total_cin,
@@ -700,18 +702,22 @@ static int cmd_show_counters(struct cli_def *cli, char *command, char **argv, in
 	cli_print(cli, "-----------------------------------------");
 	cli_print(cli, "%-30s%u", "call_processtun",		GET_STAT(call_processtun));
 	cli_print(cli, "%-30s%u", "call_processipout",		GET_STAT(call_processipout));
+	cli_print(cli, "%-30s%u", "call_processipv6out",	GET_STAT(call_processipv6out));
 	cli_print(cli, "%-30s%u", "call_processudp",		GET_STAT(call_processudp));
 	cli_print(cli, "%-30s%u", "call_processpap",		GET_STAT(call_processpap));
 	cli_print(cli, "%-30s%u", "call_processchap",		GET_STAT(call_processchap));
 	cli_print(cli, "%-30s%u", "call_processlcp",		GET_STAT(call_processlcp));
 	cli_print(cli, "%-30s%u", "call_processipcp",		GET_STAT(call_processipcp));
+	cli_print(cli, "%-30s%u", "call_processipv6cp",		GET_STAT(call_processipv6cp));
 	cli_print(cli, "%-30s%u", "call_processipin",		GET_STAT(call_processipin));
+	cli_print(cli, "%-30s%u", "call_processipv6in",		GET_STAT(call_processipv6in));
 	cli_print(cli, "%-30s%u", "call_processccp",		GET_STAT(call_processccp));
 	cli_print(cli, "%-30s%u", "call_processrad",		GET_STAT(call_processrad));
 	cli_print(cli, "%-30s%u", "call_sendarp",		GET_STAT(call_sendarp));
 	cli_print(cli, "%-30s%u", "call_sendipcp",		GET_STAT(call_sendipcp));
 	cli_print(cli, "%-30s%u", "call_sendchap",		GET_STAT(call_sendchap));
 	cli_print(cli, "%-30s%u", "call_sessionbyip",		GET_STAT(call_sessionbyip));
+	cli_print(cli, "%-30s%u", "call_sessionbyipv6",		GET_STAT(call_sessionbyipv6));
 	cli_print(cli, "%-30s%u", "call_sessionbyuser",		GET_STAT(call_sessionbyuser));
 	cli_print(cli, "%-30s%u", "call_tunnelsend",		GET_STAT(call_tunnelsend));
 	cli_print(cli, "%-30s%u", "call_tunnelkill",		GET_STAT(call_tunnelkill));

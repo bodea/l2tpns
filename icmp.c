@@ -1,6 +1,6 @@
 // L2TPNS: icmp
 
-char const *cvs_id_icmp = "$Id: icmp.c,v 1.6 2004-12-16 08:49:53 bodea Exp $";
+char const *cvs_id_icmp = "$Id: icmp.c,v 1.7 2005-01-25 04:19:05 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -8,6 +8,7 @@ char const *cvs_id_icmp = "$Id: icmp.c,v 1.6 2004-12-16 08:49:53 bodea Exp $";
 #include <asm/types.h>
 #include <linux/ip.h>
 #include <linux/icmp.h>
+#include <netinet/icmp6.h>
 #include <stdio.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -18,6 +19,14 @@ char const *cvs_id_icmp = "$Id: icmp.c,v 1.6 2004-12-16 08:49:53 bodea Exp $";
 #include "l2tpns.h"
 
 static uint16_t _checksum(unsigned char *addr, int count);
+
+struct ipv6_pseudo_hdr {
+	struct in6_addr src;
+	struct in6_addr dest;
+	uint32_t ulp_length;
+	uint32_t zero    : 24;
+	uint32_t nexthdr :  8;
+};
 
 void host_unreachable(in_addr_t destination, uint16_t id, in_addr_t source, char *packet, int packet_len)
 {
@@ -88,4 +97,78 @@ static uint16_t _checksum(unsigned char *addr, int count)
 	sum = ~sum;
 
 	return htons((uint16_t) sum);
+}
+
+void send_ipv6_ra(tunnelidt t, sessionidt s, struct in6_addr *ip)
+{
+	struct nd_opt_prefix_info *pinfo;
+	struct ipv6_pseudo_hdr *phdr;
+	uint8_t b[MAXETHER + 20];
+	uint8_t c[MAXETHER + 20];
+	int l;
+	uint8_t *o;
+
+	LOG(3, s, t, "Sending IPv6 RA\n");
+		
+	memset(b, 0, sizeof(b));
+	o = makeppp(b, sizeof(b), 0, 0, t, s, PPPIPV6);
+
+	if (!o)
+	{
+		LOG(3, s, t, "failed to send IPv6 RA\n");
+		return;
+	}
+
+	*o = 0x60;			// IPv6
+	*(o+1) = 0;
+	*(o+5) = 48;			// Length of payload (not header)
+	*(o+6) = 58;			// icmp6 is next
+	*(o+7) = 255;			// Hop limit
+	memset(o+8, 0, 16);		// source = FE80::1
+	*(o+8) = 0xFE;
+	*(o+9) = 0x80;
+	*(o+23) = 1;
+	if (ip != NULL)
+		memcpy(o+24, ip, 16);	// dest = ip
+	else
+	{
+		// FF02::1 - all hosts
+		*(o+24) = 0xFF;
+		*(o+25) = 2;
+		*(o+39) = 1;
+	}
+	*(o+40) = 134;			// RA message
+	*(o+41) = 0;			// Code
+	*(o+42) = *(o+43) = 0;		// Checksum
+	*(o+44) = 64;			// Hop count
+	*(o+45) = 0;			// Flags
+	*(o+46) = *(o+47) = 255;	// Lifetime
+	*(uint32_t *)(o+48) = 0;	// Reachable time
+	*(uint32_t *)(o+52) = 0;	// Retrans timer
+	pinfo = (struct nd_opt_prefix_info *)(o+56);
+	pinfo->nd_opt_pi_type           = ND_OPT_PREFIX_INFORMATION;
+	pinfo->nd_opt_pi_len            = 4;
+	pinfo->nd_opt_pi_prefix_len     = 64; // prefix length
+	pinfo->nd_opt_pi_flags_reserved = ND_OPT_PI_FLAG_ONLINK;
+	pinfo->nd_opt_pi_flags_reserved |= ND_OPT_PI_FLAG_AUTO;
+	pinfo->nd_opt_pi_valid_time     = htonl(2592000);
+	pinfo->nd_opt_pi_preferred_time = htonl(604800);
+	pinfo->nd_opt_pi_reserved2      = 0;
+	pinfo->nd_opt_pi_prefix         = config->ipv6_prefix;
+	l = sizeof(*pinfo) + 56;
+
+	memset(c, 0, sizeof(c));
+	phdr = (struct ipv6_pseudo_hdr *) c;
+	memcpy(&phdr->src, o+8, 16);
+	memcpy(&phdr->dest, o+24, 16);
+	phdr->ulp_length = htonl(l - 40);
+	phdr->nexthdr = IPPROTO_ICMPV6;
+
+	memcpy(c + sizeof(*phdr), o + 40, l - 40);
+
+	// Checksum is over the icmp6 payload plus the pseudo header
+	*(uint16_t *)(o+42) = _checksum(c, l - 40 + sizeof(*phdr));
+
+	tunnelsend(b, l + (o-b), t); // send it...
+	return;
 }

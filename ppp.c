@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.41 2005-01-13 07:57:39 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.42 2005-01-25 04:19:06 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -139,9 +139,6 @@ void processchap(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 	if (!r)
 	{
 		LOG(1, s, t, "Unexpected CHAP message\n");
-
-// FIXME: Need to drop the session here.
-
 		STAT(tunnel_rx_errors);
 		return;
 	}
@@ -492,6 +489,20 @@ void processlcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 	{
 		sessionshutdown(s, "Connection closed.");
 	}
+	else if (*p == ProtocolRej)
+	{
+		if (*(uint16_t *) (p+4) == htons(PPPIPV6CP))
+		{
+			LOG(3, s, t, "IPv6 rejected\n");
+			session[s].flags |= SF_IPV6_NACKED;
+		}
+		else
+		{
+			LOG(1, s, t, "Unexpected LCP protocol reject 0x%X\n",
+				ntohs(*(uint16_t *) (p+4)));
+			STAT(tunnel_rx_errors);
+		}
+	}
 	else if (*p == EchoReq)
 	{
 		LOG(5, s, t, "LCP: Received EchoReq.  Sending EchoReply\n");
@@ -685,6 +696,128 @@ void processipcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 	}
 }
 
+// Process IPV6CP messages
+void processipv6cp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
+{
+
+	CSTAT(processipv6cp);
+
+	LOG_HEX(5, "IPV6CP", p, l);
+	if (l < 4)
+	{
+		LOG(1, s, t, "Short IPV6CP %d bytes\n", l);
+		STAT(tunnel_rx_errors);
+		return ;
+	}
+	if (*p == ConfigAck)
+	{
+		// happy with our IPV6CP
+		session[s].flags |= SF_IPV6CP_ACKED;
+
+		LOG(3, s, t, "IPV6CP Acked, IPv6 is now active\n");
+		// Add a routed block if configured.
+		if (session[s].ipv6prefixlen)
+		{
+			route6set(s, session[s].ipv6route, session[s].ipv6prefixlen, 1);
+			session[s].flags |= SF_IPV6_ROUTED;
+		}
+
+		// Send an initial RA (TODO: Should we send these regularly?)
+		send_ipv6_ra(t, s, NULL);
+		return;
+	}
+	if (*p != ConfigReq)
+	{
+		LOG(1, s, t, "Unexpected IPV6CP code %d\n", *p);
+		STAT(tunnel_rx_errors);
+		return;
+	}
+
+	LOG(4, s, t, "IPV6CP ConfigReq received\n");
+	if (ntohs(*(uint16_t *) (p + 2)) > l)
+	{
+		LOG(1, s, t, "Length mismatch IPV6CP %d/%d\n", ntohs(*(uint16_t *) (p + 2)), l);
+		STAT(tunnel_rx_errors);
+		return ;
+	}
+	if (!session[s].ip)
+	{
+		LOG(3, s, t, "Waiting on radius reply\n");
+		return;			// have to wait on RADIUS reply
+	}
+	// form a config reply quoting the IP in the session
+	{
+		uint8_t b[MAXCONTROL];
+		uint8_t *i,
+		*q;
+
+		l = ntohs(*(uint16_t *) (p + 2)); // We must use length from IPV6CP len field
+		q = p + 4;
+		i = p + l;
+		while (q < i && q[1])
+		{
+			if (*q != 1)
+				break;
+			q += q[1];
+		}
+		if (q < i)
+		{
+			// reject
+			uint16_t n = 4;
+			i = p + l;
+			if (!(q = makeppp(b, sizeof(b), p, l, t, s, PPPIPV6CP)))
+			{
+				LOG(2, s, t, "Failed to send IPV6CP ConfigRej\n");
+				return;
+			}
+			*q = ConfigRej;
+			p += 4;
+			while (p < i && p[1])
+			{
+				if (*p != 1)
+				{
+					LOG(2, s, t, "IPV6CP reject %d\n", *p);
+					memcpy(q + n, p, p[1]);
+					n += p[1];
+				}
+				p += p[1];
+			}
+			*(uint16_t *) (q + 2) = htons(n);
+			LOG(4, s, t, "Sending ConfigRej\n");
+			tunnelsend(b, n + (q - b), t); // send it
+		}
+		else
+		{
+			LOG(4, s, t, "Sending ConfigAck\n");
+			*p = ConfigAck;
+			i = findppp(p, 1);		// IP address
+			if (!i || i[1] != 10)
+			{
+				LOG(1, s, t, "No IP in IPV6CP request\n");
+				STAT(tunnel_rx_errors);
+				return ;
+			}
+			if ((*(uint32_t *) (i + 2) != htonl(session[s].ip)) || 
+					(*(uint32_t *) (i + 6) != 0))
+			{
+				*(uint32_t *) (i + 2) = htonl(session[s].ip);
+				*(uint32_t *) (i + 6) = 0;
+				*p = ConfigNak;
+				LOG(4, s, t,
+					" No, a ConfigNak, client is "
+					"requesting IP - sending %s\n",
+					fmtaddr(htonl(session[s].ip), 0));
+			}
+			if (!(q = makeppp(b, sizeof(b), p, l, t, s, PPPIPV6CP)))
+			{
+				LOG(2, s, t, " Failed to send IPV6CP packet.\n");
+				return;
+			}
+			tunnelsend(b, l + (q - b), t); // send it
+		}
+	}
+}
+
 // process IP packet received
 //
 // This MUST be called with at least 4 byte behind 'p'.
@@ -746,6 +879,92 @@ void processipin(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 	{
 		// Snooping this session
 		snoop_send_packet(p + 4, l - 4, session[s].snoop_ip, session[s].snoop_port);
+	}
+
+	session[s].cin += l - 4;
+	session[s].total_cin += l - 4;
+	sess_local[s].cin += l - 4;
+
+	session[s].pin++;
+	eth_tx += l - 4;
+
+	STAT(tun_tx_packets);
+	INC_STAT(tun_tx_bytes, l - 4);
+}
+
+// process IPv6 packet received
+//
+// This MUST be called with at least 4 byte behind 'p'.
+// (i.e. this routine writes to p[-4]).
+void processipv6in(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
+{
+	struct in6_addr ip;
+	in_addr_t ipv4;
+
+	CSTAT(processipv6in);
+
+	LOG_HEX(5, "IPv6", p, l);
+
+	ip = *(struct in6_addr *) (p + 8);
+	ipv4 = ntohl(*(uint32_t *)(p + 16));
+
+	if (l > MAXETHER)
+	{
+		LOG(1, s, t, "IP packet too long %d\n", l);
+		STAT(tunnel_rx_errors);
+		return ;
+	}
+
+	// no spoof
+	if (ipv4 != session[s].ip && memcmp(&config->ipv6_prefix, &ip, 8) && sessionbyipv6(ip) != s)
+	{
+		char str[INET6_ADDRSTRLEN];
+		LOG(5, s, t, "Dropping packet with spoofed IP %s\n",
+				inet_ntop(AF_INET6, &ip, str, INET6_ADDRSTRLEN));
+		return;
+	}
+
+	// Check if it's a Router Solicition message.
+	if (*(p + 6) == 58 && *(p + 7) == 255 && *(p + 24) == 0xFF && *(p + 25) == 2 &&
+			*(uint32_t *)(p + 26) == 0 && *(uint32_t *)(p + 30) == 0 &&
+			*(uint32_t *)(p + 34) == 0 &&
+			*(p + 38) == 0 && *(p + 39) == 2 && *(p + 40) == 133) {
+		LOG(3, s, t, "Got IPv6 RS\n");
+		send_ipv6_ra(t, s, &ip);
+		return;
+	}
+
+	// Add on the tun header
+	p -= 4;
+	*(uint32_t *)p = htonl(PKTIPV6);
+	l += 4;
+
+	// Are we throttled and a slave?
+	if (session[s].tbf_in && !config->cluster_iam_master) {
+		// Pass it to the master for handling.
+		master_throttle_packet(session[s].tbf_in, p, l);
+		return;
+	}
+
+	// Are we throttled and a master?? actually handle the throttled
+	// packets.
+	if (session[s].tbf_in && config->cluster_iam_master) {
+		tbf_queue_packet(session[s].tbf_in, p, l);
+		return;
+	}
+
+	// send to ethernet
+	if (tun_write(p, l) < 0)
+	{
+		STAT(tun_tx_errors);
+		LOG(0, s, t, "Error writing %d bytes to TUN device: %s" " (tunfd=%d, p=%p)\n",
+			l, strerror(errno), tunfd, p);
+	}
+
+	if (session[s].snoop_ip && session[s].snoop_port)
+	{
+		// Snooping this session
+		snoop_send_packet(p, l, session[s].snoop_ip, session[s].snoop_port);
 	}
 
 	session[s].cin += l - 4;

@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.79 2005-01-13 08:42:52 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.80 2005-01-25 04:19:05 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -19,6 +19,7 @@ char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.79 2005-01-13 08:42:52 bodea Exp 
 #include <sys/mman.h>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <netinet/ip6.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -62,9 +63,11 @@ int clifd = -1;			// Socket listening for CLI connections.
 int snoopfd = -1;		// UDP file handle for sending out intercept data
 int *radfds = NULL;		// RADIUS requests file handles
 int ifrfd = -1;			// File descriptor for routing, etc
+int ifr6fd = -1;		// File descriptor for IPv6 routing, etc
 static int rand_fd = -1;	// Random data source
 time_t basetime = 0;		// base clock
 char hostname[1000] = "";	// us.
+static int tunidx;		// ifr_ifindex of tun device
 static uint32_t sessionid = 0;	// session id for radius accounting
 static int syslog_log = 0;	// are we logging to syslog
 static FILE *log_stream = NULL;	// file handle for direct logging (i.e. direct into file, not via syslog).
@@ -75,6 +78,10 @@ struct cli_session_actions *cli_session_actions = NULL;	// Pending session chang
 struct cli_tunnel_actions *cli_tunnel_actions = NULL;	// Pending tunnel changes required by CLI
 
 static void *ip_hash[256];	// Mapping from IP address to session structures.
+struct ipv6radix {
+	int sess;
+	struct ipv6radix *branch;
+} ipv6_hash[256];		// Mapping from IPv6 address to session structures.
 
 // Traffic counters.
 static uint32_t udp_rx = 0, udp_rx_pkt = 0, udp_tx = 0;
@@ -125,6 +132,7 @@ config_descriptt config_values[] = {
 	CONFIG("cluster_interface", cluster_interface, STRING),
 	CONFIG("cluster_hb_interval", cluster_hb_interval, INT),
 	CONFIG("cluster_hb_timeout", cluster_hb_timeout, INT),
+	CONFIG("ipv6_prefix", ipv6_prefix, IPv6),
 	{ NULL, 0, 0, 0 },
 };
 
@@ -163,6 +171,7 @@ struct Tringbuffer *ringbuffer = NULL;
 
 static void cache_ipmap(in_addr_t ip, int s);
 static void uncache_ipmap(in_addr_t ip);
+static void cache_ipv6map(struct in6_addr ip, int prefixlen, int s);
 static void free_ip_address(sessionidt s);
 static void dump_acct_info(int all);
 static void sighup_handler(int sig);
@@ -421,11 +430,61 @@ static void routeset(sessionidt s, in_addr_t ip, in_addr_t mask, in_addr_t gw, i
 	}
 }
 
+void route6set(sessionidt s, struct in6_addr ip, int prefixlen, int add)
+{
+	struct in6_rtmsg rt;
+	char ipv6addr[INET6_ADDRSTRLEN];
+
+	if (ifr6fd < 0)
+	{
+		LOG(0, 0, 0, "Asked to set IPv6 route, but IPv6 not setup.\n");
+		return;
+	}
+
+	memset(&rt, 0, sizeof(rt));
+
+	memcpy(&rt.rtmsg_dst, &ip, sizeof(struct in6_addr));
+	rt.rtmsg_dst_len = prefixlen;
+	rt.rtmsg_metric = 1;
+	rt.rtmsg_flags = RTF_UP;
+	rt.rtmsg_ifindex = tunidx;
+
+	LOG(1, 0, 0, "Route %s %s/%d\n",
+	    add ? "add" : "del",
+	    inet_ntop(AF_INET6, &ip, ipv6addr, INET6_ADDRSTRLEN),
+	    prefixlen);
+
+	if (ioctl(ifr6fd, add ? SIOCADDRT : SIOCDELRT, (void *) &rt) < 0)
+		LOG(0, 0, 0, "route6set() error in ioctl: %s\n",
+				strerror(errno));
+
+	// FIXME: need to add BGP routing (RFC2858)
+
+	if (s)
+	{
+		if (!add)	// Are we deleting a route?
+			s = 0;	// Caching the session as '0' is the same as uncaching.
+
+		cache_ipv6map(ip, prefixlen, s);
+	}
+	
+	return;
+}
+
+// defined in linux/ipv6.h, but tricky to include from user-space
+// TODO: move routing to use netlink rather than ioctl
+struct in6_ifreq {
+	struct in6_addr ifr6_addr;
+	__u32 ifr6_prefixlen;
+	unsigned int ifr6_ifindex;
+};
+
 //
 // Set up TUN interface
 static void inittun(void)
 {
 	struct ifreq ifr;
+	struct in6_ifreq ifr6;
 	struct sockaddr_in sin = {0};
 	memset(&ifr, 0, sizeof(ifr));
 	ifr.ifr_flags = IFF_TUN;
@@ -470,6 +529,42 @@ static void inittun(void)
 	{
 		LOG(0, 0, 0, "Error setting tun flags: %s\n", strerror(errno));
 		exit(1);
+	}
+	if (ioctl(ifrfd, SIOCGIFINDEX, (void *) &ifr) < 0)
+	{
+		LOG(0, 0, 0, "Error getting tun ifindex: %s\n", strerror(errno));
+		exit(1);
+	}
+	tunidx = ifr.ifr_ifindex;
+
+	// Only setup IPv6 on the tun device if we have a configured prefix
+	if (config->ipv6_prefix.s6_addr[0] > 0) {
+		ifr6fd = socket(PF_INET6, SOCK_DGRAM, 0);
+
+		// Link local address is FE80::1
+		memset(&ifr6.ifr6_addr, 0, sizeof(ifr6.ifr6_addr));
+		ifr6.ifr6_addr.s6_addr[0] = 0xFE;
+		ifr6.ifr6_addr.s6_addr[1] = 0x80;
+		ifr6.ifr6_addr.s6_addr[15] = 1;
+		ifr6.ifr6_prefixlen = 64;
+		ifr6.ifr6_ifindex = ifr.ifr_ifindex;
+		if (ioctl(ifr6fd, SIOCSIFADDR, (void *) &ifr6) < 0)
+		{
+			LOG(0, 0, 0, "Error setting tun IPv6 link local address:"
+				" %s\n", strerror(errno));
+		}
+
+		// Global address is prefix::1
+		memset(&ifr6.ifr6_addr, 0, sizeof(ifr6.ifr6_addr));
+		ifr6.ifr6_addr = config->ipv6_prefix;
+		ifr6.ifr6_addr.s6_addr[15] = 1;
+		ifr6.ifr6_prefixlen = 64;
+		ifr6.ifr6_ifindex = ifr.ifr_ifindex;
+		if (ioctl(ifr6fd, SIOCSIFADDR, (void *) &ifr6) < 0)
+		{
+			LOG(0, 0, 0, "Error setting tun IPv6 global address: %s\n",
+				strerror(errno));
+		}
 	}
 }
 
@@ -537,6 +632,32 @@ static int lookup_ipmap(in_addr_t ip)
 	return (int) (intptr_t) d[(size_t) *a];
 }
 
+int lookup_ipv6map(struct in6_addr ip)
+{
+	struct ipv6radix *curnode;
+	int i;
+	int s;
+	char ipv6addr[INET6_ADDRSTRLEN];
+
+	curnode = &ipv6_hash[ip.s6_addr[0]];
+	i = 1;
+	s = curnode->sess;
+
+	while (s == 0 && i < 15 && curnode->branch != NULL)
+	{
+		curnode = &curnode->branch[ip.s6_addr[i]];
+		s = curnode->sess;
+		i++;
+	}
+
+	LOG(4, s, session[s].tunnel, "Looking up address %s and got %d\n",
+    			inet_ntop(AF_INET6, &ip, ipv6addr,
+				INET6_ADDRSTRLEN),
+			s);
+
+	return s;
+}
+
 sessionidt sessionbyip(in_addr_t ip)
 {
 	int s = lookup_ipmap(ip);
@@ -544,6 +665,25 @@ sessionidt sessionbyip(in_addr_t ip)
 
 	if (s > 0 && s < MAXSESSION && session[s].tunnel)
 		return (sessionidt) s;
+
+	return 0;
+}
+
+sessionidt sessionbyipv6(struct in6_addr ip)
+{
+	int s;
+	CSTAT(sessionbyipv6);
+
+	if (!memcmp(&config->ipv6_prefix, &ip, 8) ||
+		(ip.s6_addr[0] == 0xFE && ip.s6_addr[1] == 0x80 &&
+		 (ip.s6_addr16[1] == ip.s6_addr16[2] == ip.s6_addr16[3] == 0))) {
+		s = lookup_ipmap(*(in_addr_t *) &ip.s6_addr[8]);
+	} else {
+		s = lookup_ipv6map(ip);
+	}
+
+	if (s > 0 && s < MAXSESSION && session[s].tunnel)
+		return s;
 
 	return 0;
 }
@@ -585,6 +725,42 @@ static void cache_ipmap(in_addr_t ip, int s)
 static void uncache_ipmap(in_addr_t ip)
 {
 	cache_ipmap(ip, 0);	// Assign it to the NULL session.
+}
+
+static void cache_ipv6map(struct in6_addr ip, int prefixlen, int s)
+{
+	int i;
+	int bytes;
+	struct ipv6radix *curnode;
+	char ipv6addr[INET6_ADDRSTRLEN];
+
+	curnode = &ipv6_hash[ip.s6_addr[0]];
+
+	bytes = prefixlen >> 3;
+	i = 1;
+	while (i < bytes) {
+		if (curnode->branch == NULL)
+		{
+			if (!(curnode->branch = calloc(256,
+					sizeof (struct ipv6radix))))
+				return;
+		}
+		curnode = &curnode->branch[ip.s6_addr[i]];
+		i++;
+	}
+
+	curnode->sess = s;
+
+	if (s > 0)
+		LOG(4, s, session[s].tunnel, "Caching ip address %s/%d\n",
+	    			inet_ntop(AF_INET6, &ip, ipv6addr, 
+					INET6_ADDRSTRLEN),
+				prefixlen);
+	else if (s == 0)
+		LOG(4, 0, 0, "Un-caching ip address %s/%d\n",
+	    			inet_ntop(AF_INET6, &ip, ipv6addr, 
+					INET6_ADDRSTRLEN),
+				prefixlen);
 }
 
 //
@@ -908,6 +1084,115 @@ static void processipout(uint8_t * buf, int len)
 	sess_local[s].cout += len;	// To send to master..
 }
 
+// process outgoing (to tunnel) IPv6
+//
+void processipv6out(uint8_t * buf, int len)
+{
+	sessionidt s;
+	sessiont *sp;
+	tunnelidt t;
+	in_addr_t ip;
+	struct in6_addr ip6;
+
+	char *data = buf;	// Keep a copy of the originals.
+	int size = len;
+
+	uint8_t b[MAXETHER + 20];
+
+	CSTAT(processipv6out);
+
+	if (len < MIN_IP_SIZE)
+	{
+		LOG(1, 0, 0, "Short IPv6, %d bytes\n", len);
+		STAT(tunnel_tx_errors);
+		return;
+	}
+	if (len >= MAXETHER)
+	{
+		LOG(1, 0, 0, "Oversize IPv6 packet %d bytes\n", len);
+		STAT(tunnel_tx_errors);
+		return;
+	}
+
+	// Skip the tun header
+	buf += 4;
+	len -= 4;
+
+	// Got an IP header now
+	if (*(uint8_t *)(buf) >> 4 != 6)
+	{
+		LOG(1, 0, 0, "IP: Don't understand anything except IPv6\n");
+		return;
+	}
+
+	ip6 = *(struct in6_addr *)(buf+24);
+	s = sessionbyipv6(ip6);
+
+	if (s == 0)
+	{
+		ip = *(uint32_t *)(buf + 32);
+		s = sessionbyip(ip);
+	}
+	
+	if (s == 0)
+	{
+		// Is this a packet for a session that doesn't exist?
+		static int rate = 0;	// Number of ICMP packets we've sent this second.
+		static int last = 0;	// Last time we reset the ICMP packet counter 'rate'.
+
+		if (last != time_now)
+		{
+			last = time_now;
+			rate = 0;
+		}
+
+		if (rate++ < config->icmp_rate) // Only send a max of icmp_rate per second.
+		{
+			// FIXME: Should send icmp6 host unreachable
+		}
+		return;
+	}
+	t = session[s].tunnel;
+	sp = &session[s];
+
+	// FIXME: add DoS prevention/filters?
+
+	if (sp->tbf_out)
+	{
+		// Are we throttling this session?
+		if (config->cluster_iam_master)
+			tbf_queue_packet(sp->tbf_out, data, size);
+		else
+			master_throttle_packet(sp->tbf_out, data, size);
+		return;
+	}
+	else if (sp->walled_garden && !config->cluster_iam_master)
+	{
+		// We are walled-gardening this
+		master_garden_packet(s, data, size);
+		return;
+	}
+
+	LOG(5, s, t, "Ethernet -> Tunnel (%d bytes)\n", len);
+
+	// Add on L2TP header
+	{
+		uint8_t *p = makeppp(b, sizeof(b), buf, len, t, s, PPPIPV6);
+		if (!p) return;
+		tunnelsend(b, len + (p-b), t); // send it...
+	}
+
+	// Snooping this session, send it to intercept box
+	if (sp->snoop_ip && sp->snoop_port)
+		snoop_send_packet(buf, len, sp->snoop_ip, sp->snoop_port);
+
+	sp->cout += len; // byte count
+	sp->total_cout += len; // byte count
+	sp->pout++;
+	udp_tx += len;
+	sess_local[s].cout += len;	// To send to master..
+}
+
 //
 // Helper routine for the TBF filters.
 // Used to send queued data in to the user!
@@ -1215,6 +1500,10 @@ void sessionshutdown(sessionidt s, char *reason)
 		}
 		else
 			free_ip_address(s);
+
+		// unroute IPv6, if setup
+		if (session[s].flags & SF_IPV6_ROUTED)
+			route6set(s, session[s].ipv6route, session[s].ipv6prefixlen, 0);
 	}
 
 	if (session[s].throttle_in || session[s].throttle_out) // Unthrottle if throttled.
@@ -1276,6 +1565,30 @@ void sendipcp(tunnelidt t, sessionidt s)
 
 	tunnelsend(buf, 10 + (q - buf), t); // send it
 	session[s].flags &= ~SF_IPCP_ACKED;	// Clear flag.
+
+	// If we have an IPv6 prefix length configured, assume we should
+	// try to negotiate an IPv6 session as well. Unless we've had a
+	// (N)ACK for IPV6CP.
+	if (config->ipv6_prefix.s6_addr[0] > 0 && 
+			!(session[s].flags & SF_IPV6CP_ACKED) &&
+			!(session[s].flags & SF_IPV6_NACKED))
+	{
+		q = makeppp(buf,sizeof(buf), 0, 0, t, s, PPPIPV6CP);
+		if (!q) return;
+
+		*q = ConfigReq;
+		q[1] = r << RADIUS_SHIFT;		// ID, don't care, we
+							// only send one type
+							// of request
+		*(uint16_t *) (q + 2) = htons(14);
+		q[4] = 1;
+		q[5] = 10;
+		*(uint32_t *) (q + 6) = 0;		// We'll be prefix::1
+		*(uint32_t *) (q + 10) = 0;
+		q[13] = 1;
+
+		tunnelsend(buf, 14 + (q - buf), t);	// send it
+	}
 }
 
 // kill a session now
@@ -2037,6 +2350,19 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 			if (!config->cluster_iam_master) { master_forward_packet(buf, len, addr->sin_addr.s_addr, addr->sin_port); return; }
 			processipcp(t, s, p, l);
 		}
+		else if (prot == PPPIPV6CP)
+		{
+			if (config->ipv6_prefix.s6_addr[0] > 0)
+			{
+				session[s].last_packet = time_now;
+				if (!config->cluster_iam_master) { master_forward_packet(buf, len, addr->sin_addr.s_addr, addr->sin_port); return; }
+				processipv6cp(t, s, p, l);
+			}
+			else
+			{
+				LOG(1, s, t, "IPv6 not configured; ignoring IPv6CP\n");
+			}
+		}
 		else if (prot == PPPCCP)
 		{
 			session[s].last_packet = time_now;
@@ -2059,6 +2385,28 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 			}
 
 			processipin(t, s, p, l);
+		}
+		else if (prot == PPPIPV6)
+		{
+			if (!config->ipv6_prefix.s6_addr[0] > 0)
+			{
+				LOG(1, s, t, "IPv6 not configured; yet received IPv6 packet. Ignoring.\n");
+				return;
+			}
+			if (session[s].die)
+			{
+				LOG(4, s, t, "Session %d is closing.  Don't process PPP packets\n", s);
+				return;              // closing session, PPP not processed
+			}
+
+			session[s].last_packet = time_now;
+			if (session[s].walled_garden && !config->cluster_iam_master)
+			{
+				master_forward_packet(buf, len, addr->sin_addr.s_addr, addr->sin_port);
+				return;
+			}
+
+			processipv6in(t, s, p, l);
 		}
 		else
 		{
@@ -2088,6 +2436,10 @@ static void processtun(uint8_t * buf, int len)
 
 	if (*(uint16_t *) (buf + 2) == htons(PKTIP)) // IPv4
 		processipout(buf, len);
+	else if (*(uint16_t *) (buf + 2) == htons(PKTIPV6) // IPV6
+	    && config->ipv6_prefix.s6_addr[0] > 0)
+		processipv6out(buf, len);
+
 	// Else discard.
 }
 
@@ -3897,6 +4249,7 @@ int sessionsetup(tunnelidt t, sessionidt s)
 		// convered by a Framed-Route.  Anything else is part
 		// of the IP address pool and is already routed, it
 		// just needs to be added to the IP cache.
+		// IPv6 route setup is done in ppp.c, when IPV6CP is acked.
 		if (session[s].ip_pool_index == -1) // static ip
 		{
 			if (!routed) routeset(s, session[s].ip, 0, 0, 1);
@@ -4018,6 +4371,10 @@ int load_session(sessionidt s, sessiont *new)
 				cache_ipmap(new->ip, s);
 		}
 	}
+
+	// check v6 routing
+	if (new->flags & SF_IPV6_ROUTED && !(session[s].flags & SF_IPV6_ROUTED))
+		    route6set(s, new->ipv6route, new->ipv6prefixlen, 1);
 
 	// check filters
 	if (new->filter_in && (new->filter_in > MAXFILTER || !ip_filters[new->filter_in - 1].name[0]))

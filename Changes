@@ -1,5 +1,5 @@
-* Thu Jan 13 2005 Brendan O'Dea <bod@optusnet.com.au> 2.1.0
-- Add IPv6 support from Jonathan McDowell (work in progress).
+* Tue Jan 25 2005 Brendan O'Dea <bod@optusnet.com.au> 2.1.0
+- Add IPv6 support from Jonathan McDowell.
 - Add CHAP support from Jordan Hrycaj (work in progress).
 - Sanity check that cluster_send_session is not called from a child
   process.
