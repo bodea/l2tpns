@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.15 2004-09-02 04:18:07 fred_nerk Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.16 2004-09-19 23:26:46 fred_nerk Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -103,7 +103,7 @@ int cmd_remove_plugin(struct cli_def *cli, char *command, char **argv, int argc)
 int cmd_uptime(struct cli_def *cli, char *command, char **argv, int argc);
 int regular_stuff(struct cli_def *cli);
 
-void init_cli(char *hostname)
+void init_cli()
 {
 	FILE *f;
 	char buf[4096];
@@ -113,10 +113,10 @@ void init_cli(char *hostname)
 	struct sockaddr_in addr;
 
 	cli = cli_init();
-	if (hostname && *hostname)
-			cli_set_hostname(cli, hostname);
+	if (config->hostname && *config->hostname)
+		cli_set_hostname(cli, config->hostname);
 	else
-			cli_set_hostname(cli, "l2tpns");
+		cli_set_hostname(cli, "l2tpns");
 
 	c = cli_register_command(cli, NULL, "show", NULL, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
 	cli_register_command(cli, c, "banana", cmd_show_banana, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Show a banana");
@@ -257,6 +257,9 @@ void cli_do(int sockfd)
 			log(0, 0, 0, 0, "This is probably really really bad.\n");
 		}
 	}
+
+	if (config->hostname && *config->hostname)
+		cli_set_hostname(cli, config->hostname);
 
 	signal(SIGPIPE, SIG_DFL);
 	signal(SIGCHLD, SIG_DFL);

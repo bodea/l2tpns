@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.26 2004-09-19 23:19:23 fred_nerk Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.27 2004-09-19 23:26:46 fred_nerk Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -57,7 +57,7 @@ int snoopfd = -1;		// UDP file handle for sending out intercept data
 int *radfds = NULL;		// RADIUS requests file handles
 int ifrfd = -1;			// File descriptor for routing, etc
 time_t basetime = 0;		// base clock
-char hostname[1000] = "";	// us.
+char *hostname = NULL;		// us.
 int tunidx;			// ifr_ifindex of tun device
 u32 sessionid = 0;		// session id for radius accounting
 int syslog_log = 0;		// are we logging to syslog
@@ -95,6 +95,7 @@ struct config_descriptt config_values[] = {
 	CONFIG("debug", debug, INT),
 	CONFIG("log_file", log_filename, STRING),
 	CONFIG("pid_file", pid_file, STRING),
+	CONFIG("hostname", hostname, STRING),
 	CONFIG("l2tp_secret", l2tpsecret, STRING),
 	CONFIG("primary_dns", default_dns1, IP),
 	CONFIG("secondary_dns", default_dns2, IP),
@@ -2461,6 +2462,7 @@ void mainloop(void)
 void initdata(void)
 {
 	int i;
+	char *p;
 
 	if ((_statistics = shared_malloc(sizeof(struct Tstats))) == MAP_FAILED)
 	{
@@ -2547,13 +2549,11 @@ void initdata(void)
 	for (i = 1; i < MAXTUNNEL- 1; i++)
 		tunnel[i].state = TUNNELUNDEF;	// mark it as not filled in.
 
-	if (!*hostname)
-	{
-		char *p;
-		// Grab my hostname unless it's been specified
-		gethostname(hostname, sizeof(hostname));
-		if ((p = strchr(hostname, '.'))) *p = 0;
-	}
+	// Grab my hostname unless it's been specified
+	gethostname(config->hostname, sizeof(config->hostname));
+	if ((p = strchr(config->hostname, '.'))) *p = 0;
+	hostname = config->hostname;
+
 	_statistics->start_time = _statistics->last_reset = time(NULL);
 
 #ifdef BGP
@@ -2957,7 +2957,7 @@ int main(int argc, char *argv[])
 	config->debug = optdebug;
 
 	init_tbf();
-	init_cli(hostname);
+	init_cli();
 	read_config_file();
 
 	log(0, 0, 0, 0, "L2TPNS version " VERSION "\n");

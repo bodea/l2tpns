@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.17 2004-09-02 04:18:07 fred_nerk Exp $
+// $Id: l2tpns.h,v 1.18 2004-09-19 23:26:46 fred_nerk Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -448,6 +448,7 @@ struct configt
 	char		bgp_peer[2][64];
 	u16		bgp_peer_as[2];
 #endif
+	char		hostname[256];			// our hostname - set to gethostname() by default
 };
 
 struct config_descriptt
@@ -546,7 +547,7 @@ int sessionsetup(tunnelidt t, sessionidt s);
 int cluster_send_session(int s);
 int cluster_send_tunnel(int t);
 int cluster_send_goodbye();
-void init_cli(char *hostname);
+void init_cli();
 void cli_do_file(FILE *fh);
 void cli_do(int sockfd);
 int cli_arg_help(struct cli_def *cli, int cr_ok, char *entry, ...);
