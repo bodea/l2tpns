@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.29 2004-11-25 12:41:35 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.30 2004-11-25 12:46:48 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -824,7 +824,7 @@ void processccp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 
 		// send CCP request for no compression for our end if not negotiated
 		if (!(session[s].flags & SF_CCP_ACKED))
-			initccp();
+			initccp(t, s);
 
 		break;
 
@@ -962,7 +962,7 @@ void initlcp(tunnelidt t, sessionidt s)
 }
 
 // Send CCP request for no compression
-static void sendccp(tunnelidt t, sessionidt s)
+static void initccp(tunnelidt t, sessionidt s)
 {
 	char b[500], *q;
 
