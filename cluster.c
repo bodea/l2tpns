@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.12 2004-09-21 04:30:46 fred_nerk Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.13 2004-10-29 04:25:40 bodea Exp $";
 
 #include <stdio.h>
 #include <sys/file.h>
@@ -115,12 +115,12 @@ int cluster_init()
 	memcpy(&interface_addr, &ifr.ifr_addr, sizeof(interface_addr));
 	my_address = interface_addr.sin_addr.s_addr;
 
-				// Join multicast group.
+	// Join multicast group.
 	mreq.imr_multiaddr.s_addr = config->cluster_address;
 	mreq.imr_interface = interface_addr.sin_addr;
 
 
-	opt = 0;		// Turn off multicast loopback.
+	opt = 0;	// Turn off multicast loopback.
 	setsockopt(cluster_sockfd, IPPROTO_IP, IP_MULTICAST_LOOP, &opt, sizeof(opt));
 
 	if (setsockopt(cluster_sockfd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0)
@@ -221,7 +221,7 @@ int peer_send_data(u32 peer, char * data, int size)
 	if (!config->cluster_address) return 0;
 
 	if (!peer)	// Odd??
-	return -1;
+		return -1;
 
 	addr.sin_addr.s_addr = peer;
 	addr.sin_port = htons(CLUSTERPORT);
@@ -284,10 +284,10 @@ int master_forward_packet(char *data, int size, u32 addr, int port)
 // token bucket queue, and lets normal processing take care
 // of it.
 //
-int master_throttle_packet(int tbfid, char * data, int size)
+int master_throttle_packet(int tbfid, char *data, int size)
 {
 	char buf[65536];	// Vast overkill.
-	char * p = buf;
+	char *p = buf;
 
 	if (!config->cluster_master_address) // No election has been held yet. Just skip it.
 		return -1;
@@ -371,12 +371,12 @@ void cluster_send_ping(time_t basetime)
 
 //
 // Walk the session counters looking for non-zero ones to send
-// to the master. We send up to 100 of them at one time.
-// We examine a maximum of 2000 sessions.
+// to the master. We send up to 600 of them at one time.
+// We examine a maximum of 3000 sessions.
 // (50k max session should mean that we normally
 // examine the entire session table every 25 seconds).
 
-#define MAX_B_RECS (400)
+#define MAX_B_RECS (600)
 void master_update_counts(void)
 {
 	int i, c;
@@ -818,7 +818,7 @@ void cluster_heartbeat()
 		exit(1);
 	}
 
-	log(3,0,0,0, "Sending heartbeat #%d with %d changes (%d x-sess, %d x-tunnels, %d highsess, %d hightun size %d)\n",
+	log(3,0,0,0, "Sending heartbeat #%d with %d changes (%d x-sess, %d x-tunnels, %d highsess, %d hightun, size %d)\n",
 			h.seq, config->cluster_num_changes, count, tcount, config->cluster_highest_sessionid,
 			config->cluster_highest_tunnelid, (p-buff));
 
