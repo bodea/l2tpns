@@ -38,7 +38,7 @@ rm -rf %{buildroot}
 %config(noreplace) /etc/l2tpns/users
 %config(noreplace) /etc/l2tpns/startup-config
 %config(noreplace) /etc/l2tpns/ip_pool
-%attr(700,root,root) /usr/sbin/l2tpns
+%attr(755,root,root) /usr/sbin/*
 %attr(755,root,root) /usr/lib/l2tpns
 %attr(644,root,root) /usr/share/man/man[58]/*
 
