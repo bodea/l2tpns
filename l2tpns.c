@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.55 2004-11-25 02:45:27 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.56 2004-11-25 02:49:18 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -2061,7 +2061,7 @@ static int regular_cleanups(void)
 			u8 b[MAXCONTROL] = {0};
 
 			u8 *q = makeppp(b, sizeof(b), 0, 0, session[s].tunnel, s, PPPLCP);
-			if (!q) return;
+			if (!q) continue;
 
 			*q = EchoReq;
 			*(u8 *)(q + 1) = (time_now % 255); // ID
