@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.13 2004-10-29 04:25:40 bodea Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.14 2004-10-30 07:35:00 bodea Exp $";
 
 #include <stdio.h>
 #include <sys/file.h>
@@ -591,15 +591,8 @@ void cluster_check_master(void)
 		session[i].tbf_in = session[i].tbf_out = 0; // Remove stale pointers from old master.
 		throttle_session(i, session[i].throttle);
 
-// I'm unsure about this. --mo
-// It's potentially a good thing, but it could send a
-// LOT of packets.
-//		if (session[i].throttle)
-//			cluster_send_session(s);	// Tell the slaves about the new tbf indexes.
-
 		if (session[i].tunnel != T_FREE && i > config->cluster_highest_sessionid)
 			config->cluster_highest_sessionid = i;
-
 	}
 
 	session[last_free].next = 0;	// End of chain.
