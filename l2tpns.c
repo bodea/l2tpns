@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.15 2004-07-12 15:16:27 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.16 2004-07-26 00:20:41 fred_nerk Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -100,6 +100,8 @@ struct config_descriptt config_values[] = {
 	CONFIG("save_state", save_state, BOOL),
 	CONFIG("primary_radius", radiusserver[0], IP),
 	CONFIG("secondary_radius", radiusserver[1], IP),
+	CONFIG("primary_radius_port",radiusport[0], SHORT),
+	CONFIG("secondary_radius_port",radiusport[1], SHORT),
 	CONFIG("radius_accounting", radius_accounting, BOOL),
 	CONFIG("radius_secret", radiussecret, STRING),
 	CONFIG("bind_address", bind_address, IP),
@@ -3325,7 +3327,21 @@ void update_config()
 	// Update radius
 	config->numradiusservers = 0;
 	for (i = 0; i < MAXRADSERVER; i++)
-		if (config->radiusserver[i]) config->numradiusservers++;
+		if (config->radiusserver[i])
+		{
+			config->numradiusservers++;
+			// Set radius port: if not set, take the port from the
+			// first radius server.  For the first radius server,
+			// take the #defined default value from l2tpns.h
+
+			// test twice, In case someone works with
+			// a secondary radius server without defining
+			// a primary one, this will work even then.
+			if (i>0 && !config->radiusport[i])
+				config->radiusport[i] = config->radiusport[i-1];
+			if (!config->radiusport[i])
+				config->radiusport[i] = RADPORT;
+		}
 
 	if (!config->numradiusservers)
 	{

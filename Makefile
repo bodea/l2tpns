@@ -41,12 +41,25 @@ depend:
 	mv Makefile Makefile.bak
 	mv Makefile.tmp Makefile
 
+# install config files only if a startup-config does not exist yet JK 20040713
+#  this does not interfere when building rpms or debs and makes
+#  fast upgrading via make install possible
+
 install: all
 	$(INSTALL) -D -o root -g root -m 0755 l2tpns $(bindir)/l2tpns
 	$(INSTALL) -D -o root -g root -m 0755 nsctl $(bindir)/nsctl
-	$(INSTALL) -D -o root -g root -m 0600 etc/startup-config.default $(etcdir)/startup-config
-	$(INSTALL) -D -o root -g root -m 0644 etc/ip_pool.default $(etcdir)/l2tpns.ip_pool
-	$(INSTALL) -D -o root -g root -m 0600 etc/users.default $(etcdir)/l2tpns.users
+	@if [ -f $(etcdir)/startup-config ]; then \
+		echo '***' Installing default config files in $(etcdir) as .defaults; \
+		$(INSTALL) -D -o root -g root -m 0600 etc/startup-config.default $(etcdir)/startup-config.default; \
+		$(INSTALL) -D -o root -g root -m 0644 etc/ip_pool.default $(etcdir)/ip_pool.default; \
+		$(INSTALL) -D -o root -g root -m 0600 etc/users.default $(etcdir)/users.default; \
+	else    \
+		echo '***' Installing default config files in $(etcdir) - remember to adjust them; \
+		$(INSTALL) -D -o root -g root -m 0600 etc/startup-config.default $(etcdir)/startup-config;      \
+		$(INSTALL) -D -o root -g root -m 0644 etc/ip_pool.default $(etcdir)/l2tpns.ip_pool;     \
+		$(INSTALL) -D -o root -g root -m 0600 etc/users.default $(etcdir)/l2tpns.users; \
+	fi
+
 	for plugin in $(PLUGINS); do \
 		$(INSTALL) -D -o root -g root -m 0755 $$plugin $(libdir)/$$plugin; \
 	done

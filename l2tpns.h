@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.12 2004-07-12 08:21:45 bodea Exp $
+// $Id: l2tpns.h,v 1.13 2004-07-26 00:20:41 fred_nerk Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -67,7 +67,6 @@
 #define ACCT_TIME	3000		// 5 minute accounting interval
 #define	L2TPPORT	1701		// L2TP port
 #define RADPORT		1645		// old radius port...
-#define	RADAPORT	1646		// old radius accounting port
 #define	PKTARP		0x0806		// ARP packet type
 #define	PKTIP		0x0800		// IP packet type
 #define PSEUDOMAC	0x0200		// pseudo MAC prefix (local significant MAC)
@@ -396,6 +395,7 @@ struct configt
 	char		radiussecret[64];
 	int		radius_accounting;
 	ipt		radiusserver[MAXRADSERVER];	// radius servers
+	u16		radiusport[MAXRADSERVER];	// radius base ports
 	u8		numradiusservers;		// radius server count
 	short		num_radfds;			// Number of radius filehandles allocated
 

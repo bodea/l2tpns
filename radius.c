@@ -1,6 +1,6 @@
 // L2TPNS Radius Stuff
 
-char const *cvs_id_radius = "$Id: radius.c,v 1.8 2004-07-11 07:57:35 bodea Exp $";
+char const *cvs_id_radius = "$Id: radius.c,v 1.9 2004-07-26 00:20:41 fred_nerk Exp $";
 
 #include <time.h>
 #include <stdio.h>
@@ -345,7 +345,14 @@ void radiussend(u16 r, u8 state)
 	memset(&addr, 0, sizeof(addr));
 	addr.sin_family = AF_INET;
 	*(u32 *) & addr.sin_addr = config->radiusserver[(radius[r].try - 1) % config->numradiusservers];
-	addr.sin_port = htons((state == RADIUSAUTH) ? RADPORT : RADAPORT);
+	{
+	    // get radius port
+	    u16	port = config->radiusport[(radius[r].try - 1) % config->numradiusservers];
+	    // no need to define the accounting port for itself:
+	    //  the accounting port is as far as I know always one more
+	    //  than the auth port    JK 20040713
+	    addr.sin_port = htons((state == RADIUSAUTH) ? port : port+1);
+	}
 
 	log_hex(5, "RADIUS Send", b, (p - b));
 	sendto(radfds[r & RADIUS_MASK], b, p - b, 0, (void *) &addr, sizeof(addr));
