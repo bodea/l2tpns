@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.50 2004-12-18 01:20:05 bodea Exp $
+// $Id: l2tpns.h,v 1.51 2005-01-07 07:17:13 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -72,6 +72,7 @@
 #endif
 
 #define TUNDEVICE	"/dev/net/tun"
+#define RANDOMDEVICE	"/dev/urandom"			// default, not as secure as /dev/random but non-blocking
 #define STATEFILE	DATADIR "/state.dump"		// State dump file
 #define CONFIGFILE	FLASHDIR "/startup-config"	// Configuration file
 #define CLIUSERS	FLASHDIR "/users"		// CLI Users file
@@ -93,8 +94,8 @@
 #define PPPIPV6		0x0057
 #define PPPMP		0x003D
 #define MIN_IP_SIZE	0x19
-enum
-{
+
+enum {
 	ConfigReq = 1,
 	ConfigAck,
 	ConfigNak,
@@ -107,6 +108,15 @@ enum
 	EchoReply,
 	DiscardRequest,
 	IdentRequest
+};
+
+enum {
+	AccessRequest = 1,
+	AccessAccept,
+	AccessReject,
+	AccountingRequest,
+	AccountingResponse,
+	AccessChallenge = 11
 };
 
 // Types
@@ -212,6 +222,9 @@ sessiont;
 #define SF_CCP_ACKED	4	// CCP negotiated
 #define SF_IPV6CP_ACKED	8	// IPv6 negotiated
 #define SF_IPV6_NACKED	16	// IPv6 rejected
+
+#define AUTHPAP		1	// allow PAP
+#define AUTHCHAP	2	// allow CHAP
 
 typedef struct
 {
@@ -381,13 +394,14 @@ struct Tstats
     uint32_t	call_processrad;
     uint32_t	call_radiussend;
     uint32_t	call_radiusretry;
+    uint32_t    call_random_data;
 #endif
 };
 
 #ifdef STATISTICS
 
 #ifdef STAT_CALLS
-#define CSTAT(x)	STAT(x)
+#define CSTAT(x)	STAT(call_ ## x)
 #else
 #define CSTAT(x)
 #endif
@@ -424,12 +438,18 @@ typedef struct
 	char		log_filename[128];
 	char		l2tpsecret[64];
 
+	char		random_device[256];		// random device path, defaults to RANDOMDEVICE
+
 	char		radiussecret[64];
 	int		radius_accounting;
 	in_addr_t	radiusserver[MAXRADSERVER];	// radius servers
 	uint16_t	radiusport[MAXRADSERVER];	// radius base ports
 	uint8_t		numradiusservers;		// radius server count
 	short		num_radfds;			// Number of radius filehandles allocated
+
+	char		radius_authtypes_s[32];		// list of valid authentication types (chap, pap) in order of preference
+	int		radius_authtypes;
+	int		radius_authprefer;
 
 	in_addr_t	default_dns1, default_dns2;
 
@@ -575,6 +595,7 @@ void radiusclear(uint16_t r, sessionidt s);
 clockt backoff(uint8_t try);
 sessionidt sessionbyip(in_addr_t ip);
 sessionidt sessionbyuser(char *username);
+void random_data(uint8_t *buf, int len);
 void sessionshutdown(sessionidt s, char *reason);
 void send_garp(in_addr_t ip);
 void tunnelsend(uint8_t *buf, uint16_t l, tunnelidt t);
