@@ -4,7 +4,7 @@
 
 /* set up throttling based on RADIUS reply */
 
-char const *cvs_id = "$Id: autothrottle.c,v 1.12 2004-11-30 05:49:47 bodea Exp $";
+char const *cvs_id = "$Id: autothrottle.c,v 1.13 2004-11-30 07:14:45 bodea Exp $";
 
 int plugin_api_version = PLUGIN_API_VERSION;
 struct pluginfuncs *p;
@@ -31,7 +31,7 @@ int plugin_radius_response(struct param_radius_response *data)
 		    strncmp("output", data->value, sp - data->value)))
 		{
 			p->log(3, p->get_id_by_session(data->s), data->s->tunnel,
-				"         Not throttling user (invalid type %s)\n",
+				"         Not throttling user (invalid type %.*s)\n",
 				sp - data->value, data->value);
 
 			return PLUGIN_RET_OK;
