@@ -1,10 +1,10 @@
 // L2TP Network Server
 // Adrian Kennard 2002
-// Copyright (c) 2003, 2004 Optus Internet Engineering
+// Copyright (c) 2003, 2004, 2005 Optus Internet Engineering
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.73.2.1 2005-01-10 07:08:13 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.73.2.2 2005-01-10 07:44:49 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -793,7 +793,7 @@ static void processipout(uint8_t * buf, int len)
 			if (sess_count[s].packets_dropped)
 			{
 				INC_STAT(tun_rx_dropped, sess_count[s].packets_dropped);
-				LOG(2, s, t, "Possible DoS attack on %s (%s); dropped %u packets.",
+				LOG(2, s, t, "Possible DoS attack on %s (%s); dropped %u packets.\n",
 					fmtaddr(ip, 0), sp->user, sess_count[s].packets_dropped);
 			}
 
@@ -3166,7 +3166,7 @@ int main(int argc, char *argv[])
 	init_tbf(config->num_tbfs);
 
 	LOG(0, 0, 0, "L2TPNS version " VERSION "\n");
-	LOG(0, 0, 0, "Copyright (c) 2003, 2004 Optus Internet Engineering\n");
+	LOG(0, 0, 0, "Copyright (c) 2003, 2004, 2005 Optus Internet Engineering\n");
 	LOG(0, 0, 0, "Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced\n");
 	{
 		struct rlimit rlim;
