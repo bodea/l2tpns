@@ -10,6 +10,7 @@
   startup-config (from Jonathan's Debian package patches).
 - Read multiple packets off cluster_sockfd as well as udpfd, tunfd in an
   attempt to avoid losing the cluster in high load (DoS) conditions.
+- Compress logs.
 
 * Wed Dec 1 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.12
 - The "This time, for sure!" release.
