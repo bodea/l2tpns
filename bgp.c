@@ -10,7 +10,7 @@
  *   nor RFC2385 (which requires a kernel patch on 2.4 kernels).
  */
 
-char const *cvs_id_bgp = "$Id: bgp.c,v 1.5 2004-11-05 04:55:26 bodea Exp $";
+char const *cvs_id_bgp = "$Id: bgp.c,v 1.6 2004-11-11 03:07:42 bodea Exp $";
 
 #include <stdlib.h>
 #include <unistd.h>
@@ -34,7 +34,6 @@ static struct bgp_route_list *bgp_insert_route(struct bgp_route_list *head,
     struct bgp_route_list *new);
 
 static void bgp_free_routes(struct bgp_route_list *routes);
-static char const *bgp_state_str(enum bgp_state state);
 static char const *bgp_msg_type_str(u8 type);
 static int bgp_connect(struct bgp_peer *peer);
 static int bgp_handle_connect(struct bgp_peer *peer);
@@ -47,6 +46,10 @@ static int bgp_send_update(struct bgp_peer *peer);
 static int bgp_send_notification(struct bgp_peer *peer, u8 code, u8 subcode);
 
 static u16 our_as;
+static struct bgp_route_list *bgp_routes = 0;
+
+int bgp_configured = 0;
+struct bgp_peer *bgp_peers = 0;
 
 /* prepare peer structure, globals */
 int bgp_setup(int as)
@@ -86,7 +89,7 @@ int bgp_setup(int as)
 }
 
 /* start connection with a peer */
-int bgp_start(struct bgp_peer *peer, char *name, int as, int enable)
+int bgp_start(struct bgp_peer *peer, char *name, int as, int keepalive, int hold, int enable)
 {
     struct hostent *h;
     int ibgp;
@@ -117,6 +120,16 @@ int bgp_start(struct bgp_peer *peer, char *name, int as, int enable)
     memcpy(&peer->addr, h->h_addr, sizeof(peer->addr));
     peer->as = as > 0 ? as : our_as;
     ibgp = peer->as == our_as;
+
+    /* set initial timer values */
+    peer->init_keepalive = keepalive == -1 ? BGP_KEEPALIVE_TIME : keepalive;
+    peer->init_hold = hold == -1 ? BGP_HOLD_TIME : hold;
+
+    if (peer->init_hold < 3)
+    	peer->init_hold = 3;
+
+    if (peer->init_keepalive * 3 > peer->init_hold)
+    	peer->init_keepalive = peer->init_hold / 3;
 
     /* clear buffers, go to Idle state */
     peer->next_state = Idle;
@@ -241,8 +254,10 @@ static void bgp_clear(struct bgp_peer *peer)
     }
 
     peer->keepalive_time = 0;
-    peer->hold = 0;
     peer->expire_time = 0;
+
+    peer->keepalive = peer->init_keepalive;
+    peer->hold = peer->init_hold;
 
     bgp_free_routes(peer->routes);
     peer->routes = 0;
@@ -588,7 +603,7 @@ int bgp_process(struct bgp_peer *peer, int readable, int writable)
 	if (time_now > peer->retry_time)
 	    return bgp_connect(peer);
     }
-    else if (time_now > peer->state_time + BGP_KEEPALIVE_TIME)
+    else if (time_now > peer->state_time + BGP_STATE_TIME)
     {
 	LOG(1, 0, 0, 0, "%s timer expired for BGP peer %s\n",
 	    bgp_state_str(peer->state), peer->name);
@@ -610,7 +625,7 @@ static void bgp_free_routes(struct bgp_route_list *routes)
     }
 }
 
-static char const *bgp_state_str(enum bgp_state state)
+char const *bgp_state_str(enum bgp_state state)
 {
     switch (state)
     {
@@ -766,7 +781,7 @@ static int bgp_write(struct bgp_peer *peer)
     peer->outbuf->done = 0;
 
     if (peer->state == Established)
-	peer->keepalive_time = time_now + BGP_KEEPALIVE_TIME;
+	peer->keepalive_time = time_now + peer->keepalive;
 
     if (peer->state != peer->next_state)
     {
@@ -888,7 +903,7 @@ static int bgp_handle_input(struct bgp_peer *peer)
 		return 0;
 	    }
 
-	    if ((peer->hold = ntohs(data.hold_time)) < 10)
+	    if ((peer->hold = ntohs(data.hold_time)) < 3)
 	    {
 		LOG(1, 0, 0, 0, "Bad hold time (%d) from BGP peer %s\n",
 		    peer->hold, peer->name);
@@ -896,6 +911,10 @@ static int bgp_handle_input(struct bgp_peer *peer)
 		bgp_send_notification(peer, BGP_ERR_OPEN, BGP_ERR_OPN_HOLD_TIME);
 		return 0;
 	    }
+
+	    /* adjust our keepalive based on negotiated hold value */
+	    if (peer->keepalive * 3 > peer->hold)
+		peer->keepalive = peer->hold / 3;
 
 	    /* next transition requires an exchange of keepalives */
 	    bgp_send_keepalive(peer);
@@ -910,7 +929,7 @@ static int bgp_handle_input(struct bgp_peer *peer)
 	{
 	    peer->state = peer->next_state = Established;
 	    peer->state_time = time_now;
-	    peer->keepalive_time = time_now + BGP_KEEPALIVE_TIME;
+	    peer->keepalive_time = time_now + peer->keepalive;
 	    peer->update_routes = 1;
 	    peer->retry_count = 0;
 	    peer->retry_time = 0;
@@ -972,7 +991,7 @@ static int bgp_send_open(struct bgp_peer *peer)
 
     data.version = BGP_VERSION;
     data.as = htons(our_as);
-    data.hold_time = htons(BGP_HOLD_TIME);
+    data.hold_time = htons(peer->hold);
     data.identifier = my_address;
     data.opt_len = 0;
 
@@ -1173,160 +1192,4 @@ static int bgp_send_notification(struct bgp_peer *peer, u8 code, u8 subcode)
     peer->inbuf->done = 0;
 
     return bgp_write(peer);
-}
-
-/* CLI stuff */
-
-#include <libcli.h>
-
-int cmd_show_bgp(struct cli_def *cli, char *command, char **argv, int argc)
-{
-    int i;
-    int hdr = 0;
-    char *addr;
-
-    if (!bgp_configured)
-    	return CLI_OK;
-
-    if (CLI_HELP_REQUESTED)
-	return cli_arg_help(cli, 1,
-	    "A.B.C.D", "BGP peer address",
-	    "NAME",    "BGP peer name",
-	    NULL);
-
-    cli_print(cli, "BGPv%d router identifier %s, local AS number %d, "
-	"hold time %ds", BGP_VERSION, inet_toa(my_address), (int) our_as,
-	BGP_HOLD_TIME);
-
-    time(&time_now);
-
-    for (i = 0; i < BGP_NUM_PEERS; i++)
-    {
-	if (!*bgp_peers[i].name)
-	    continue;
-
-	addr = inet_toa(bgp_peers[i].addr);
-	if (argc && strcmp(addr, argv[0]) &&
-	  strncmp(bgp_peers[i].name, argv[0], strlen(argv[0])))
-	    continue;
-
-	if (!hdr++)
-	{
-	    cli_print(cli, "");
-	    cli_print(cli, "Peer                  AS         Address "
-		"State       Retries Retry in Route Pend");
-	    cli_print(cli, "------------------ ----- --------------- "
-		"----------- ------- -------- ----- ----");
-	}
-
-	cli_print(cli, "%-18.18s %5d %15s %-11s %7d %7ds %5s %4s",
-	    bgp_peers[i].name,
-	    bgp_peers[i].as,
-	    addr,
-	    bgp_state_str(bgp_peers[i].state),
-	    bgp_peers[i].retry_count,
-	    bgp_peers[i].retry_time ? bgp_peers[i].retry_time - time_now : 0,
-	    bgp_peers[i].routing ? "yes" : "no",
-	    bgp_peers[i].update_routes ? "yes" : "no");
-    }
-
-    return CLI_OK;
-}
-
-int cmd_suspend_bgp(struct cli_def *cli, char *command, char **argv, int argc)
-{
-    int i;
-    char *addr;
-
-    if (!bgp_configured)
-    	return CLI_OK;
-
-    if (CLI_HELP_REQUESTED)
-	return cli_arg_help(cli, 1,
-	    "A.B.C.D", "BGP peer address",
-	    "NAME",    "BGP peer name",
-	    NULL);
-
-    for (i = 0; i < BGP_NUM_PEERS; i++)
-    {
-	if (bgp_peers[i].state != Established)
-	    continue;
-
-	if (!bgp_peers[i].routing)
-	    continue;
-
-	addr = inet_toa(bgp_peers[i].addr);
-	if (argc && strcmp(addr, argv[0]) && strcmp(bgp_peers[i].name, argv[0]))
-	    continue;
-
-	bgp_peers[i].cli_flag = BGP_CLI_SUSPEND;
-	cli_print(cli, "Suspending peer %s", bgp_peers[i].name);
-    }
-
-    return CLI_OK;
-}
-
-int cmd_no_suspend_bgp(struct cli_def *cli, char *command, char **argv, int argc)
-{
-    int i;
-    char *addr;
-
-    if (!bgp_configured)
-    	return CLI_OK;
-
-    if (CLI_HELP_REQUESTED)
-	return cli_arg_help(cli, 1,
-	    "A.B.C.D", "BGP peer address",
-	    "NAME",    "BGP peer name",
-	    NULL);
-
-    for (i = 0; i < BGP_NUM_PEERS; i++)
-    {
-	if (bgp_peers[i].state != Established)
-	    continue;
-
-	if (bgp_peers[i].routing)
-	    continue;
-
-	addr = inet_toa(bgp_peers[i].addr);
-	if (argc && strcmp(addr, argv[0]) &&
-	  strncmp(bgp_peers[i].name, argv[0], strlen(argv[0])))
-	    continue;
-
-	bgp_peers[i].cli_flag = BGP_CLI_ENABLE;
-	cli_print(cli, "Un-suspending peer %s", bgp_peers[i].name);
-    }
-
-    return CLI_OK;
-}
-
-int cmd_restart_bgp(struct cli_def *cli, char *command, char **argv, int argc)
-{
-    int i;
-    char *addr;
-
-    if (!bgp_configured)
-    	return CLI_OK;
-
-    if (CLI_HELP_REQUESTED)
-	return cli_arg_help(cli, 1,
-	    "A.B.C.D", "BGP peer address",
-	    "NAME",    "BGP peer name",
-	    NULL);
-
-    for (i = 0; i < BGP_NUM_PEERS; i++)
-    {
-	if (!*bgp_peers[i].name)
-	    continue;
-
-	addr = inet_toa(bgp_peers[i].addr);
-	if (argc && strcmp(addr, argv[0]) &&
-	  strncmp(bgp_peers[i].name, argv[0], strlen(argv[0])))
-	    continue;
-
-	bgp_peers[i].cli_flag = BGP_CLI_RESTART;
-	cli_print(cli, "Restarting peer %s", bgp_peers[i].name);
-    }
-
-    return CLI_OK;
 }

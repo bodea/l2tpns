@@ -1,5 +1,5 @@
 // L2TPNS Clustering Stuff
-// $Id: cluster.h,v 1.5 2004-07-08 16:54:35 bodea Exp $
+// $Id: cluster.h,v 1.6 2004-11-11 03:07:42 bodea Exp $
 
 #ifndef __CLUSTER_H__
 #define __CLUSTER_H__
@@ -79,6 +79,6 @@ void cluster_send_ping(time_t basetime);
 void cluster_heartbeat(void);
 void cluster_check_master(void);
 void cluster_check_slaves(void);
-int show_cluster(struct cli_def *cli, char *command, char **argv, int argc);
+int cmd_show_cluster(struct cli_def *cli, char *command, char **argv, int argc);
 
 #endif /* __CLUSTER_H__ */

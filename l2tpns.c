@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.47 2004-11-09 08:05:02 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.48 2004-11-11 03:07:42 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -49,6 +49,10 @@ char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.47 2004-11-09 08:05:02 bodea Exp 
 #include "util.h"
 #include "tbf.h"
 
+#ifdef BGP
+#include "bgp.h"
+#endif /* BGP */
+
 // Globals
 struct configt *config = NULL;	// all configuration
 int tunfd = -1;			// tun interface file handle. (network device)
@@ -81,13 +85,6 @@ char main_quit = 0;		// True if we're in the process of exiting.
 char *_program_name = NULL;
 linked_list *loaded_plugins;
 linked_list *plugins[MAX_PLUGIN_TYPES];
-
-#ifdef BGP
-#include "bgp.h"
-struct bgp_peer *bgp_peers = 0;
-struct bgp_route_list *bgp_routes = 0;
-int bgp_configured = 0;
-#endif /* BGP */
 
 #define membersize(STRUCT, MEMBER) sizeof(((STRUCT *)0)->MEMBER)
 #define CONFIG(NAME, MEMBER, TYPE) { NAME, offsetof(struct configt, MEMBER), membersize(struct configt, MEMBER), TYPE }
@@ -123,13 +120,6 @@ struct config_descriptt config_values[] = {
 	CONFIG("cluster_interface", cluster_interface, STRING),
 	CONFIG("cluster_hb_interval", cluster_hb_interval, INT),
 	CONFIG("cluster_hb_timeout", cluster_hb_timeout, INT),
-#ifdef BGP
-	CONFIG("as_number", as_number, SHORT),
-	CONFIG("bgp_peer1", bgp_peer[0], STRING),
-	CONFIG("bgp_peer1_as", bgp_peer_as[0], SHORT),
-	CONFIG("bgp_peer2", bgp_peer[1], STRING),
-	CONFIG("bgp_peer2_as", bgp_peer_as[1], SHORT),
-#endif /* BGP */
 	{ NULL, 0, 0, 0 },
 };
 
@@ -2585,20 +2575,12 @@ void initdata(int optdebug, char *optconfig)
 	_statistics->start_time = _statistics->last_reset = time(NULL);
 
 #ifdef BGP
-	if (!(bgp_peers = shared_malloc(sizeof(struct bgp_peer) * BGP_NUM_PEERS)))
-	{
-		LOG(0, 0, 0, 0, "Error doing malloc for bgp: %s\n", strerror(errno));
-		exit(1);
-	}
+ 	if (!(bgp_peers = shared_malloc(sizeof(struct bgp_peer) * BGP_NUM_PEERS)))
+ 	{
+ 		LOG(0, 0, 0, 0, "Error doing malloc for bgp: %s\n", strerror(errno));
+ 		exit(1);
+ 	}
 #endif /* BGP */
-}
-
-void initiptables(void)
-{
-	/* Flush the tables here so that we have a clean slate */
-
-// Not needed. 'nat' is setup by garden.c
-// mangle isn't used (as throttling is done by tbf inhouse).
 }
 
 int assign_ip_address(sessionidt s)
@@ -2935,7 +2917,7 @@ void dump_acct_info()
 // Main program
 int main(int argc, char *argv[])
 {
-	int o;
+	int i;
 	int optdebug = 0;
 	char *optconfig = CONFIGFILE;
 
@@ -2944,9 +2926,9 @@ int main(int argc, char *argv[])
 	time(&basetime);             // start clock
 
 	// scan args
-	while ((o = getopt(argc, argv, "dvc:h:")) >= 0)
+	while ((i = getopt(argc, argv, "dvc:h:")) >= 0)
 	{
-		switch (o)
+		switch (i)
 		{
 			case 'd':
 				if (fork()) exit(0);
@@ -2983,7 +2965,6 @@ int main(int argc, char *argv[])
 	signal(SIGALRM, sigalrm_handler);
 	siginterrupt(SIGALRM, 0);
 
-	initiptables();
 	initplugins();
 	initdata(optdebug, optconfig);
 
@@ -3038,13 +3019,13 @@ int main(int argc, char *argv[])
 	signal(SIGPIPE, SIG_IGN);
 	bgp_setup(config->as_number);
 	bgp_add_route(config->bind_address, 0xffffffff);
-	if (*config->bgp_peer[0])
-		bgp_start(&bgp_peers[0], config->bgp_peer[0],
-		    config->bgp_peer_as[0], 0); /* 0 = routing disabled */
-
-	if (*config->bgp_peer[1])
-		bgp_start(&bgp_peers[1], config->bgp_peer[1],
-		    config->bgp_peer_as[1], 0);
+	for (i = 0; i < BGP_NUM_PEERS; i++)
+	{
+		if (config->neighbour[i].name[0])
+			bgp_start(&bgp_peers[i], config->neighbour[i].name,
+				config->neighbour[i].as, config->neighbour[i].keepalive,
+				config->neighbour[i].hold, 0); /* 0 = routing disabled */
+	}
 #endif /* BGP */
 
 	inittun();
@@ -3082,12 +3063,9 @@ int main(int argc, char *argv[])
 #ifdef BGP
 	/* try to shut BGP down cleanly; with luck the sockets will be
 	   writable since we're out of the select */
-	{
-		int i;
-		for (i = 0; i < BGP_NUM_PEERS; i++)
-			if (bgp_peers[i].state == Established)
-				bgp_stop(&bgp_peers[i]);
-	}
+	for (i = 0; i < BGP_NUM_PEERS; i++)
+		if (bgp_peers[i].state == Established)
+			bgp_stop(&bgp_peers[i]);
 #endif /* BGP */
 
 	/* remove plugins (so cleanup code gets run) */
@@ -3942,27 +3920,6 @@ void processcontrol(u8 * buf, int len, struct sockaddr_in *addr)
 	}
 
 	free(resp);
-}
-
-/*
- * HACK
- * Go through all of the tunnels and do some cleanups
- */
-void tunnel_clean()
-{
-	int i;
-
-	LOG(1, 0, 0, 0, "Cleaning tunnels array\n");
-
-	for (i = 1; i < MAXTUNNEL; i++)
-	{
-		if (!tunnel[i].ip
-				|| !*tunnel[i].hostname
-				|| (tunnel[i].state == TUNNELDIE && tunnel[i].die >= time_now))
-		{
-			tunnelclear(i);
-		}
-	}
 }
 
 void tunnelclear(tunnelidt t)

@@ -1,5 +1,5 @@
 /* BGPv4 (RFC1771) */
-/* $Id: bgp.h,v 1.2 2004-06-28 02:43:13 fred_nerk Exp $ */
+/* $Id: bgp.h,v 1.3 2004-11-11 03:07:42 bodea Exp $ */
 
 #ifndef __BGP_H__
 #define __BGP_H__
@@ -7,6 +7,7 @@
 #define BGP_MAX_PACKET_SIZE	4096
 #define BGP_HOLD_TIME		180	/* seconds before peer times us out */
 #define BGP_KEEPALIVE_TIME	60	/* seconds between messages */
+#define BGP_STATE_TIME		60	/* state transition timeout in seconds */
 #define BGP_MAX_RETRY		42	/* maximum number of times to retry */
 #define BGP_RETRY_BACKOFF	60	/* number of seconds between retries,
 					   cumulative */
@@ -159,7 +160,10 @@ struct bgp_peer {
     time_t keepalive_time;		/* time to send next keepalive */
     time_t retry_time;			/* time for connection retry */
     int retry_count;			/* connection retry count */
-    int hold;				/* hold time from peer */
+    int init_keepalive;			/* initial keepalive time */
+    int init_hold;			/* initial hold time */
+    int keepalive;			/* negotiated keepalive time */
+    int hold;				/* negotiated hold time */
     time_t expire_time;			/* time next peer packet expected */
     int routing;			/* propagate routes */
     int update_routes;			/* UPDATE required */
@@ -176,14 +180,12 @@ struct bgp_peer {
 #define BGP_CLI_ENABLE		2
 #define BGP_CLI_RESTART		3
 
-#define BGP_NUM_PEERS 2
 extern struct bgp_peer *bgp_peers;
-extern struct bgp_route_list *bgp_routes;
 extern int bgp_configured;
 
 /* actions */
 int bgp_setup(int as);
-int bgp_start(struct bgp_peer *peer, char *name, int as, int enable);
+int bgp_start(struct bgp_peer *peer, char *name, int as, int keepalive, int hold, int enable);
 void bgp_stop(struct bgp_peer *peer);
 void bgp_halt(struct bgp_peer *peer);
 int bgp_restart(struct bgp_peer *peer);
@@ -192,12 +194,7 @@ int bgp_del_route(in_addr_t ip, in_addr_t mask);
 void bgp_enable_routing(int enable);
 int bgp_select_state(struct bgp_peer *peer);
 int bgp_process(struct bgp_peer *peer, int readable, int writable);
-
-/* CLI */
-int cmd_show_bgp(struct cli_def *cli, char *command, char **argv, int argc);
-int cmd_suspend_bgp(struct cli_def *cli, char *command, char **argv, int argc);
-int cmd_no_suspend_bgp(struct cli_def *cli, char *command, char **argv, int argc);
-int cmd_restart_bgp(struct cli_def *cli, char *command, char **argv, int argc);
+char const *bgp_state_str(enum bgp_state state);
 
 extern char const *cvs_id_bgp;
 

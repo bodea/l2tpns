@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.24 2004-11-05 04:55:26 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.25 2004-11-11 03:07:42 bodea Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -29,6 +29,7 @@ char const *cvs_id_cli = "$Id: cli.c,v 1.24 2004-11-05 04:55:26 bodea Exp $";
 #include "ll.h"
 #ifdef BGP
 #include "bgp.h"
+#include <netdb.h>
 #endif
 
 extern tunnelt *tunnel;
@@ -71,35 +72,46 @@ int debug_tunnel;
 int debug_rb_tail;
 FILE *save_config_fh;
 
-int cmd_show_session(struct cli_def *cli, char *command, char **argv, int argc);
-int cmd_show_tunnels(struct cli_def *cli, char *command, char **argv, int argc);
-int cmd_show_users(struct cli_def *cli, char *command, char **argv, int argc);
-int cmd_show_radius(struct cli_def *cli, char *command, char **argv, int argc);
-int cmd_show_counters(struct cli_def *cli, char *command, char **argv, int argc);
-int cmd_show_version(struct cli_def *cli, char *command, char **argv, int argc);
-int cmd_show_pool(struct cli_def *cli, char *command, char **argv, int argc);
-int cmd_show_run(struct cli_def *cli, char *command, char **argv, int argc);
-int cmd_show_banana(struct cli_def *cli, char *command, char **argv, int argc);
-int cmd_show_plugins(struct cli_def *cli, char *command, char **argv, int argc);
-int cmd_show_throttle(struct cli_def *cli, char *command, char **argv, int argc);
-int cmd_show_cluster(struct cli_def *cli, char *command, char **argv, int argc);
-int cmd_write_memory(struct cli_def *cli, char *command, char **argv, int argc);
-int cmd_clear_counters(struct cli_def *cli, char *command, char **argv, int argc);
-int cmd_drop_user(struct cli_def *cli, char *command, char **argv, int argc);
-int cmd_drop_tunnel(struct cli_def *cli, char *command, char **argv, int argc);
-int cmd_drop_session(struct cli_def *cli, char *command, char **argv, int argc);
-int cmd_snoop(struct cli_def *cli, char *command, char **argv, int argc);
-int cmd_no_snoop(struct cli_def *cli, char *command, char **argv, int argc);
-int cmd_throttle(struct cli_def *cli, char *command, char **argv, int argc);
-int cmd_no_throttle(struct cli_def *cli, char *command, char **argv, int argc);
-int cmd_debug(struct cli_def *cli, char *command, char **argv, int argc);
-int cmd_no_debug(struct cli_def *cli, char *command, char **argv, int argc);
-int cmd_set(struct cli_def *cli, char *command, char **argv, int argc);
-int cmd_load_plugin(struct cli_def *cli, char *command, char **argv, int argc);
-int cmd_remove_plugin(struct cli_def *cli, char *command, char **argv, int argc);
-int cmd_uptime(struct cli_def *cli, char *command, char **argv, int argc);
-int regular_stuff(struct cli_def *cli);
-void parsemac(char *string, char mac[6]);
+static int cmd_show_session(struct cli_def *cli, char *command, char **argv, int argc);
+static int cmd_show_tunnels(struct cli_def *cli, char *command, char **argv, int argc);
+static int cmd_show_users(struct cli_def *cli, char *command, char **argv, int argc);
+static int cmd_show_radius(struct cli_def *cli, char *command, char **argv, int argc);
+static int cmd_show_counters(struct cli_def *cli, char *command, char **argv, int argc);
+static int cmd_show_version(struct cli_def *cli, char *command, char **argv, int argc);
+static int cmd_show_pool(struct cli_def *cli, char *command, char **argv, int argc);
+static int cmd_show_run(struct cli_def *cli, char *command, char **argv, int argc);
+static int cmd_show_banana(struct cli_def *cli, char *command, char **argv, int argc);
+static int cmd_show_plugins(struct cli_def *cli, char *command, char **argv, int argc);
+static int cmd_show_throttle(struct cli_def *cli, char *command, char **argv, int argc);
+static int cmd_write_memory(struct cli_def *cli, char *command, char **argv, int argc);
+static int cmd_clear_counters(struct cli_def *cli, char *command, char **argv, int argc);
+static int cmd_drop_user(struct cli_def *cli, char *command, char **argv, int argc);
+static int cmd_drop_tunnel(struct cli_def *cli, char *command, char **argv, int argc);
+static int cmd_drop_session(struct cli_def *cli, char *command, char **argv, int argc);
+static int cmd_snoop(struct cli_def *cli, char *command, char **argv, int argc);
+static int cmd_no_snoop(struct cli_def *cli, char *command, char **argv, int argc);
+static int cmd_throttle(struct cli_def *cli, char *command, char **argv, int argc);
+static int cmd_no_throttle(struct cli_def *cli, char *command, char **argv, int argc);
+static int cmd_debug(struct cli_def *cli, char *command, char **argv, int argc);
+static int cmd_no_debug(struct cli_def *cli, char *command, char **argv, int argc);
+static int cmd_set(struct cli_def *cli, char *command, char **argv, int argc);
+static int cmd_load_plugin(struct cli_def *cli, char *command, char **argv, int argc);
+static int cmd_remove_plugin(struct cli_def *cli, char *command, char **argv, int argc);
+static int cmd_uptime(struct cli_def *cli, char *command, char **argv, int argc);
+static int regular_stuff(struct cli_def *cli);
+static void parsemac(char *string, char mac[6]);
+
+#ifdef BGP
+#define MODE_CONFIG_BGP 8
+static int cmd_router_bgp(struct cli_def *cli, char *command, char **argv, int argc);
+static int cmd_router_bgp_exit(struct cli_def *cli, char *command, char **argv, int argc);
+static int cmd_router_bgp_neighbour(struct cli_def *cli, char *command, char **argv, int argc);
+static int cmd_router_bgp_no_neighbour(struct cli_def *cli, char *command, char **argv, int argc);
+static int cmd_show_bgp(struct cli_def *cli, char *command, char **argv, int argc);
+static int cmd_suspend_bgp(struct cli_def *cli, char *command, char **argv, int argc);
+static int cmd_no_suspend_bgp(struct cli_def *cli, char *command, char **argv, int argc);
+static int cmd_restart_bgp(struct cli_def *cli, char *command, char **argv, int argc);
+#endif /* BGP */
 
 void init_cli(char *hostname)
 {
@@ -155,23 +167,37 @@ void init_cli(char *hostname)
 	cli_register_command(cli, NULL, "throttle", cmd_throttle, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Temporarily enable throttling for a user");
 	cli_register_command(cli, NULL, "debug", cmd_debug, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Set the level of logging that is shown on the console");
 
+#ifdef BGP
 	c = cli_register_command(cli, NULL, "suspend", NULL, PRIVILEGE_PRIVILEGED, MODE_EXEC, NULL);
-	cli_register_command(cli, c, "bgp", cmd_suspend_bgp, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Withdraw routes from BGP peer");
+	cli_register_command(cli, c, "bgp", cmd_suspend_bgp, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Withdraw routes from BGP neighbour");
+#endif /* BGP */
 
 	c = cli_register_command(cli, NULL, "no", NULL, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
 	cli_register_command(cli, c, "snoop", cmd_no_snoop, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Temporarily disable interception for a user");
 	cli_register_command(cli, c, "throttle", cmd_no_throttle, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Temporarily disable throttling for a user");
 	cli_register_command(cli, c, "debug", cmd_no_debug, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Turn off logging of a certain level of debugging");
+
+#ifdef BGP
 	c2 = cli_register_command(cli, c, "suspend", NULL, PRIVILEGE_PRIVILEGED, MODE_EXEC, NULL);
-	cli_register_command(cli, c2, "bgp", cmd_no_suspend_bgp, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Advertise routes to BGP peer");
+	cli_register_command(cli, c2, "bgp", cmd_no_suspend_bgp, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Advertise routes to BGP neighbour");
+
+	c = cli_register_command(cli, NULL, "restart", NULL, PRIVILEGE_PRIVILEGED, MODE_EXEC, NULL);
+	cli_register_command(cli, c, "bgp", cmd_restart_bgp, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Restart BGP");
+
+	c = cli_register_command(cli, NULL, "router", NULL, PRIVILEGE_PRIVILEGED, MODE_CONFIG, NULL);
+	cli_register_command(cli, c, "bgp", cmd_router_bgp, PRIVILEGE_PRIVILEGED, MODE_CONFIG, "Configure BGP");
+
+	cli_register_command(cli, NULL, "exit", cmd_router_bgp_exit, PRIVILEGE_PRIVILEGED, MODE_CONFIG_BGP, "Exit from BGP configuration");
+	cli_register_command(cli, NULL, "neighbour", cmd_router_bgp_neighbour, PRIVILEGE_PRIVILEGED, MODE_CONFIG_BGP, "Configure BGP neighbour");
+
+	c = cli_register_command(cli, NULL, "no", NULL, PRIVILEGE_PRIVILEGED, MODE_CONFIG_BGP, NULL);
+	cli_register_command(cli, c, "neighbour", cmd_router_bgp_no_neighbour, PRIVILEGE_PRIVILEGED, MODE_CONFIG_BGP, "Remove BGP neighbour");
+#endif /* BGP */
 
 	c = cli_register_command(cli, NULL, "drop", NULL, PRIVILEGE_PRIVILEGED, MODE_EXEC, NULL);
 	cli_register_command(cli, c, "user", cmd_drop_user, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Disconnect a user");
 	cli_register_command(cli, c, "tunnel", cmd_drop_tunnel, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Disconnect a tunnel and all sessions on that tunnel");
 	cli_register_command(cli, c, "session", cmd_drop_session, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Disconnect a session");
-
-	c = cli_register_command(cli, NULL, "restart", NULL, PRIVILEGE_PRIVILEGED, MODE_EXEC, NULL);
-	cli_register_command(cli, c, "bgp", cmd_restart_bgp, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Restart BGP");
 
 	c = cli_register_command(cli, NULL, "load", NULL, PRIVILEGE_PRIVILEGED, MODE_CONFIG, NULL);
 	cli_register_command(cli, c, "plugin", cmd_load_plugin, PRIVILEGE_PRIVILEGED, MODE_CONFIG, "Load a plugin");
@@ -326,7 +352,7 @@ int cli_arg_help(struct cli_def *cli, int cr_ok, char *entry, ...)
 	return CLI_OK;
 }
 
-int cmd_show_session(struct cli_def *cli, char *command, char **argv, int argc)
+static int cmd_show_session(struct cli_def *cli, char *command, char **argv, int argc)
 {
 	int i;
 
@@ -463,7 +489,7 @@ int cmd_show_session(struct cli_def *cli, char *command, char **argv, int argc)
 	return CLI_OK;
 }
 
-int cmd_show_tunnels(struct cli_def *cli, char *command, char **argv, int argc)
+static int cmd_show_tunnels(struct cli_def *cli, char *command, char **argv, int argc)
 {
 	int i, x, show_all = 0;
 	char *states[] = {
@@ -552,7 +578,7 @@ int cmd_show_tunnels(struct cli_def *cli, char *command, char **argv, int argc)
 	return CLI_OK;
 }
 
-int cmd_show_users(struct cli_def *cli, char *command, char **argv, int argc)
+static int cmd_show_users(struct cli_def *cli, char *command, char **argv, int argc)
 {
 	char sid[32][8];
 	char *sargv[32];
@@ -593,7 +619,7 @@ int cmd_show_users(struct cli_def *cli, char *command, char **argv, int argc)
 	return CLI_OK;
 }
 
-int cmd_show_counters(struct cli_def *cli, char *command, char **argv, int argc)
+static int cmd_show_counters(struct cli_def *cli, char *command, char **argv, int argc)
 {
 	if (CLI_HELP_REQUESTED)
 		return CLI_HELP_NO_ARGS;
@@ -674,7 +700,7 @@ int cmd_show_counters(struct cli_def *cli, char *command, char **argv, int argc)
 	return CLI_OK;
 }
 
-int cmd_show_version(struct cli_def *cli, char *command, char **argv, int argc)
+static int cmd_show_version(struct cli_def *cli, char *command, char **argv, int argc)
 {
 	int tag = 0;
 	int file = 0;
@@ -746,7 +772,7 @@ int cmd_show_version(struct cli_def *cli, char *command, char **argv, int argc)
 	return CLI_OK;
 }
 
-int cmd_show_pool(struct cli_def *cli, char *command, char **argv, int argc)
+static int cmd_show_pool(struct cli_def *cli, char *command, char **argv, int argc)
 {
 	int i;
 	int used = 0, free = 0, show_all = 0;
@@ -808,7 +834,7 @@ void print_save_config(struct cli_def *cli, char *string)
 		fprintf(save_config_fh, "%s\n", string);
 }
 
-int cmd_write_memory(struct cli_def *cli, char *command, char **argv, int argc)
+static int cmd_write_memory(struct cli_def *cli, char *command, char **argv, int argc)
 {
 	if (CLI_HELP_REQUESTED)
 		return CLI_HELP_NO_ARGS;
@@ -828,7 +854,7 @@ int cmd_write_memory(struct cli_def *cli, char *command, char **argv, int argc)
 	return CLI_OK;
 }
 
-int cmd_show_run(struct cli_def *cli, char *command, char **argv, int argc)
+static int cmd_show_run(struct cli_def *cli, char *command, char **argv, int argc)
 {
 	int i;
 
@@ -871,11 +897,45 @@ int cmd_show_run(struct cli_def *cli, char *command, char **argv, int argc)
 		}
 	}
 
+#ifdef BGP
+	if (config->as_number)
+	{
+	    	int k;
+		int h;
+
+	    	cli_print(cli, "# BGP");
+		cli_print(cli, "router bgp %u", config->as_number);
+		for (i = 0; i < BGP_NUM_PEERS; i++)
+		{
+			if (!config->neighbour[i].name[0])
+				continue;
+
+		    	cli_print(cli, " neighbour %s remote-as %u", config->neighbour[i].name, config->neighbour[i].as);
+
+			k = config->neighbour[i].keepalive;
+			h = config->neighbour[i].hold;
+
+			if (k == -1)
+			{
+				if (h == -1)
+					continue;
+
+				k = BGP_KEEPALIVE_TIME;
+			}
+
+			if (h == -1)
+				h = BGP_HOLD_TIME;
+
+			cli_print(cli, " neighbour %s timers %d %d", config->neighbour[i].name, k, h);
+		}
+	}
+#endif
+
 	cli_print(cli, "# end");
 	return CLI_OK;
 }
 
-int cmd_show_radius(struct cli_def *cli, char *command, char **argv, int argc)
+static int cmd_show_radius(struct cli_def *cli, char *command, char **argv, int argc)
 {
 	int i, free = 0, used = 0, show_all = 0;
 	char *states[] = {
@@ -929,7 +989,7 @@ int cmd_show_radius(struct cli_def *cli, char *command, char **argv, int argc)
 	return CLI_OK;
 }
 
-int cmd_show_plugins(struct cli_def *cli, char *command, char **argv, int argc)
+static int cmd_show_plugins(struct cli_def *cli, char *command, char **argv, int argc)
 {
 	int i;
 
@@ -944,7 +1004,7 @@ int cmd_show_plugins(struct cli_def *cli, char *command, char **argv, int argc)
 	return CLI_OK;
 }
 
-int cmd_show_throttle(struct cli_def *cli, char *command, char **argv, int argc)
+static int cmd_show_throttle(struct cli_def *cli, char *command, char **argv, int argc)
 {
 	int i;
 
@@ -976,7 +1036,7 @@ int cmd_show_throttle(struct cli_def *cli, char *command, char **argv, int argc)
 	return CLI_OK;
 }
 
-int cmd_show_banana(struct cli_def *cli, char *command, char **argv, int argc)
+static int cmd_show_banana(struct cli_def *cli, char *command, char **argv, int argc)
 {
 	if (CLI_HELP_REQUESTED)
 		return CLI_HELP_NO_ARGS;
@@ -999,7 +1059,7 @@ int cmd_show_banana(struct cli_def *cli, char *command, char **argv, int argc)
 	return CLI_OK;
 }
 
-int cmd_clear_counters(struct cli_def *cli, char *command, char **argv, int argc)
+static int cmd_clear_counters(struct cli_def *cli, char *command, char **argv, int argc)
 {
 	if (CLI_HELP_REQUESTED)
 		return CLI_HELP_NO_ARGS;
@@ -1009,7 +1069,7 @@ int cmd_clear_counters(struct cli_def *cli, char *command, char **argv, int argc
 	return CLI_OK;
 }
 
-int cmd_drop_user(struct cli_def *cli, char *command, char **argv, int argc)
+static int cmd_drop_user(struct cli_def *cli, char *command, char **argv, int argc)
 {
 	int i;
 	sessionidt s;
@@ -1048,7 +1108,7 @@ int cmd_drop_user(struct cli_def *cli, char *command, char **argv, int argc)
 	return CLI_OK;
 }
 
-int cmd_drop_tunnel(struct cli_def *cli, char *command, char **argv, int argc)
+static int cmd_drop_tunnel(struct cli_def *cli, char *command, char **argv, int argc)
 {
 	int i;
 	tunnelidt t;
@@ -1096,7 +1156,7 @@ int cmd_drop_tunnel(struct cli_def *cli, char *command, char **argv, int argc)
 	return CLI_OK;
 }
 
-int cmd_drop_session(struct cli_def *cli, char *command, char **argv, int argc)
+static int cmd_drop_session(struct cli_def *cli, char *command, char **argv, int argc)
 {
 	int i;
 	sessionidt s;
@@ -1139,7 +1199,7 @@ int cmd_drop_session(struct cli_def *cli, char *command, char **argv, int argc)
 	return CLI_OK;
 }
 
-int cmd_snoop(struct cli_def *cli, char *command, char **argv, int argc)
+static int cmd_snoop(struct cli_def *cli, char *command, char **argv, int argc)
 {
 	ipt ip;
 	u16 port;
@@ -1210,7 +1270,7 @@ int cmd_snoop(struct cli_def *cli, char *command, char **argv, int argc)
 	return CLI_OK;
 }
 
-int cmd_no_snoop(struct cli_def *cli, char *command, char **argv, int argc)
+static int cmd_no_snoop(struct cli_def *cli, char *command, char **argv, int argc)
 {
 	int i;
 	sessionidt s;
@@ -1246,7 +1306,7 @@ int cmd_no_snoop(struct cli_def *cli, char *command, char **argv, int argc)
 	return CLI_OK;
 }
 
-int cmd_throttle(struct cli_def *cli, char *command, char **argv, int argc)
+static int cmd_throttle(struct cli_def *cli, char *command, char **argv, int argc)
 {
 	int rate_in = 0;
 	int rate_out = 0;
@@ -1373,7 +1433,7 @@ int cmd_throttle(struct cli_def *cli, char *command, char **argv, int argc)
 	return CLI_OK;
 }
 
-int cmd_no_throttle(struct cli_def *cli, char *command, char **argv, int argc)
+static int cmd_no_throttle(struct cli_def *cli, char *command, char **argv, int argc)
 {
 	int i;
 	sessionidt s;
@@ -1416,7 +1476,7 @@ int cmd_no_throttle(struct cli_def *cli, char *command, char **argv, int argc)
 	return CLI_OK;
 }
 
-int cmd_debug(struct cli_def *cli, char *command, char **argv, int argc)
+static int cmd_debug(struct cli_def *cli, char *command, char **argv, int argc)
 {
 	int i;
 
@@ -1480,7 +1540,7 @@ int cmd_debug(struct cli_def *cli, char *command, char **argv, int argc)
 	return CLI_OK;
 }
 
-int cmd_no_debug(struct cli_def *cli, char *command, char **argv, int argc)
+static int cmd_no_debug(struct cli_def *cli, char *command, char **argv, int argc)
 {
 	int i;
 
@@ -1526,7 +1586,7 @@ int cmd_no_debug(struct cli_def *cli, char *command, char **argv, int argc)
 	return CLI_OK;
 }
 
-int cmd_load_plugin(struct cli_def *cli, char *command, char **argv, int argc)
+static int cmd_load_plugin(struct cli_def *cli, char *command, char **argv, int argc)
 {
 	int i, firstfree = 0;
 
@@ -1561,7 +1621,7 @@ int cmd_load_plugin(struct cli_def *cli, char *command, char **argv, int argc)
 	return CLI_OK;
 }
 
-int cmd_remove_plugin(struct cli_def *cli, char *command, char **argv, int argc)
+static int cmd_remove_plugin(struct cli_def *cli, char *command, char **argv, int argc)
 {
 	int i;
 
@@ -1622,7 +1682,7 @@ char *duration(time_t secs)
 	return buf;
 }
 
-int cmd_uptime(struct cli_def *cli, char *command, char **argv, int argc)
+static int cmd_uptime(struct cli_def *cli, char *command, char **argv, int argc)
 {
 	FILE *fh;
 	char buf[100], *p = buf, *loads[3];
@@ -1658,7 +1718,7 @@ int cmd_uptime(struct cli_def *cli, char *command, char **argv, int argc)
 	return CLI_OK;
 }
 
-int cmd_set(struct cli_def *cli, char *command, char **argv, int argc)
+static int cmd_set(struct cli_def *cli, char *command, char **argv, int argc)
 {
 	int i;
 
@@ -1791,6 +1851,387 @@ int regular_stuff(struct cli_def *cli)
 #endif
 	return CLI_OK;
 }
+
+#ifdef BGP
+static int cmd_router_bgp(struct cli_def *cli, char *command, char **argv, int argc)
+{
+	int as;
+
+	if (CLI_HELP_REQUESTED)
+		return cli_arg_help(cli, argc > 1,
+			"<1-65535>", "Autonomous system number", NULL);
+
+	if (argc != 1 || (as = atoi(argv[0])) < 1 || as > 65535)
+	{
+		cli_print(cli, "Invalid autonomous system number");
+		return CLI_OK;
+	}
+
+	if (bgp_configured && as != config->as_number)
+	{
+		cli_print(cli, "Can't change local AS on a running system");
+		return CLI_OK;
+	}
+
+	config->as_number = as;
+	cli_set_configmode(cli, MODE_CONFIG_BGP, "router");
+
+	return CLI_OK;
+}
+
+static int cmd_router_bgp_exit(struct cli_def *cli, char *command, char **argv, int argc)
+{
+	if (CLI_HELP_REQUESTED)
+		return CLI_HELP_NO_ARGS;
+
+	cli_set_configmode(cli, MODE_CONFIG, NULL);
+    	return CLI_OK;
+}
+
+static int find_bgp_neighbour(char *name)
+{
+	int i;
+	int new = -1;
+	struct hostent *h;
+	in_addr_t addrs[4] = { 0 };
+	char **a;
+
+	if (!(h = gethostbyname(name)) || h->h_addrtype != AF_INET)
+		return -2;
+
+	for (i = 0; i < sizeof(addrs) / sizeof(*addrs) && h->h_addr_list[i]; i++)
+		memcpy(&addrs[i], h->h_addr_list[i], sizeof(*addrs));
+
+	for (i = 0; i < BGP_NUM_PEERS; i++)
+	{
+	    	if (!config->neighbour[i].name[0])
+		{
+			if (new == -1) new = i;
+			continue;
+		}
+
+		if (!strcmp(name, config->neighbour[i].name))
+			return i;
+
+		if (!(h = gethostbyname(config->neighbour[i].name)) || h->h_addrtype != AF_INET)
+			continue;
+
+		for (a = h->h_addr_list; *a; a++)
+		{
+			int j;
+			for (j = 0; j < sizeof(addrs) / sizeof(*addrs) && addrs[j]; j++)
+				if (!memcmp(&addrs[j], *a, sizeof(*addrs)))
+					return i;
+		}
+	}
+
+	return new;
+}
+
+static int cmd_router_bgp_neighbour(struct cli_def *cli, char *command, char **argv, int argc)
+{
+	int i;
+	int keepalive;
+	int hold;
+
+    	if (CLI_HELP_REQUESTED)
+	{
+		switch (argc)
+		{
+		case 1:
+			return cli_arg_help(cli, 0,
+				"A.B.C.D", "BGP neighbour address",
+				"NAME",    "BGP neighbour name",
+				NULL);
+
+		case 2:
+			return cli_arg_help(cli, 0,
+				"remote-as", "Set remote autonomous system number",
+				"timers",    "Set timers",
+				NULL);
+
+		default:
+		    	if (!strncmp("remote-as", argv[1], strlen(argv[1])))
+			    	return cli_arg_help(cli, argv[2][1], "<1-65535>", "Autonomous system number", NULL);
+
+			if (!strncmp("timers", argv[1], strlen(argv[1])))
+			{
+			    	if (argc == 3)
+					return cli_arg_help(cli, 0, "<1-65535>", "Keepalive time", NULL);
+
+				if (argc == 4)
+					return cli_arg_help(cli, argv[3][1], "<3-65535>", "Hold time", NULL);
+
+				if (argc == 5 && !argv[4][1])
+					return cli_arg_help(cli, 1, NULL);
+			}
+
+			return CLI_OK;
+		}
+	}
+
+	if (argc < 3)
+	{
+		cli_print(cli, "Invalid arguments");
+		return CLI_OK;
+	}
+
+	if ((i = find_bgp_neighbour(argv[0])) == -2)
+	{
+		cli_print(cli, "Invalid neighbour");
+		return CLI_OK;
+	}
+
+	if (i == -1)
+	{
+		cli_print(cli, "Too many neighbours (max %d)", BGP_NUM_PEERS);
+		return CLI_OK;
+	}
+
+	if (!strncmp("remote-as", argv[1], strlen(argv[1])))
+	{
+	    	int as = atoi(argv[2]);
+		if (as < 0 || as > 65535)
+		{
+			cli_print(cli, "Invalid autonomous system number");
+			return CLI_OK;
+		}
+
+		if (!config->neighbour[i].name[0])
+		{
+			snprintf(config->neighbour[i].name, sizeof(config->neighbour[i].name), argv[0]);
+			config->neighbour[i].keepalive = -1;
+			config->neighbour[i].hold = -1;
+		}
+
+		config->neighbour[i].as = as;
+		return CLI_OK;
+	}
+
+	if (argc != 4 || strncmp("timers", argv[1], strlen(argv[1])))
+	{
+		cli_print(cli, "Invalid arguments");
+		return CLI_OK;
+	}
+
+	if (!config->neighbour[i].name[0])
+	{
+		cli_print(cli, "Specify remote-as first");
+		return CLI_OK;
+	}
+
+	keepalive = atoi(argv[2]);
+	hold = atoi(argv[3]);
+
+	if (keepalive < 1 || keepalive > 65535)
+	{
+		cli_print(cli, "Invalid keepalive time");
+		return CLI_OK;
+	}
+
+	if (hold < 3 || hold > 65535)
+	{
+		cli_print(cli, "Invalid hold time");
+		return CLI_OK;
+	}
+
+	if (keepalive == BGP_KEEPALIVE_TIME)
+		keepalive = -1; // using default value
+
+	if (hold == BGP_HOLD_TIME)
+		hold = -1;
+
+	config->neighbour[i].keepalive = keepalive;
+	config->neighbour[i].hold = hold;
+
+    	return CLI_OK;
+}
+
+static int cmd_router_bgp_no_neighbour(struct cli_def *cli, char *command, char **argv, int argc)
+{
+	int i;
+
+    	if (CLI_HELP_REQUESTED)
+		return cli_arg_help(cli, argc > 0,
+			"A.B.C.D", "BGP neighbour address",
+			"NAME",    "BGP neighbour name",
+			NULL);
+
+	if (argc != 1)
+	{
+		cli_print(cli, "Specify a BGP neighbour");
+		return CLI_OK;
+	}
+
+	if ((i = find_bgp_neighbour(argv[0])) == -2)
+	{
+		cli_print(cli, "Invalid neighbour");
+		return CLI_OK;
+	}
+
+	if (i < 0 || !config->neighbour[i].name[0])
+	{
+		cli_print(cli, "Neighbour %s not configured", argv[0]);
+		return CLI_OK;
+	}
+
+	memset(&config->neighbour[i], 0, sizeof(config->neighbour[i]));
+    	return CLI_OK;
+}
+
+static int cmd_show_bgp(struct cli_def *cli, char *command, char **argv, int argc)
+{
+	int i;
+	int hdr = 0;
+	char *addr;
+
+	if (!bgp_configured)
+		return CLI_OK;
+
+	if (CLI_HELP_REQUESTED)
+		return cli_arg_help(cli, 1,
+			"A.B.C.D", "BGP neighbour address",
+			"NAME",    "BGP neighbour name",
+			NULL);
+
+	cli_print(cli, "BGPv%d router identifier %s, local AS number %d",
+		BGP_VERSION, inet_toa(my_address), (int) config->as_number);
+
+	time(&time_now);
+
+	for (i = 0; i < BGP_NUM_PEERS; i++)
+	{
+		if (!*bgp_peers[i].name)
+			continue;
+
+		addr = inet_toa(bgp_peers[i].addr);
+		if (argc && strcmp(addr, argv[0]) &&
+		    strncmp(bgp_peers[i].name, argv[0], strlen(argv[0])))
+			continue;
+
+		if (!hdr++)
+		{
+			cli_print(cli, "");
+			cli_print(cli, "Peer                  AS         Address "
+			    "State       Retries Retry in Route Pend Timers");
+			cli_print(cli, "------------------ ----- --------------- "
+			    "----------- ------- -------- ----- ---- ---------");
+		}
+
+		cli_print(cli, "%-18.18s %5d %15s %-11s %7d %7ds %5s %4s %4d %4d",
+			bgp_peers[i].name,
+			bgp_peers[i].as,
+			addr,
+			bgp_state_str(bgp_peers[i].state),
+			bgp_peers[i].retry_count,
+			bgp_peers[i].retry_time ? bgp_peers[i].retry_time - time_now : 0,
+			bgp_peers[i].routing ? "yes" : "no",
+			bgp_peers[i].update_routes ? "yes" : "no",
+			bgp_peers[i].keepalive,
+			bgp_peers[i].hold);
+	}
+
+	return CLI_OK;
+}
+
+static int cmd_suspend_bgp(struct cli_def *cli, char *command, char **argv, int argc)
+{
+	int i;
+	char *addr;
+
+	if (!bgp_configured)
+		return CLI_OK;
+
+	if (CLI_HELP_REQUESTED)
+		return cli_arg_help(cli, 1,
+			"A.B.C.D", "BGP neighbour address",
+			"NAME",    "BGP neighbour name",
+			NULL);
+
+	for (i = 0; i < BGP_NUM_PEERS; i++)
+	{
+		if (bgp_peers[i].state != Established)
+			continue;
+
+		if (!bgp_peers[i].routing)
+			continue;
+
+		addr = inet_toa(bgp_peers[i].addr);
+		if (argc && strcmp(addr, argv[0]) && strcmp(bgp_peers[i].name, argv[0]))
+			continue;
+
+		bgp_peers[i].cli_flag = BGP_CLI_SUSPEND;
+		cli_print(cli, "Suspending peer %s", bgp_peers[i].name);
+	}
+
+	return CLI_OK;
+}
+
+static int cmd_no_suspend_bgp(struct cli_def *cli, char *command, char **argv, int argc)
+{
+	int i;
+	char *addr;
+
+	if (!bgp_configured)
+		return CLI_OK;
+
+	if (CLI_HELP_REQUESTED)
+		return cli_arg_help(cli, 1,
+			"A.B.C.D", "BGP neighbour address",
+			"NAME",    "BGP neighbour name",
+			NULL);
+
+	for (i = 0; i < BGP_NUM_PEERS; i++)
+	{
+		if (bgp_peers[i].state != Established)
+			continue;
+
+		if (bgp_peers[i].routing)
+			continue;
+
+		addr = inet_toa(bgp_peers[i].addr);
+		if (argc && strcmp(addr, argv[0]) &&
+		    strncmp(bgp_peers[i].name, argv[0], strlen(argv[0])))
+			continue;
+
+		bgp_peers[i].cli_flag = BGP_CLI_ENABLE;
+		cli_print(cli, "Un-suspending peer %s", bgp_peers[i].name);
+	}
+
+	return CLI_OK;
+}
+
+static int cmd_restart_bgp(struct cli_def *cli, char *command, char **argv, int argc)
+{
+	int i;
+	char *addr;
+
+	if (!bgp_configured)
+		return CLI_OK;
+
+	if (CLI_HELP_REQUESTED)
+		return cli_arg_help(cli, 1,
+			"A.B.C.D", "BGP neighbour address",
+			"NAME",    "BGP neighbour name",
+			NULL);
+
+	for (i = 0; i < BGP_NUM_PEERS; i++)
+	{
+		if (!*bgp_peers[i].name)
+			continue;
+
+		addr = inet_toa(bgp_peers[i].addr);
+		if (argc && strcmp(addr, argv[0]) &&
+		    strncmp(bgp_peers[i].name, argv[0], strlen(argv[0])))
+			continue;
+
+		bgp_peers[i].cli_flag = BGP_CLI_RESTART;
+		cli_print(cli, "Restarting peer %s", bgp_peers[i].name);
+	}
+
+	return CLI_OK;
+}
+#endif /* BGP*/
 
 // Convert a string in the form of abcd.ef12.3456 into char[6]
 void parsemac(char *string, char mac[6])

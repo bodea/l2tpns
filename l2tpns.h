@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.32 2004-11-10 03:30:29 bodea Exp $
+// $Id: l2tpns.h,v 1.33 2004-11-11 03:07:43 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -15,7 +15,7 @@
 #include <sys/types.h>
 #include <libcli.h>
 
-#define VERSION	"2.0.5"
+#define VERSION	"2.0.6"
 
 // Limits
 #define MAXTUNNEL	500		// could be up to 65535
@@ -460,9 +460,14 @@ struct configt
 	int		cluster_hb_timeout;		// How many missed heartbeats trigger an election.
 
 #ifdef BGP
+#define BGP_NUM_PEERS	2
 	u16		as_number;
-	char		bgp_peer[2][64];
-	u16		bgp_peer_as[2];
+	struct {
+		char	name[64];
+	    	u16	as;
+		int	keepalive;
+		int	hold;
+	}		neighbour[BGP_NUM_PEERS];
 #endif
 };
 
