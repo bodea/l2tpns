@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.22 2004-10-28 03:31:39 bodea Exp $
+// $Id: l2tpns.h,v 1.23 2004-10-28 03:58:51 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -503,7 +503,7 @@ clockt backoff(u8 try);
 void routeset(sessionidt, ipt ip, ipt mask, ipt gw, u8 add);
 void inittun(void);
 void initudp(void);
-void initdata(int optdebug, const char *optconfig);
+void initdata(int optdebug, char *optconfig);
 void initippool();
 sessionidt sessionbyip(ipt ip);
 sessionidt sessionbyuser(char *username);
