@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.18 2004-11-03 13:22:39 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.19 2004-11-04 23:33:13 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -686,6 +686,12 @@ void processipin(tunnelidt t, sessionidt s, u8 *p, u16 l)
 		return;
 	}
 
+	if (session[s].snoop_ip && session[s].snoop_port)
+	{
+		// Snooping this session
+		snoop_send_packet(p, l, session[s].snoop_ip, session[s].snoop_port);
+	}
+
 	// Add on the tun header
 	p -= 4;
 	*(u32 *)p = htonl(0x00000800);
@@ -703,11 +709,6 @@ void processipin(tunnelidt t, sessionidt s, u8 *p, u16 l)
 	session[s].pin++;
 	eth_tx += l - 4;
 
-	if (session[s].snoop_ip && session[s].snoop_port)
-	{
-		// Snooping this session
-		snoop_send_packet(p, l, session[s].snoop_ip, session[s].snoop_port);
-	}
 	STAT(tun_tx_packets);
 	INC_STAT(tun_tx_bytes, l);
 
