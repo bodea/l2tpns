@@ -25,7 +25,7 @@ LD = gcc
 INCLUDES = -I.
 CPPFLAGS = $(INCLUDES) $(DEFINES)
 CFLAGS = -Wall $(OPTIM)
-LDFLAGS = -rdynamic
+LDFLAGS =
 LDLIBS = -lm
 INSTALL = install -c -D -o root -g root
 
