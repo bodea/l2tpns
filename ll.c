@@ -1,6 +1,6 @@
 // L2TPNS Linked List Stuff
 
-char const *cvs_id_ll = "$Id: ll.c,v 1.5 2004-08-13 00:02:50 fred_nerk Exp $";
+char const *cvs_id_ll = "$Id: ll.c,v 1.6 2004-11-18 08:12:55 bodea Exp $";
 
 #include <stdio.h>
 #include <sys/file.h>
@@ -74,9 +74,8 @@ void ll_iterate(linked_list *l, int(*func)(void *))
 
 	for (i = l->head; i; i = i->next)
 	{
-		if (i->data)
-			if (!func(i))
-				break;
+		if (i->data && !func(i->data))
+			break;
 	}
 }
 
@@ -107,8 +106,8 @@ void ll_delete(linked_list *l, void *data)
 		if (i->data == data)
 		{
 			if (l->head == i) l->head = i->next;
-			if (l->end == i) l->end = i->next;
-			if (p) p->next = i->next;
+			if (l->end == i)  l->end = p;
+			if (p)            p->next = i->next;
 			free(i);
 			l->current = NULL;
 			return;
