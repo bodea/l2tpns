@@ -1,0 +1,885 @@
+<HTML>
+<HEAD>
+<TITLE>L2TPNS Manual</TITLE>
+<STYLE>
+H1 {
+	text-align: center;
+}
+
+H2 {
+	border-top: 1px solid black;
+	border-bottom: 1px solid black;
+	background-color: lightblue;
+	padding-left: 10px;
+}
+
+H3 {
+	text-decoration: underline;
+}
+</STYLE>
+</HEAD>
+<BODY>
+<H1>L2TPNS Manual</H1>
+<OL>
+	<LI>Overview</LI>
+	<LI>Installation</LI>
+	<LI>Configuration</LI>
+	<LI>Controlling the process</LI>
+	<LI>Command-Line Interface</LI>
+	<LI>Throttling</LI>
+	<LI>Interception</LI>
+	<LI>Authentication</LI>
+	<LI>Plugins</LI>
+	<LI>Walled Garden</LI>
+	<LI>Clustering</LI>
+	<LI>Performance</LI>
+</OL>
+<H2>Overview</H2>
+L2TPNS is half of a complete L2TP implementation. It supports only the
+LNS side of the connection.<P>
+
+L2TP (Layer 2 Tunneling Protocol) is designed to allow any layer 2
+protocol (e.g. Ethernet, PPP) to be tunneled over an IP connection. L2TPNS
+implements PPP over L2TP only.<P>
+
+There are a couple of other L2TP imlementations, of which <A
+HREF="http://sourceforge.net/projects/l2tpd">l2tpd</A> is probably the
+most popular. l2tpd also will handle being either end of a tunnel, and
+is a lot more configurable than L2TPNS. However, due to the way it works,
+it is nowhere near as scalable.<P>
+
+L2TPNS uses the TUN/TAP interface provided by the Linux kernel to receive
+and send packets. Using some packet manipulation it doesn't require a
+single interface per connection, as l2tpd does.<P>
+
+This allows it to scale extremely well to very high loads and very high
+numbers of connections.<P>
+
+It also has a plugin architecture which allows custom code to be run
+during processing. An example of this is in the walled garden module
+included.<P>
+
+<BR>
+<EM>Documentation is not my best skill. If you find any problems
+with this document, or if you wish to contribute, please email <A
+HREF="mailto:david@dparrish.com?subject=L2TPNS+Documentation">david@dparrish.com</A>.</EM><P>
+
+<H2>Installation</H2>
+<H3>Requirements</H3>
+
+<OL>
+<LI>Linux kernel version 2.4 or above, with the Tun/Tap interface either
+compiled in, or as a module.</LI>
+
+<LI>libcli 1.5 or greater.<BR>You can get this from <A
+HREF="http://sourceforge.net/projects/libcli">http://sourceforge.net/projects/libcli</A></LI>
+
+<LI>The iproute2 user-space tools. These are used for throttling,
+so if you don't want to throttle then this is not required.<BR>You
+may also need to patch tc and the kernel to include HTB
+support. You can find the relevant patches and instructions at <A
+HREF="http://luxik.cdi.cz/~devik/qos/htb/">http://luxik.cdi.cz/~devik/qos/htb/</A>.</LI>
+
+</OL>
+
+<H3>Compile</H3>
+
+You can generally get away with just running <B>make</B> from the source
+directory. This will compile the daemon, associated tools and any modules
+shipped with the distribution.<P>
+
+<H3>Install</H3>
+
+After you have successfully compiled everything, run <B>make
+install</B> to install it. By default, the binaries are installed into
+<EM>/usr/sbin</EM>, the configuration into <EM>/etc/l2tpns</EM>, and the
+modules into <EM>/usr/lib/l2tpns</EM>.<P>
+
+You will definately need to edit the configuration file before you start.
+See the Configuration section for more information.<P>
+
+You should also create the appropriate iptables chains if you want to use
+throttling or walled garden.
+<PRE>
+# Create the walled garden stuff
+iptables -t nat -N l2tpns
+iptables -t nat -F l2tpns
+iptables -t nat -A PREROUTING -j l2tpns
+iptables -t nat -A l2tpns -j garden_users
+# Create the throttling stuff
+iptables -t mangle -N l2tpns
+iptables -t mangle -F l2tpns
+iptables -t mangle -N throttle
+iptables -t mangle -F throttle
+iptables -t mangle -A PREROUTING -j l2tpns
+iptables -t mangle -A l2tpns -j throttle
+</PRE>
+
+<H3>Running it</H3>
+
+You only need to run <B>/usr/sbin/l2tpns</B> as root to start it. It does
+not detach to a daemon process, so you should perhaps run it from init.<P>
+
+By default there is no log destination set, so all log messages will go to
+stdout.<P>
+
+<H2>Configuration</H2>
+
+All configuration of the software is done from the files installed into
+/etc/l2tpns.
+
+<H3>l2tpns.cfg</H3>
+
+This is the main configuration file for L2TPNS. The format of the file is a
+list of commands that can be run through the command-line interface. This
+file can also be written directly by the L2TPNS process if a user runs the
+<EM>write memory</EM> command, so any comments will be lost. However if your
+policy is not to write the config by the program, then feel free to comment
+the file with a # at the beginning of the line.<P>
+
+A list of the possible configuration directives follows. Each of these
+should be set by a line like:<P>
+<PRE>
+set configstring "value"
+set ipaddress 192.168.1.1
+set boolean true
+</PRE>
+
+<UL>
+<LI><B>debug</B> (int)<BR>
+Sets the level of messages that will be written to the log file. The value
+should be between 0 and 5, with 0 being no debugging, and 5 being the
+highest. A rough description of the levels is:
+	<OL>
+	<LI VALUE=0>Critical Errors - Things are probably broken</LI>
+	<LI>Errors - Things might have gone wrong, but probably will recover</LI>
+	<LI>Warnings - Just in case you care what is not quite perfect</LI>
+	<LI>Information - Parameters of control packets</LI>
+	<LI>Calls - For tracing the execution of the code</LI>
+	<LI>Packets - Everything, including a hex dump of all packets processed... probably twice</LI>
+	</OL>
+Note that the higher you set the debugging level, the slower the program
+will run. Also, at level 5 a LOT of information will be logged. This should
+only ever be used for working out why it doesn't work at all.
+<P>
+</LI>
+
+<LI><B>log_file</B> (string)<BR>
+This will be where all logging and debugging information is written
+to. This can be either a filename, such as <EM>/var/log/l2tpns</EM>, or
+the special magic string <EM>syslog:facility</EM>, where <EM>facility</EM>
+is any one of the syslog logging facilities, such as local5.
+<P>
+</LI>
+
+<LI><B>l2tp_secret</B> (string)<BR>
+This sets the string that L2TPNS will use for authenticating tunnel request.
+This must be the same as the LAC, or authentication will fail. This will
+only actually be used if the LAC requests authentication.
+<P>
+</LI>
+
+<LI><B>primary_dns</B> (ip address)<BR>
+Whenever a PPP connection is established, DNS servers will be sent to the
+user, both a primary and a secondary. If either is set to 0.0.0.0, then that
+one will not be sent.<BR>
+This sets the first DNS entry that will be sent.
+<P>
+</LI>
+
+<LI><B>secondary_dns</B> (ip address)<BR>
+See <EM>primary_dns</EM>.
+<P>
+</LI>
+
+<LI><B>snoop_host</B> (ip address)<BR>
+Whenever a user is intercepted, a copy of their traffic will be sent to this
+IP address, using the port specified by <EM>snoop_port</EM>. Each packet
+will be sent as UDP.
+<P>
+</LI>
+
+<LI><B>snoop_port</B> (int)<BR>
+See <EM>snoop_host</EM>.
+<P>
+</LI>
+
+<LI><B>primary_radius</B> (ip address)<BR>
+This sets the primary radius server used for both authentication and
+accounting. If this server does not respond, then the secondary radius
+server will be used.
+<P>
+</LI>
+
+<LI><B>secondary_radius</B> (ip address)<BR>
+See <EM>primary_radius</EM>.
+<P>
+</LI>
+
+<LI><B>radius_accounting</B> (boolean)<BR>
+If set to true, then radius accounting packets will be sent. This means that
+a Start record will be sent when the session is successfully authenticated,
+and a Stop record will be sent when the session is closed.
+<P>
+</LI>
+
+<LI><B>radius_secret</B> (string)<BR>
+This secret will be used in all radius queries. If this is not set then
+radius queries will fail.
+<P>
+</LI>
+
+<LI><B>bind_address</B> (ip address)<BR>
+When the tun interface is created, it is assigned the address specified
+here. If no address is given, 1.1.1.1 is used.<BR>
+If an address is given here, then packets containing user traffic should be
+routed via this address, otherwise the primary address of the machine.<BR>
+This is set automatically by the cluster master when taking over a failed
+machine.
+<P>
+</LI>
+
+<LI><B>cluster_master</B> (ip address)<BR>
+This sets the address of the cluster master. See the <EM>Clustering</EM>
+section for more information on configuring a cluster.
+<P>
+</LI>
+
+<LI><B>throttle_speed</B> (int)<BR>
+Sets the speed (in kbits/s) which sessions will be limited to. If this is
+set to 0, then throttling will not be used at all. Note: You can set this by
+the CLI, but changes will not affect currently connected users.
+<P>
+</LI>
+
+<LI><B>dump_speed</B> (boolean)<BR>
+If set to true, then the current bandwidth utilization will be logged every
+second. Even if this is disabled, you can see this information by running
+the <EM>uptime</EM> command on the CLI.
+<P>
+</LI>
+
+<LI><B>setuid</B> (int)<BR>
+After starting up and binding the interface, change UID to this. This
+doesn't work properly.
+<P>
+</LI>
+
+<LI><B>accounting_dir</B> (string)<BR>
+If set to a directory, then every 5 minutes the current usage for every
+connected use will be dumped to a file. Each file dumped begins with a
+header, where each line is prefixed by #. Following the header is a single
+line for every connected user, fields separated by a space.<BR>
+The fields are username, ip, qos, uptxoctets, downrxoctets. The qos
+field is 1 if a standard user, and 2 if the user is throttled.
+
+<P>
+</LI>
+
+<LI><B>save_state</B> (boolean)<BR>
+If set to true, a state file will be dumped to disk when the process dies.
+This will be restored on startup, loading all active tunnels and sessions.
+<P>
+</LI>
+
+</UL>
+
+<H3>l2tpns.users</H3>
+
+This file's sole purpose is to manage access to the command-line
+interface.  If this file doesn't exist, then anyone who can get to port
+23 will be allowed access without a username / password.<P>
+
+If this is not what you want, then create this file and put in it a list of
+username / password pairs, separated by a <B>:</B>. e.g.:<P>
+
+<PRE>
+user.1:randompassword
+fred:bhPe4rD1ME8.s
+bob:SP2RHKl3Q3qo6
+</PRE>
+
+Keep in mind that the password should be in clear-text. There is no user
+privilege distinction, so anyone on this list will have full control of the
+system.<P>
+
+<H3>l2tpns.ip_pool</H3>
+
+This file is used to configure the IP address pool which user addresses are
+assigned from. This file should contain either an IP address or a IP mask
+per line. e.g.:<P>
+
+<PRE>
+192.168.1.1
+192.168.1.2
+192.168.1.3
+192.168.4.0/24
+172.16.0.0/16
+10.0.0.0/8
+</PRE>
+
+Keep in mind that L2TPNS can only handle 65535 connections per process, so
+don't put more than 65535 IP addresses in the configuration file. They will
+be wasted.
+
+<H2>Controlling the process</H2>
+
+A running L2TPNS process can be controlled in a number of ways. The primary
+method of control is by the Command-Line Interface (CLI).<P>
+
+You can also remotely send commands to modules via the nsctl client
+provided. This currently only works with the walled garden module, but
+modification is trivial to support other modules.<P>
+
+Also, there are a number of signals that L2TPNS understands and takes action
+when it receives them.
+
+<H3>Command-Line Interface</H3>
+
+You can access the command line interface by telnet'ing to port 23. There is
+no IP address restriction, so it's a good idea to firewall this port off
+from anyone who doesn't need access to it. See l2tpns.users for information
+on restricting access based on a username and password.<P>
+
+The CLI gives you real-time control over almost everything in
+the process.  The interface is designed to look like a CISCO
+device, and supports things like command history, line editing and
+context sensitive help. This is provided by linking with the <A
+HREF="http://sourceforge.net/projects/libcli">libcli</A> library.<P>
+
+After you have connected to the telnet port (and perhaps logged in), you
+will be presented with a prompt <PRE>l2tpns&gt;</PRE><P>
+
+You can type <EM>help</EM> to get a list of all possible commands, but this
+list could be quite long. A brief overview of the more important commands
+follows:
+
+<UL>
+<LI><B>show session</B><BR>
+Without specifying a session ID, this will list all tunnels currently
+connected. If you specify a session ID, you will be given all information on
+a single tunnel. Note that the full session list can be around 185 columns
+wide, so you should probably use a wide terminal to see the list
+properly.<P>
+The columns listed in the overview are:
+<TABLE>
+	<TR><TD><B>SID</B></TD><TD>Session ID</TD></TR>
+	<TR><TD><B>TID</B></TD><TD>Tunnel ID - Use with <EM>show tunnel tid</EM></TD></TR>
+	<TR><TD><B>Username</B></TD><TD>The username given in the PPP
+	authentication. If this is *, then LCP authentication has not
+	completed.</TD></TR>
+	<TR><TD><B>IP</B></TD><TD>The IP address given to the session. If
+	this is 0.0.0.0, LCP negotiation has not completed.</TD></TR>
+	<TR><TD><B>I</B></TD><TD>Intercept - Y or N depending on whether the
+	session is being snooped. See <EM>snoop</EM>.</TD></TR>
+	<TR><TD><B>T</B></TD><TD>Throttled - Y or N if the session is
+	currently throttled. See <EM>throttle</EM>.</TD></TR>
+	<TR><TD><B>G</B></TD><TD>Walled Garden - Y or N if the user is
+	trapped in the walled garden. This field is present even if the
+	garden module is not loaded.</TD></TR>
+	<TR><TD><B>opened</B></TD><TD>The number of seconds since the
+	session started</TD></TR>
+	<TR><TD><B>downloaded</B></TD><TD>Number of bytes downloaded by the user</TD></TR>
+	<TR><TD><B>uploaded</B></TD><TD>Number of bytes uploaded by the user</TD></TR>
+	<TR><TD><B>idle</B></TD><TD>The number of seconds since traffic was
+	detected on the session</TD></TR>
+	<TR><TD><B>LAC</B></TD><TD>The IP address of the LAC the session is
+	connected to.</TD></TR>
+	<TR><TD><B>CLI</B></TD><TD>The Calling-Line-Identification field
+	provided during the session setup. This field is generated by the
+	LAC.</TD></TR>
+</TABLE>
+<P>
+</LI>
+
+<LI><B>show tunnel</B><BR>
+This will show all the open tunnels in a summary, or detail on a single
+tunnel if you give a tunnel id.<P>
+The columns listed in the overview are:
+<TABLE>
+	<TR><TD><B>TID</B></TD><TD>Tunnel ID</TD></TR>
+	<TR><TD><B>Hostname</B></TD><TD>The hostname for the tunnel as
+	provided by the LAC. This has no relation to DNS, it is just
+	a text field.</TD></TR>
+	<TR><TD><B>IP</B></TD><TD>The IP address of the LAC</TD></TR>
+	<TR><TD><B>State</B></TD><TD>Tunnel state - Free, Open, Dieing,
+	Opening</TD></TR>
+	<TR><TD><B>Sessions</B></TD><TD>The number of open sessions on the
+	tunnel</TD></TR>
+</TABLE>
+<P>
+</LI>
+
+<LI><B>show pool</B><BR>
+Displays the current IP address pool allocation. This will only display
+addresses that are in use, or are reserved for re-allocation to a
+disconnected user.<P>
+If an address is not currently in use, but has been used, then in the User
+column the username will be shown in square brackets, followed by the time
+since the address was used:
+<PRE>
+IP Address      Used  Session User
+192.168.100.6     N           [joe.user] 1548s
+</PRE>
+<P>
+</LI>
+
+<LI><B>show radius</B><BR>
+Show a summary of the in-use radius sessions. This list should not be very
+long, as radius sessions should be cleaned up as soon as they are used. The
+columns listed are:
+<TABLE>
+	<TR><TD><B>Radius</B></TD><TD>The ID of the radius request. This is
+	sent in the packet to the radius server for identification.</TD></TR>
+	<TR><TD><B>State</B></TD><TD>The state of the request - WAIT, CHAP,
+	AUTH, IPCP, START, STOP, NULL.</TD></TR>
+	<TR><TD><B>Session</B></TD><TD>The session ID that this radius
+	request is associated with</TD></TR>
+	<TR><TD><B>Retry</B></TD><TD>If a response does not appear to the
+	request, it will retry at this time. This is a unix timestamp.</TD></TR>
+	<TR><TD><B>Try</B></TD><TD>Retry count. The radius request is
+	discarded after 3 retries.</TD></TR>
+</TABLE>
+<P>
+</LI>
+
+<LI><B>show running-config</B><BR>
+This will list the current running configuration. This is in a format that
+can either be pasted into the configuration file, or run directly at the
+command line.
+<P>
+</LI>
+
+<LI><B>show counters</B><BR>
+Internally, counters are kept of key values, such as bytes and packets
+transferred, as well as function call counters. This function displays all
+these counters, and is probably only useful for debugging.<P>
+You can reset these counters by running <EM>clear counters</EM>.
+<P>
+</LI>
+
+<LI><B>write memory</B><BR>
+This will write the current running configuration to the config file
+l2tpns.cfg, which will be run on a restart.
+<P>
+</LI>
+
+<LI><B>snoop</B><BR>
+You must specify a username, which will be intercepted for the current
+session. Specify <EM>no snoop username</EM> to disable interception for the
+current session.<P>
+If you want interception to be permanent, you will have to modify the radius
+response for the user. See <EM>Interception</EM>.
+<P>
+</LI>
+
+<LI><B>throttle</B><BR>
+You must specify a username, which will be throttled for the current
+session. Specify <EM>no throttle username</EM> to disable throttling for the
+current session.<P>
+If you want throttling to be permanent, you will have to modify the radius
+response for the user. See <EM>Throttling</EM>.
+<P>
+</LI>
+
+<LI><B>drop session</B><BR>
+This will cleanly disconnect a session. You must specify a session id, which
+you can get from <EM>show session</EM>. This will send a disconnect message
+to the remote end.
+<P>
+</LI>
+
+<LI><B>drop tunnel</B><BR>
+This will cleanly disconnect a tunnel, as well as all sessions on that
+tunnel. It will send a disconnect message for each session individually, and
+after 10 seconds it will send a tunnel disconnect message.
+<P>
+</LI>
+
+<LI><B>load plugin</B><BR>
+Load a plugin. You must specify the plugin name, and it will search in
+/usr/lib/l2tpns for <EM>plugin</EM>.so. You can unload a loaded plugin with
+<EM>remove plugin</EM>.
+<P>
+</LI>
+
+<LI><B>set</B><BR>
+Set a configuration variable. You must specify the variable name, and the
+value. If the value contains any spaces, you should quote the value with
+double quotes (").
+<P>
+</LI>
+
+<LI><B>uptime</B><BR>
+This will show how long the L2TPNS process has been running, and the current
+bandwidth utilization:
+<PRE>
+17:10:35 up 8 days, 2212 users, load average: 0.21, 0.17, 0.16
+Bandwidth: UDP-ETH:6/6  ETH-UDP:13/13  TOTAL:37.6   IN:3033 OUT:2569
+</PRE>
+The bandwidth line contains 4 sets of values.<BR>
+UDP-ETH is the current bandwidth going from the LAC to the ethernet
+(user uploads), in mbits/sec.<BR>
+ETH-UDP is the current bandwidth going from ethernet to the LAC (user
+downloads).<BR>
+TOTAL is the total aggregate bandwidth in mbits/s.<BR>
+IN and OUT are packets/per-second going between UDP-ETH and ETH-UDP.
+<P>
+These counters are updated every second.
+<P>
+</LI>
+</UL>
+
+<H3>nsctl</H3>
+
+nsctl was implemented (badly) to allow messages to be passed to modules.<P>
+
+You must pass at least 2 parameters: <EM>host</EM> and <EM>command</EM>. The
+host is the address of the L2TPNS server which you want to send the message
+to.<BR>
+Command can currently be either <EM>garden</EM> or <EM>ungarden</EM>. With
+both of these commands, you must give a session ID as the 3rd parameter.
+This will activate or deactivate the walled garden for a session
+temporarily.
+
+<H3>Signals</H3>
+
+While the process is running, you can send it a few different signals, using
+the kill command.
+<PRE>
+killall -HUP l2tpns
+</PRE>
+
+The signals understood are:
+<UL>
+<LI>SIGHUP - Reload the config from disk<P></LI>
+<LI>SIGTERM / SIGINT - Shut down for a restart. This will dump the current
+state to disk (if <EM>save_state</EM> is set to true). Upon restart, the
+process will read this saved state to resume active sessions. <P>
+This is really useful when doing an upgrade, as the code can change without
+dropping any users. However, if the internal structures such as
+<EM>sessiont</EM> or <EM>tunnelt</EM> change, then this saved state file
+will not reload, and none of the sessions will be recreated. This is bad.<P>
+If these structures do change, you should kill the server with SIGQUIT,
+which won't dump the state.</LI>
+<LI>SIGQUIT - Shut down cleanly. This will send a disconnect message for
+every active session and tunnel before shutting down. This is a good idea
+when upgrading the code, as no sessions will be left with the remote end
+thinking they are open.</LI>
+</UL>
+
+<H2>Throttling</H2>
+
+L2TPNS contains support for slowing down user sessions to whatever speed you
+desire. You must first enable the global setting <EM>throttle_speed</EM>
+before this will be activated. <P>
+
+If you wish a session to be throttled permanently, you should set the
+Vendor-Specific radius value <B>Cisco-Avpair="throttle=yes"</B>, which
+will be handled by the <EM>autothrottle</EM> module.<P>
+
+Otherwise, you can enable and disable throttling an active session using
+the <EM>throttle</EM> CLI command.<P>
+
+Throttling is actually performed using a combination of iptables and tc.<BR>
+First, a HTB bucket is created using tc (unless one is already created and
+unused).<BR>
+Secondly, an iptables rule is inserted into the throttle chanin in the
+mangle table so all packets destined for the user's IP address go into the
+HTB.<P>
+
+You can check the packets being throttled using the tc command. Find the HTB
+handle by doing <EM>show session id</EM> in the CLI, next to the Filter
+Bucket tag. Then at the shell prompt, you can run:
+<PRE>
+tc -s class ls dev tun0 | grep -A3 <EM>1:870</EM>
+class htb 1:870 root prio 0 rate 28Kbit ceil 28Kbit burst 15Kb cburst 1634b 
+ Sent 27042557 bytes 41464 pkts (dropped 1876, overlimits 0) 
+ lended: 41471 borrowed: 0 giants: 0
+ tokens: 3490743 ctokens: 353601
+</PRE>
+
+<H2>Interception</H2>
+
+You may have to deal with legal requirements to be able to intercept a
+user's traffic at any time. L2TPNS allows you to begin and end interception
+on the fly, as well as at authentication time.<P>
+
+When a user is being intercepted, a copy of every packet they send and
+receive will be sent wrapped in a UDP packet to the IP address and port set
+in the <EM>snoop_host</EM> and <EM>snoop_port</EM> configuration
+variables.<P>
+
+The UDP packet contains just the raw IP frame, with no extra headers.<P>
+
+To enable interception on a connected user, use the <EM>snoop username</EM>
+and <EM>no snoop username</EM> CLI commands. These will enable interception
+immediately.<P>
+
+If you wish the user to be intercepted whenever they reconnect, you will
+need to modify the radius response to include the Vendor-Specific value
+<B>Cisco-Avpair="intercept=yes"</B>. For this feature to be enabled,
+you need to have the <EM>autosnoop</EM> module loaded.<P>
+
+<H2>Authentication</H2>
+
+Whenever a session connects, it is not fully set up until authentication is
+completed. The remote end must send a PPP CHAP or PPP PAP authentication
+request to L2TPNS.<P>
+
+This request is sent to the radius server, which will hopefully respond with
+Auth-Accept or Auth-Reject.<P>
+
+If Auth-Accept is received, the session is set up and an IP address is
+assigned. The radius server can include a Framed-IP-Address field in the
+reply, and that address will be assigned to the client. It can also include
+specific DNS servers, and a Framed-Route if that is required.<P>
+
+If Auth-Reject is received, then the client is sent a PPP AUTHNAK packet,
+at which point they should disconnect. The exception to this is when the
+walled garden module is loaded, in which case the user still receives the
+PPP AUTHACK, but their session is flagged as being a garden'd user, and they
+should not receive any service.<P>
+
+The radius reply can also contain a Vendor-Specific attribute called
+Cisco-Avpair. This field is a freeform text field that most CISCO
+devices understand to contain configuration instructions for the session. In
+the case of L2TPNS it is expected to be of the form
+<PRE>
+key=value,key2=value2,key3=value3,key<EM>n</EM>=<EM>value</EM>
+</PRE>
+
+Each key-value pair is separated and passed to any modules loaded. The
+<EM>autosnoop</EM> and <EM>autothrottle</EM> understand the keys
+<EM>intercept</EM> and <EM>throttle</EM> respectively. For example, to have
+a user who is to be throttled and intercepted, the Cisco-Avpair value should
+contain:
+<PRE>
+intercept=yes,throttle=yes
+</PRE>
+
+<H2>Plugins</H2>
+
+So as to make L2TPNS as flexible as possible (I know the core code is pretty
+difficult to understand), it includes a plugin API, which you can use to
+hook into certain events.<P>
+
+There are a few example modules included - autosnoop, autothrottle and
+garden.<P>
+
+When an event happens that has a hook, L2TPNS looks for a predefined
+function name in every loaded module, and runs them in the order the modules
+were loaded.<P>
+
+The function should return <B>PLUGIN_RET_OK</B> if it is all OK. If it returns
+<B>PLUGIN_RET_STOP</B>, then it is assumed to have worked, but that no further
+modules should be run for this event.<P>
+A return of <B>PLUGIN_RET_ERROR</B> means that this module failed, and
+no further processing should be done for this event. <EM>Use this with care.</EM>
+
+Every event function called takes a specific structure named
+param_<EM>event</EM>, which varies in content with each event. The
+function name for each event will be <B>plugin_<EM>event</EM></B>,
+so for the event <EM>timer</EM>, the function declaration should look like:
+<PRE>
+int plugin_timer(struct param_timer *data);
+</PRE>
+
+A list of the available events follows, with a list of all the fields in the
+supplied structure:
+<TABLE CELLSPACING=0 CELLPADDING=0><TR BGCOLOR=LIGHTGREEN><TD>
+<TABLE CELLSPACING=1 CELLPADDING=3>
+	<TR BGCOLOR=LIGHTGREEN><TH><B>Event</B></TH><TH><B>Description</B></TH><TH><B>Parameters</B></TH></TR>
+	<TR VALIGN=TOP BGCOLOR=WHITE><TD><B>pre_auth</B></TD>
+		<TD>This is called after a radius response has been
+		received, but before it has been processed by the
+		code. This will allow you to modify the response in
+		some way.
+		</TD>
+		<TD>
+		<UL>
+			<LI>t - Tunnel ID</LI>
+			<LI>s - Session ID</LI>
+			<LI>username</LI>
+			<LI>password</LI>
+			<LI>protocol (0xC023 for PAP, 0xC223 for CHAP)</LI>
+			<LI>continue_auth - Set to 0 to stop processing authentication modules</LI>
+		</UL>
+		</TD>
+	</TR>
+	<TR VALIGN=TOP BGCOLOR=WHITE><TD><B>post_auth</B></TD>
+		<TD>This is called after a radius response has been
+		received, and the basic checks have been performed. This
+		is what the garden module uses to force authentication
+		to be accepted.
+		</TD>
+		<TD>
+		<UL>
+			<LI>t - Tunnel ID</LI>
+			<LI>s - Session ID</LI>
+			<LI>username</LI>
+			<LI>auth_allowed - This is already set to true or
+			false depending on whether authentication has been
+			allowed so far. You can set this to 1 or 0 to force
+			allow or disallow authentication</LI>
+			<LI>protocol (0xC023 for PAP, 0xC223 for CHAP)</LI>
+		</UL>
+		</TD>
+	</TR>
+	<TR VALIGN=TOP BGCOLOR=WHITE><TD><B>packet_rx</B></TD>
+		<TD>This is called whenever a session receives a
+		packet. <FONT COLOR=RED>Use this sparingly, as this will
+		seriously slow down the system.</FONT>
+		</TD>
+		<TD>
+		<UL>
+			<LI>t - Tunnel ID</LI>
+			<LI>s - Session ID</LI>
+			<LI>buf - The raw packet data</LI>
+			<LI>len - The length of buf</LI>
+		</UL>
+		</TD>
+	</TR>
+	<TR VALIGN=TOP BGCOLOR=WHITE><TD><B>packet_tx</B></TD>
+		<TD>This is called whenever a session sends a
+		packet. <FONT COLOR=RED>Use this sparingly, as this will
+		seriously slow down the system.</FONT>
+		</TD>
+		<TD>
+		<UL>
+			<LI>t - Tunnel ID</LI>
+			<LI>s - Session ID</LI>
+			<LI>buf - The raw packet data</LI>
+			<LI>len - The length of buf</LI>
+		</UL>
+		</TD>
+	</TR>
+	<TR VALIGN=TOP BGCOLOR=WHITE><TD><B>timer</B></TD>
+		<TD>This is run every second, no matter what is happening.
+		This is called from a signal handler, so make sure anything
+		you do is reentrant.
+		</TD>
+		<TD>
+		<UL>
+			<LI>time_now - The current unix timestamp</LI>
+		</UL>
+		</TD>
+	</TR>
+	<TR VALIGN=TOP BGCOLOR=WHITE><TD><B>new_session</B></TD>
+		<TD>This is called after a session is fully set up. The
+		session is now ready to handle traffic.
+		</TD>
+		<TD>
+		<UL>
+			<LI>t - Tunnel ID</LI>
+			<LI>s - Session ID</LI>
+		</UL>
+		</TD>
+	</TR>
+	<TR VALIGN=TOP BGCOLOR=WHITE><TD><B>kill_session</B></TD>
+		<TD>This is called when a session is about to be shut down.
+		This may be called multiple times for the same session.
+		</TD>
+		<TD>
+		<UL>
+			<LI>t - Tunnel ID</LI>
+			<LI>s - Session ID</LI>
+		</UL>
+		</TD>
+	</TR>
+	<TR VALIGN=TOP BGCOLOR=WHITE><TD><B>radius_response</B></TD>
+		<TD>This is called whenever a radius response includes a
+		Cisco-Avpair value. The value is split up into
+		<EM>key=value</EM> pairs, and each is processed through all
+		modules.
+		</TD>
+		<TD>
+		<UL>
+			<LI>t - Tunnel ID</LI>
+			<LI>s - Session ID</LI>
+			<LI>key</LI>
+			<LI>value</LI>
+		</UL>
+		</TD>
+	</TR>
+	<TR VALIGN=TOP BGCOLOR=WHITE><TD><B>control</B></TD>
+		<TD>This is called in whenever a nsctl packet is received.
+		This should handle the packet and form a response if
+		required.
+		</TD>
+		<TD>
+		<UL>
+			<LI>buf - The raw packet data</LI>
+			<LI>l - The raw packet data length</LI>
+			<LI>source_ip - Where the request came from</LI>
+			<LI>source_port - Where the request came from</LI>
+			<LI>response - Allocate a buffer and put your response in here</LI>
+			<LI>response_length - Length of response</LI>
+			<LI>send_response - true or false whether a response
+			should be sent. If you set this to true, you must
+			allocate a response buffer.</LI>
+			<LI>type - Type of request (see nsctl.c)</LI>
+			<LI>id - ID of request</LI>
+			<LI>data - I'm really not sure</LI>
+			<LI>data_length - Length of data</LI>
+		</UL>
+		</TD>
+	</TR>
+</TABLE>
+</TD></TR></TABLE>
+
+<H2>Walled Garden</H2>
+
+Walled Garden is implemented so that you can provide perhaps limited service
+to sessions that incorrectly authenticate.<P>
+
+Whenever a session provides incorrect authentication, and the
+radius server responds with Auth-Reject, the walled garden module
+(if loaded) will force authentication to succeed, but set the flag
+<EM>garden</EM> in the session structure, and adds an iptables rule to
+the <B>garden_users</B> chain to force all packets for the session's IP
+address to traverse the <B>garden</B> chain.<P>
+
+This doesn't <EM>just work</EM>. To set this all up, you will need to create
+2 iptables chains on the nat table - <B>garden</B> and <B>garden_users</B>.
+<PRE>
+iptables -t nat -N garden
+iptables -t nat -F garden
+iptables -t nat -N garden_users
+iptables -t nat -F garden_users
+</PRE>
+
+You should add rules to the <B>garden</B> chain to limit user's traffic. For
+example, to force all traffic except DNS to be forwarded to 192.168.1.1, add
+these entries to your firewall startup script:
+<PRE>
+iptables -t nat -A garden -p tcp --dport ! 53 -j DNAT --to 192.168.1.1
+iptables -t nat -A garden -p udp --dport ! 53 -j DNAT --to 192.168.1.1
+</PRE>
+
+L2TPNS will add entries to the garden_users chain as appropriate.<P>
+
+You can check the amount of traffic being captured using the following
+command:
+<PRE>
+iptables -t nat -L garden -nvx
+</PRE>
+
+<H2>Clustering</H2>
+
+Clustering is currently broken. But here's how it's supposed to work.<P>
+
+<H2>Performance</H2>
+
+Performance is great.<P>
+
+I'd like to include some pretty graphs here that show a linear performance
+increase, with no impact by number of connected sessions.<P>
+
+That's really what it looks like.<P>
+
+<BR>
+David Parrish<BR>
+<A HREF="mailto:david@dparrish.com?subject=L2TPNS+Documentation">david@dparrsih.com</A>
+</BODY>
+</HTML>
