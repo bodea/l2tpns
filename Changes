@@ -1,4 +1,4 @@
-* Mon Jan 10 2005 Brendan O'Dea <bod@optusnet.com.au> 2.1.0
+* Thu Jan 13 2005 Brendan O'Dea <bod@optusnet.com.au> 2.1.0
 - Add IPv6 support from Jonathan McDowell (work in progress).
 - Add CHAP support from Jordan Hrycaj (work in progress).
 - Sanity check that cluster_send_session is not called from a child
@@ -12,6 +12,9 @@
 - Make "call_" prefix implict in CSTAT() macro.
 - Fix some format string problems.
 - Fix "clear counters".
+- Log "Accepted connection to CLI" at 4 when connection is from localhost
+  to reduce noise in logs.
+- Show time since last counter reset in "show counters".
 
 * Fri Dec 17 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.13
 - Better cluster master collision resolution: keep a counter of state

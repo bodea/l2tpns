@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.48 2005-01-12 05:21:26 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.49 2005-01-13 07:05:56 bodea Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -290,8 +290,9 @@ void cli_do(int sockfd)
 	if (fork_and_close()) return;
 	if (getpeername(sockfd, (struct sockaddr *)&addr, &l) == 0)
 	{
-		LOG(3, 0, 0, "Accepted connection to CLI from %s\n", fmtaddr(addr.sin_addr.s_addr, 0));
 		require_auth = addr.sin_addr.s_addr != inet_addr("127.0.0.1");
+		LOG(require_auth ? 3 : 4, 0, 0, "Accepted connection to CLI from %s\n",
+			fmtaddr(addr.sin_addr.s_addr, 0));
 	}
 	else
 		LOG(0, 0, 0, "getpeername() failed on cli socket.  Requiring authentication: %s\n", strerror(errno));
@@ -322,7 +323,9 @@ void cli_do(int sockfd)
 	cli_loop(cli, sockfd);
 
 	close(sockfd);
-	LOG(3, 0, 0, "Closed CLI connection from %s\n", fmtaddr(addr.sin_addr.s_addr, 0));
+	LOG(require_auth ? 3 : 4, 0, 0, "Closed CLI connection from %s\n",
+		fmtaddr(addr.sin_addr.s_addr, 0));
+
 	exit(0);
 }
 
@@ -723,6 +726,10 @@ static int cmd_show_counters(struct cli_def *cli, char *command, char **argv, in
 	cli_print(cli, "%-30s%u", "call_radiusretry",		GET_STAT(call_radiusretry));
 	cli_print(cli, "%-30s%u", "call_random_data",		GET_STAT(call_random_data));
 #endif
+
+	cli_print(cli, "");
+	cli_print(cli, "Counters last reset %s ago", duration(time_now - GET_STAT(last_reset)));
+
 	return CLI_OK;
 }
 
