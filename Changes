@@ -1,5 +1,7 @@
 ? Brendan O'Dea <bod@optusnet.com.au> 2.0.5
 - Handle routing properly in lone-master case 
+- Fix intercepts:  don't double-snoop throttled customers, ensure
+  byte/packet counts are only updated once
 
 * Mon Nov 8 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.4
 - Added setrxspeed plugin

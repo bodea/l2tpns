@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.45 2004-11-05 07:50:05 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.46 2004-11-09 05:42:53 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -787,10 +787,6 @@ void processipout(u8 * buf, int len)
 		return;
 	}
 
-	// Snooping this session, send it to intercept box
-	if (sp->snoop_ip && sp->snoop_port)
-		snoop_send_packet(buf, len, sp->snoop_ip, sp->snoop_port);
-
 	LOG(5, session[s].ip, s, t, "Ethernet -> Tunnel (%d bytes)\n", len);
 
 	// Add on L2TP header
@@ -803,6 +799,10 @@ void processipout(u8 * buf, int len)
 		}
 		tunnelsend(b, len + (p-b), t); // send it...
 	}
+
+	// Snooping this session, send it to intercept box
+	if (sp->snoop_ip && sp->snoop_port)
+		snoop_send_packet(buf, len, sp->snoop_ip, sp->snoop_port);
 
 	sp->cout += len; // byte count
 	sp->total_cout += len; // byte count
@@ -837,14 +837,11 @@ void send_ipout(sessionidt s, u8 *buf, int len)
 
 	if (!session[s].ip)
 		return;
+
 	t = session[s].tunnel;
 	sp = &session[s];
 
 	LOG(5, session[s].ip, s, t, "Ethernet -> Tunnel (%d bytes)\n", len);
-
-	// Snooping this session.
-	if (sp->snoop_ip && sp->snoop_port)
-		snoop_send_packet(buf, len, sp->snoop_ip, sp->snoop_port);
 
 	// Add on L2TP header
 	{
@@ -856,6 +853,11 @@ void send_ipout(sessionidt s, u8 *buf, int len)
 		}
 		tunnelsend(b, len + (p-b), t); // send it...
 	}
+
+	// Snooping this session.
+	if (sp->snoop_ip && sp->snoop_port)
+		snoop_send_packet(buf, len, sp->snoop_ip, sp->snoop_port);
+
 	sp->cout += len; // byte count
 	sp->total_cout += len; // byte count
 	sp->pout++;

@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.22 2004-11-05 23:18:54 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.23 2004-11-09 05:42:53 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -709,12 +709,6 @@ void processipin(tunnelidt t, sessionidt s, u8 *p, u16 l)
 		return;
 	}
 
-	if (session[s].snoop_ip && session[s].snoop_port)
-	{
-		// Snooping this session
-		snoop_send_packet(p, l, session[s].snoop_ip, session[s].snoop_port);
-	}
-
 	// Add on the tun header
 	p -= 4;
 	*(u32 *)p = htonl(0x00000800);
@@ -724,16 +718,6 @@ void processipin(tunnelidt t, sessionidt s, u8 *p, u16 l)
 		master_throttle_packet(session[s].tbf_in, p, l); // Pass it to the master for handling.
 		return;
 	}
-
-	session[s].cin += l - 4;
-	session[s].total_cin += l - 4;
-	sess_count[s].cin += l - 4;
-
-	session[s].pin++;
-	eth_tx += l - 4;
-
-	STAT(tun_tx_packets);
-	INC_STAT(tun_tx_bytes, l);
 
 	if (session[s].tbf_in && config->cluster_iam_master) { // Are we throttled and a master?? actually handle the throttled packets.
 		tbf_queue_packet(session[s].tbf_in, p, l);
@@ -746,8 +730,25 @@ void processipin(tunnelidt t, sessionidt s, u8 *p, u16 l)
 		STAT(tun_tx_errors);
 		LOG(0, 0, s, t, "Error writing %d bytes to TUN device: %s (tunfd=%d, p=%p)\n",
 			l, strerror(errno), tunfd, p);
+
+		return;
 	}
 
+	if (session[s].snoop_ip && session[s].snoop_port)
+	{
+		// Snooping this session
+		snoop_send_packet(p + 4, l - 4, session[s].snoop_ip, session[s].snoop_port);
+	}
+
+	session[s].cin += l - 4;
+	session[s].total_cin += l - 4;
+	sess_count[s].cin += l - 4;
+
+	session[s].pin++;
+	eth_tx += l - 4;
+
+	STAT(tun_tx_packets);
+	INC_STAT(tun_tx_bytes, l - 4);
 }
 
 //
@@ -757,11 +758,20 @@ void processipin(tunnelidt t, sessionidt s, u8 *p, u16 l)
 void send_ipin(sessionidt s, u8 *buf, int len)
 {
 	LOG_HEX(5, "IP in throttled", buf, len);
+
 	if (write(tunfd, buf, len) < 0)
 	{
 		STAT(tun_tx_errors);
 		LOG(0, 0, 0, 0, "Error writing %d bytes to TUN device: %s (tunfd=%d, p=%p)\n",
 			len, strerror(errno), tunfd, buf);
+
+		return;
+	}
+
+	if (session[s].snoop_ip && session[s].snoop_port)
+	{
+		// Snooping this session
+		snoop_send_packet(p + 4, l - 4, session[s].snoop_ip, session[s].snoop_port);
 	}
 
 	// Increment packet counters
@@ -771,6 +781,9 @@ void send_ipin(sessionidt s, u8 *buf, int len)
 
 	session[s].pin++;
 	eth_tx += len - 4;
+
+	STAT(tun_tx_packets);
+	INC_STAT(tun_tx_bytes, l - 4);
 }
 
 
