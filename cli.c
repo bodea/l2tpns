@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.26 2004-11-11 05:38:01 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.27 2004-11-11 06:13:29 bodea Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -2111,7 +2111,7 @@ static int cmd_show_bgp(struct cli_def *cli, char *command, char **argv, int arg
 		{
 			cli_print(cli, "");
 			cli_print(cli, "Peer                  AS         Address "
-			    "State       Retries Retry in Route Pend Timers");
+			    "State       Retries Retry in Route Pend    Timers");
 			cli_print(cli, "------------------ ----- --------------- "
 			    "----------- ------- -------- ----- ---- ---------");
 		}
