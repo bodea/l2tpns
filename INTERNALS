@@ -59,7 +59,23 @@ char **ip_hash
 	the ip_pool[] table.
 
 	If it's zero, then there is no associated value.
+
+config->cluster_iam_master 
+
+	If true, indicates that this node is the master for
+	the cluster. This has many consequences...
 	
+config->cluster_iam_uptodate
+	
+	On the slaves, this indicates if it's seen a full run
+	of sessions from the master, and thus it's safe to be
+	taking traffic. 
+
+	On the master, this indicates that all slaves are
+	up to date. If any of the slaves aren't up to date,
+	this variable is false, and indicates that we should
+	shift to more rapid heartbeats to bring the slave
+	back up to date.
 
 
 ============================================================
@@ -67,15 +83,16 @@ char **ip_hash
 Clustering: How it works.
 
 	At a high level, the various members of the cluster elect
-a master. All other machines become slaves. Slaves handle normal
-packet forwarding. Whenever a slave get a 'state changing' packet
-(i.e. tunnel setup/teardown, session setup etc) it _doesn't_ handle
-it, but instead forwards it to the master.
+a master. All other machines become slaves as soon as they hear
+a heartbeat from the master. Slaves handle normal packet forwarding.
+Whenever a slave get a 'state changing' packet (i.e. tunnel setup/teardown,
+session setup etc) it _doesn't_ handle it, but instead forwards it
+to the master.
 
 	'State changing' it defined to be "a packet that would cause
 a change in either a session or tunnel structure that isn't just
 updating the idle time or byte counters". In practise, this means
-also all LCP, IPCP, and L2TP control packets.
+almost all LCP, IPCP, and L2TP control packets.
 
 	The master then handles the packet normally, updating
 the session/tunnel structures. The changed structures are then
@@ -101,16 +118,30 @@ unicasts C_LASTSEEN to tell the master the last heartbeast it
 had seen. The master normally than unicasts the missing packets
 to the slave. If the master doesn't have the old packet any more
 (i.e. it's outside the transmission window) then the master
-unicasts C_KILL to the slave asking it to die. (it should then
-restart, and catchup on state via the normal process).
+unicasts C_KILL to the slave asking it to die. (The slave should
+then restart, and catchup on state via the normal process).
+
+	If a slave goes for more than a few seconds without
+hearing from the master, it sends out a preemptive C_LASTSEEN.
+If the master still exists, this forces to the master to unicast
+the missed heartbeats. This is a work around for a temporary
+multicast problem. (i.e. if an IGMP probe is missed, the slave
+will temporarily stop seeing the multicast heartbeats. This
+work around prevents the slave from becoming master with 
+horrible consequences).
 
 Ping'ing:
 	All slaves send out a 'ping' once per second as a
 multicast packet. This 'ping' contains the slave's ip address,
-and most importantly: The number of seconds from epoch
+and most importantly, the number of seconds from epoch
 that the slave started up. (I.e. the value of time(2) at
-that the process started).
+that the process started). (This is the 'basetime').
+Obviously, this is never zero.
 
+	There is a special case. The master can send a single
+ping on shutdown to indicate that it is dead and that an
+immediate election should be held. This special ping is
+send from the master with a 'basetime' of zero.
 
 Elections:
 
@@ -178,3 +209,17 @@ Becoming slave:
 	When there are no undefined tunnel or session structures, the
 	slave marks itself as 'up-to-date' and starts advertising routes
 	(if BGP is enabled).
+
+STONITH:
+	
+	Currently, there is very minimal protection from split brain.
+In particular, there is no real STONITH protocol to stop two masters
+appearing in the event of a network problem.
+
+
+
+TODO:
+	Should slaves that have undefined sessions, and receive
+a packet from a non-existant session then forward it to the master??
+In normal practice, a slave with undefined session shouldn't be 
+handling packets, but ...
