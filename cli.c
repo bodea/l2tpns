@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.46 2005-01-10 07:17:37 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.47 2005-01-10 08:00:44 bodea Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -1118,8 +1118,10 @@ static int cmd_clear_counters(struct cli_def *cli, char *command, char **argv, i
 	if (CLI_HELP_REQUESTED)
 		return CLI_HELP_NO_ARGS;
 
-	cli_print(cli, "Counters cleared");
+	memset(_statistics, 0, sizeof(struct Tstats));
 	SET_STAT(last_reset, time(NULL));
+
+	cli_print(cli, "Counters cleared");
 	return CLI_OK;
 }
 
