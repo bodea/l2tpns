@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.21 2004-12-09 00:38:44 bodea Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.22 2004-12-13 05:09:55 bodea Exp $";
 
 #include <stdio.h>
 #include <sys/file.h>
@@ -81,7 +81,7 @@ int cluster_init()
 	struct sockaddr_in interface_addr;
 	struct ip_mreq mreq;
 	struct ifreq   ifr;
-	int opt = 0;
+	int opt;
 
 	config->cluster_undefined_sessions = MAXSESSION-1;
 	config->cluster_undefined_tunnels = MAXTUNNEL-1;
@@ -98,6 +98,9 @@ int cluster_init()
 	addr.sin_port = htons(CLUSTERPORT);
 	addr.sin_addr.s_addr = INADDR_ANY;
 	setsockopt(cluster_sockfd, SOL_SOCKET, SO_REUSEADDR, &addr, sizeof(addr));
+
+	opt = fcntl(cluster_sockfd, F_GETFL, 0);
+	fcntl(cluster_sockfd, F_SETFL, opt | O_NONBLOCK);
 
 	if (bind(cluster_sockfd, (void *) &addr, sizeof(addr)) < 0)
 	{
@@ -129,7 +132,7 @@ int cluster_init()
 		return -1;
 	}
 
-	if (setsockopt (cluster_sockfd, IPPROTO_IP, IP_MULTICAST_IF, &interface_addr, sizeof(interface_addr)) < 0)
+	if (setsockopt(cluster_sockfd, IPPROTO_IP, IP_MULTICAST_IF, &interface_addr, sizeof(interface_addr)) < 0)
 	{
 		LOG(0, 0, 0, "Failed to setsockopt (set mcast interface): %s\n", strerror(errno));
 		return -1;
