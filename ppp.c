@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.39.2.1 2005-01-13 07:58:54 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.39.2.2 2005-02-14 05:55:49 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -60,13 +60,18 @@ void processpap(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 	{
 		uint8_t *b = p;
 		b += 4;
+		user[0] = pass[0] = 0;
 		if (*b && *b < sizeof(user))
+		{
 			memcpy(user, b + 1, *b);
-		user[*b] = 0;
-		b += 1 + *b;
-		if (*b && *b < sizeof(pass))
-			memcpy(pass, b + 1, *b);
-		pass[*b] = 0;
+			user[*b] = 0;
+			b += 1 + *b;
+			if (*b && *b < sizeof(pass))
+			{
+				memcpy(pass, b + 1, *b);
+				pass[*b] = 0;
+			}
+		}
 		LOG(3, s, t, "PAP login %s/%s\n", user, pass);
 	}
 	if (session[s].ip || !session[s].radius)
