@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.40 2005-01-05 13:50:30 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.41 2005-01-13 07:57:39 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -750,7 +750,7 @@ void processipin(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 
 	session[s].cin += l - 4;
 	session[s].total_cin += l - 4;
-	sess_count[s].cin += l - 4;
+	sess_local[s].cin += l - 4;
 
 	session[s].pin++;
 	eth_tx += l - 4;
@@ -785,7 +785,7 @@ void send_ipin(sessionidt s, uint8_t *buf, int len)
 	// Increment packet counters
 	session[s].cin += len - 4;
 	session[s].total_cin += len - 4;
-	sess_count[s].cin += len - 4;
+	sess_local[s].cin += len - 4;
 
 	session[s].pin++;
 	eth_tx += len - 4;
