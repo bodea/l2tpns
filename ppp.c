@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.15 2004-09-19 23:19:23 fred_nerk Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.16 2004-09-23 04:01:36 fred_nerk Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -328,6 +328,7 @@ void processlcp(tunnelidt t, sessionidt s, u8 * p, u16 l)
 	}
 	else if (*p == ConfigReq)
 	{
+		l =  ntohs(*(u16 *)(p + 2));
 		signed int x = l - 4;
 		u8 *o = (p + 4);
 
@@ -411,8 +412,8 @@ void processlcp(tunnelidt t, sessionidt s, u8 * p, u16 l)
 		{
 			// Send back a ConfigAck
 			log(3, session[s].ip, s, t, "ConfigReq accepted, sending as Ack\n");
-			// for  win2k L2TP clientis  and LCP renegotiation of alive session 
-			if (magicno || l == 4) initlcp(t, s);
+			// for win2k L2TP clients and LCP renegotiation of alive session
+			if (magicno || l == 4 || (session[s].mru && l == 8)) initlcp(t, s);
 			q = makeppp(b, sizeof(b), p, l, t, s, PPPLCP);
 			if (!q)
 			{
@@ -821,7 +822,7 @@ u8 *makeppp(u8 * b, int size, u8 * p, int l, tunnelidt t, sessionidt s, u16 mtyp
 	*(u16 *) (b + 2) = htons(tunnel[t].far); // tunnel
 	*(u16 *) (b + 4) = htons(session[s].far); // session
 	b += 6;
-	if (mtype && !(session[s].l2tp_flags & SESSIONACFC))
+	if (mtype == PPPLCP || !(session[s].l2tp_flags & SESSIONACFC))
 	{
 		*(u16 *) b = htons(0xFF03); // HDLC header
 		b += 2;
