@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.21 2004-08-02 06:06:28 fred_nerk Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.22 2004-08-13 00:02:50 fred_nerk Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -538,7 +538,7 @@ int cmd_show_ipcache(struct cli_def *cli, char *command, char **argv, int argc)
 	if (CLI_HELP_REQUESTED)
 		return CLI_HELP_NO_ARGS;
 
-        cli_print(cli, "%7s %s", "Sess#", "IP Address");
+	cli_print(cli, "%7s %s", "Sess#", "IP Address");
 
 	for (i = 0; i < 256; ++i) {
 		if (!d[i]) continue;
@@ -960,8 +960,8 @@ int throttle_session(sessionidt s, int throttle)
 	if (!session[s].tunnel)
 		return 0;	// No-one home.
 
-        if (!*session[s].user)
-                return 0; // User not logged in
+	if (!*session[s].user)
+	        return 0; // User not logged in
 
 	if (throttle) {
 		if (session[s].tbf_in || session[s].tbf_out) {
@@ -1780,6 +1780,7 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 					// TBA
 					break;
 				case 12:      // ICCN
+					if ( amagic == 0) amagic = time_now;
 					session[s].magic = amagic; // set magic number
 					session[s].l2tp_flags = aflags; // set flags received
 					log(3, ntohl(addr->sin_addr.s_addr), s, t, "Magic %X Flags %X\n", amagic, aflags);
@@ -2785,55 +2786,57 @@ void snoop_send_packet(char *packet, u16 size, ipt destination, u16 port)
 }
 
 void dump_acct_info()
+
 {
-    char filename[1024];
-    char timestr[64];
-    time_t t = time(NULL);
-    int i;
-    FILE *f = NULL;
+	char filename[1024];
+	char timestr[64];
+	time_t t = time(NULL);
+	int i;
+	FILE *f = NULL;
 
 
-    CSTAT(call_dump_acct_info);
+	CSTAT(call_dump_acct_info);
 
-    strftime(timestr, 64, "%Y%m%d%H%M%S", localtime(&t));
-    snprintf(filename, 1024, "%s/%s", config->accounting_dir, timestr);
+	strftime(timestr, 64, "%Y%m%d%H%M%S", localtime(&t));
+	snprintf(filename, 1024, "%s/%s", config->accounting_dir, timestr);
 
-    for (i = 0; i < MAXSESSION; i++)
-    {
-	if (!session[i].opened || !session[i].ip || !session[i].cin || !session[i].cout || !*session[i].user || session[i].walled_garden)
-		continue;
-	if (!f)
+	for (i = 0; i < MAXSESSION; i++)
 	{
-	    time_t now = time(NULL);
-	    if (!(f = fopen(filename, "w")))
-	    {
-		    log(0, 0, 0, 0, "Can't write accounting info to %s: %s\n", filename, strerror(errno));
-		    return;
-	    }
-	    log(3, 0, 0, 0, "Dumping accounting information to %s\n", filename);
-	    fprintf(f, "# dslwatch.pl dump file V1.01\n"
-		"# host: %s\n"
-		"# time: %ld\n"
-		"# uptime: %ld\n"
-		"# format: username ip qos uptxoctets downrxoctets\n",
-		    hostname,
-		    now,
-		    now - basetime);
+		if (!session[i].opened || !session[i].ip || !session[i].cin || !session[i].cout || !*session[i].user || session[i].walled_garden)
+			continue;
+		if (!f)
+		{
+			time_t now = time(NULL);
+			if (!(f = fopen(filename, "w")))
+			{
+				log(0, 0, 0, 0, "Can't write accounting info to %s: %s\n", filename, strerror(errno));
+				return ;
+			}
+			log(3, 0, 0, 0, "Dumping accounting information to %s\n", filename);
+			fprintf(f, "# dslwatch.pl dump file V1.01\n"
+			        "# host: %s\n"
+			        "# time: %ld\n"
+			        "# uptime: %ld\n"
+			        "# format: username ip qos uptxoctets downrxoctets\n",
+			        hostname,
+			        now,
+			        now - basetime);
+		}
+
+		log(4, 0, 0, 0, "Dumping accounting information for %s\n", session[i].user);
+		fprintf(f, "%s %s %d %u %u\n",
+		        session[i].user,		// username
+		        inet_toa(htonl(session[i].ip)),	// ip
+		        (session[i].throttle) ? 2 : 1,	// qos
+		        (u32)session[i].cin,		// uptxoctets
+		        (u32)session[i].cout);		// downrxoctets
+
+		session[i].pin = session[i].cin = 0;
+		session[i].pout = session[i].cout = 0;
 	}
 
-	log(4, 0, 0, 0, "Dumping accounting information for %s\n", session[i].user);
-	fprintf(f, "%s %s %d %u %u\n",
-	    session[i].user,				// username
-	    inet_toa(htonl(session[i].ip)),		// ip
-	    (session[i].throttle) ? 2 : 1,		// qos
-	    (u32)session[i].cin,		// uptxoctets
-	    (u32)session[i].cout);		// downrxoctets
-
-	session[i].pin = session[i].cin = 0;
-	session[i].pout = session[i].cout = 0;
-    }
-
-    if (f) fclose(f);
+	if (f)
+		fclose(f);
 }
 
 // Main program
@@ -2939,11 +2942,11 @@ int main(int argc, char *argv[])
 	signal(SIGPIPE, SIG_IGN);
 	bgp_setup(config->as_number);
 	bgp_add_route(config->bind_address, 0xffffffff);
-        if (*config->bgp_peer[0])
+	if (*config->bgp_peer[0])
 		bgp_start(&bgp_peers[0], config->bgp_peer[0],
 		    config->bgp_peer_as[0], 0); /* 0 = routing disabled */
 
-        if (*config->bgp_peer[1])
+	if (*config->bgp_peer[1])
 		bgp_start(&bgp_peers[1], config->bgp_peer[1],
 		    config->bgp_peer_as[1], 0);
 #endif /* BGP */
@@ -3084,168 +3087,178 @@ void sigchild_handler(int signal)
 
 void read_state()
 {
-    struct stat sb;
-    int i;
-    ippoolt itmp;
-    FILE *f;
-    char magic[sizeof(DUMP_MAGIC)-1];
-    u32 buf[2];
+	struct stat sb;
+	int i;
+	ippoolt itmp;
+	FILE *f;
+	char magic[sizeof(DUMP_MAGIC) - 1];
+	u32 buf[2];
 
-    if (!config->save_state)
-    {
-	unlink(STATEFILE);
-	return;
-    }
-
-    if (stat(STATEFILE, &sb) < 0)
-    {
-	unlink(STATEFILE);
-	return;
-    }
-
-    if (sb.st_mtime < (time(NULL) - 60))
-    {
-	log(0, 0, 0, 0, "State file is too old to read, ignoring\n");
-	unlink(STATEFILE);
-	return;
-    }
-
-    f = fopen(STATEFILE, "r");
-    unlink(STATEFILE);
-
-    if (!f)
-    {
-	log(0, 0, 0, 0, "Can't read state file: %s\n", strerror(errno));
-	exit(1);
-    }
-
-    if (fread(magic, sizeof(magic), 1, f) != 1 || strncmp(magic, DUMP_MAGIC, sizeof(magic)))
-    {
-	log(0, 0, 0, 0, "Bad state file magic\n");
-	exit(1);
-    }
-
-    log(1, 0, 0, 0, "Reading state information\n");
-    if (fread(buf, sizeof(buf), 1, f) != 1 || buf[0] > MAXIPPOOL || buf[1] != sizeof(ippoolt))
-    {
-	log(0, 0, 0, 0, "Error/mismatch reading ip pool header from state file\n");
-	exit(1);
-    }
-
-    if (buf[0] > ip_pool_size)
-    {
-	log(0, 0, 0, 0, "ip pool has shrunk!  state = %d, current = %d\n", buf[0], ip_pool_size);
-	exit(1);
-    }
-
-    log(2, 0, 0, 0, "Loading %u ip addresses\n", buf[0]);
-    for (i = 0; i < buf[0]; i++)
-    {
-	if (fread(&itmp, sizeof(itmp), 1, f) != 1)
+	if (!config->save_state)
 	{
-	    log(0, 0, 0, 0, "Error reading ip %d from state file: %s\n", i, strerror(errno));
-	    exit(1);
+		unlink(STATEFILE);
+		return ;
 	}
 
-	if (itmp.address != ip_address_pool[i].address)
+	if (stat(STATEFILE, &sb) < 0)
 	{
-	    log(0, 0, 0, 0, "Mismatched ip %d from state file: pool may only be extended\n", i);
-	    exit(1);
+		unlink(STATEFILE);
+		return ;
 	}
 
-	memcpy(&ip_address_pool[i], &itmp, sizeof(itmp));
-    }
-
-    if (fread(buf, sizeof(buf), 1, f) != 1 || buf[0] != MAXTUNNEL || buf[1] != sizeof(tunnelt))
-    {
-	log(0, 0, 0, 0, "Error/mismatch reading tunnel header from state file\n");
-	exit(1);
-    }
-
-    log(2, 0, 0, 0, "Loading %u tunnels\n", MAXTUNNEL);
-    if (fread(tunnel, sizeof(tunnelt), MAXTUNNEL, f) != MAXTUNNEL)
-    {
-	log(0, 0, 0, 0, "Error reading tunnel data from state file\n");
-	exit(1);
-    }
-
-    for (i = 0; i < MAXTUNNEL; i++)
-    {
-	tunnel[i].controlc = 0;
-	tunnel[i].controls = NULL;
-	tunnel[i].controle = NULL;
-	if (*tunnel[i].hostname)
-	    log(3, 0, 0, 0, "Created tunnel for %s\n", tunnel[i].hostname);
-    }
-
-    if (fread(buf, sizeof(buf), 1, f) != 1 || buf[0] != MAXSESSION || buf[1] != sizeof(sessiont))
-    {
-	log(0, 0, 0, 0, "Error/mismatch reading session header from state file\n");
-	exit(1);
-    }
-
-    log(2, 0, 0, 0, "Loading %u sessions\n", MAXSESSION);
-    if (fread(session, sizeof(sessiont), MAXSESSION, f) != MAXSESSION)
-    {
-	log(0, 0, 0, 0, "Error reading session data from state file\n");
-	exit(1);
-    }
-
-    for (i = 0; i < MAXSESSION; i++)
-    {
-	session[i].tbf_in = 0;
-	session[i].tbf_out = 0;
-	if (session[i].opened)
+	if (sb.st_mtime < (time(NULL) - 60))
 	{
-	    log(2, 0, i, 0, "Loaded active session for user %s\n", session[i].user);
-	    if (session[i].ip)
-		sessionsetup(session[i].tunnel, i);
+		log(0, 0, 0, 0, "State file is too old to read, ignoring\n");
+		unlink(STATEFILE);
+		return ;
 	}
-    }
 
-    fclose(f);
-    log(0, 0, 0, 0, "Loaded saved state information\n");
+	f = fopen(STATEFILE, "r");
+	unlink(STATEFILE);
+
+	if (!f)
+	{
+		log(0, 0, 0, 0, "Can't read state file: %s\n", strerror(errno));
+		exit(1);
+	}
+
+	if (fread(magic, sizeof(magic), 1, f) != 1 || strncmp(magic, DUMP_MAGIC, sizeof(magic)))
+	{
+		log(0, 0, 0, 0, "Bad state file magic\n");
+		exit(1);
+	}
+
+	log(1, 0, 0, 0, "Reading state information\n");
+	if (fread(buf, sizeof(buf), 1, f) != 1 || buf[0] > MAXIPPOOL || buf[1] != sizeof(ippoolt))
+	{
+		log(0, 0, 0, 0, "Error/mismatch reading ip pool header from state file\n");
+		exit(1);
+	}
+
+	if (buf[0] > ip_pool_size)
+	{
+		log(0, 0, 0, 0, "ip pool has shrunk!  state = %d, current = %d\n", buf[0], ip_pool_size);
+		exit(1);
+	}
+
+	log(2, 0, 0, 0, "Loading %u ip addresses\n", buf[0]);
+	for (i = 0; i < buf[0]; i++)
+	{
+		if (fread(&itmp, sizeof(itmp), 1, f) != 1)
+		{
+			log(0, 0, 0, 0, "Error reading ip %d from state file: %s\n", i, strerror(errno));
+			exit(1);
+		}
+
+		if (itmp.address != ip_address_pool[i].address)
+		{
+			log(0, 0, 0, 0, "Mismatched ip %d from state file: pool may only be extended\n", i);
+			exit(1);
+		}
+
+		memcpy(&ip_address_pool[i], &itmp, sizeof(itmp));
+	}
+
+	if (fread(buf, sizeof(buf), 1, f) != 1 || buf[0] != MAXTUNNEL || buf[1] != sizeof(tunnelt))
+	{
+		log(0, 0, 0, 0, "Error/mismatch reading tunnel header from state file\n");
+		exit(1);
+	}
+
+	log(2, 0, 0, 0, "Loading %u tunnels\n", MAXTUNNEL);
+	if (fread(tunnel, sizeof(tunnelt), MAXTUNNEL, f) != MAXTUNNEL)
+	{
+		log(0, 0, 0, 0, "Error reading tunnel data from state file\n");
+		exit(1);
+	}
+
+	for (i = 0; i < MAXTUNNEL; i++)
+	{
+		tunnel[i].controlc = 0;
+		tunnel[i].controls = NULL;
+		tunnel[i].controle = NULL;
+		if (*tunnel[i].hostname)
+			log(3, 0, 0, 0, "Created tunnel for %s\n", tunnel[i].hostname);
+	}
+
+	if (fread(buf, sizeof(buf), 1, f) != 1 || buf[0] != MAXSESSION || buf[1] != sizeof(sessiont))
+	{
+		log(0, 0, 0, 0, "Error/mismatch reading session header from state file\n");
+		exit(1);
+	}
+
+	log(2, 0, 0, 0, "Loading %u sessions\n", MAXSESSION);
+	if (fread(session, sizeof(sessiont), MAXSESSION, f) != MAXSESSION)
+	{
+		log(0, 0, 0, 0, "Error reading session data from state file\n");
+		exit(1);
+	}
+
+	for (i = 0; i < MAXSESSION; i++)
+	{
+		session[i].tbf_in = 0;
+		session[i].tbf_out = 0;
+		if (session[i].opened)
+		{
+			log(2, 0, i, 0, "Loaded active session for user %s\n", session[i].user);
+			if (session[i].ip)
+				sessionsetup(session[i].tunnel, i);
+		}
+	}
+
+	fclose(f);
+	log(0, 0, 0, 0, "Loaded saved state information\n");
 }
 
 void dump_state()
 {
-    FILE *f;
-    u32 buf[2];
+	FILE *f;
+	u32 buf[2];
 
-    if (!config->save_state)
-	return;
+	if (!config->save_state)
+		return;
 
-    do {
-	if (!(f = fopen(STATEFILE, "w")))
-	    break;
+	do
+	{
+		if (!(f = fopen(STATEFILE, "w")))
+			break;
 
-	log(1, 0, 0, 0, "Dumping state information\n");
+		log(1, 0, 0, 0, "Dumping state information\n");
 
-	if (fwrite(DUMP_MAGIC, sizeof(DUMP_MAGIC)-1, 1, f) != 1) break;
+		if (fwrite(DUMP_MAGIC, sizeof(DUMP_MAGIC) - 1, 1, f) != 1)
+			break;
 
-	log(2, 0, 0, 0, "Dumping %u ip addresses\n", ip_pool_size);
-	buf[0] = ip_pool_size;
-	buf[1] = sizeof(ippoolt);
-	if (fwrite(buf, sizeof(buf), 1, f) != 1) break;
-	if (fwrite(ip_address_pool, sizeof(ippoolt), ip_pool_size, f) != ip_pool_size) break;
+		log(2, 0, 0, 0, "Dumping %u ip addresses\n", ip_pool_size);
+		buf[0] = ip_pool_size;
+		buf[1] = sizeof(ippoolt);
+		if (fwrite(buf, sizeof(buf), 1, f) != 1)
+			break;
+		if (fwrite(ip_address_pool, sizeof(ippoolt), ip_pool_size, f) != ip_pool_size)
+			break;
 
-	log(2, 0, 0, 0, "Dumping %u tunnels\n", MAXTUNNEL);
-	buf[0] = MAXTUNNEL;
-	buf[1] = sizeof(tunnelt);
-	if (fwrite(buf, sizeof(buf), 1, f) != 1) break;
-	if (fwrite(tunnel, sizeof(tunnelt), MAXTUNNEL, f) != MAXTUNNEL) break;
+		log(2, 0, 0, 0, "Dumping %u tunnels\n", MAXTUNNEL);
+		buf[0] = MAXTUNNEL;
+		buf[1] = sizeof(tunnelt);
+		if (fwrite(buf, sizeof(buf), 1, f) != 1)
+			break;
+		if (fwrite(tunnel, sizeof(tunnelt), MAXTUNNEL, f) != MAXTUNNEL)
+			break;
 
-	log(2, 0, 0, 0, "Dumping %u sessions\n", MAXSESSION);
-	buf[0] = MAXSESSION;
-	buf[1] = sizeof(sessiont);
-	if (fwrite(buf, sizeof(buf), 1, f) != 1) break;
-	if (fwrite(session, sizeof(sessiont), MAXSESSION, f) != MAXSESSION) break;
+		log(2, 0, 0, 0, "Dumping %u sessions\n", MAXSESSION);
+		buf[0] = MAXSESSION;
+		buf[1] = sizeof(sessiont);
+		if (fwrite(buf, sizeof(buf), 1, f) != 1)
+			break;
+		if (fwrite(session, sizeof(sessiont), MAXSESSION, f) != MAXSESSION)
+			break;
 
-	if (fclose(f) == 0) return; // OK
-    } while (0);
+		if (fclose(f) == 0)
+			return ; // OK
+	}
+	while (0);
 
-    log(0, 0, 0, 0, "Can't write state information: %s\n", strerror(errno));
-    unlink(STATEFILE);
+	log(0, 0, 0, 0, "Can't write state information: %s\n", strerror(errno));
+	unlink(STATEFILE);
 }
 
 void build_chap_response(char *challenge, u8 id, u16 challenge_length, char **challenge_response)
@@ -3274,13 +3287,13 @@ void build_chap_response(char *challenge, u8 id, u16 challenge_length, char **ch
 
 static int facility_value(char *name)
 {
-    int i;
-    for (i = 0; facilitynames[i].c_name; i++)
-    {
-	if (strcmp(facilitynames[i].c_name, name) == 0)
-	    return facilitynames[i].c_val;
-    }
-    return 0;
+	int i;
+	for (i = 0; facilitynames[i].c_name; i++)
+	{
+		if (strcmp(facilitynames[i].c_name, name) == 0)
+			return facilitynames[i].c_val;
+	}
+	return 0;
 }
 
 void update_config()

@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.11 2004-08-02 06:06:28 fred_nerk Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.12 2004-08-13 00:02:50 fred_nerk Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -76,26 +76,27 @@ void processpap(tunnelidt t, sessionidt s, u8 * p, u16 l)
 			return;
 		}
 		if (session[s].ip)
-			*p = 2;              // ACK
+			*p = 2;			// ACK
 		else
-			*p = 3;              // cant authorise
+			*p = 3;			// cant authorise
 		p[1] = id;
-		*(u16 *) (p + 2) = htons(5); // length
-		p[4] = 0;               // no message
+		*(u16 *) (p + 2) = htons(5);	// length
+		p[4] = 0;			// no message
 		if (session[s].ip)
 		{
-		    log(3, session[s].ip, s, t, "%d Already an IP allocated: %s (%d)\n", getpid(), inet_toa(htonl(session[s].ip)), session[s].ip_pool_index);
+			log(3, session[s].ip, s, t, "%d Already an IP allocated: %s (%d)\n", getpid(), inet_toa(htonl(session[s].ip)), session[s].ip_pool_index);
 			session[s].flags &= ~SF_IPCP_ACKED;
 		}
 		else
 		{
-		    log(1, 0, s, t, "No radius session available to authenticate session...\n");
+			log(1, 0, s, t, "No radius session available to authenticate session...\n");
 		}
 		log(3, 0, s, t, "Fallback response to PAP (%s)\n", (session[s].ip) ? "ACK" : "NAK");
 		tunnelsend(b, 5 + (p - b), t); // send it
 	}
 	else
-	{                          // set up RADIUS request
+	{
+		// set up RADIUS request
 		u16 r = session[s].radius;
 
 		// Run PRE_AUTH plugins
@@ -410,15 +411,16 @@ void processlcp(tunnelidt t, sessionidt s, u8 * p, u16 l)
 		{
 			// Send back a ConfigAck
 			log(3, session[s].ip, s, t, "ConfigReq accepted, sending as Ack\n");
+			// for  win2k L2TP clientis  and LCP renegotiation of alive session 
+			if (magicno || l == 4) initlcp(t, s);
 			q = makeppp(b, sizeof(b), p, l, t, s, PPPLCP);
-			if (!q) {
+			if (!q)
+			{
 				log(3, session[s].ip, s, t, " failed to create packet.\n");
 				return;
 			}
 			*q = ConfigAck;
 			tunnelsend(b, l + (q - b), t);
-			// For win2k L2TP clients, LCP should be initiated by the LNS
-			if (magicno) initlcp(t, s);
 		}
 		else
 		{
@@ -438,7 +440,7 @@ void processlcp(tunnelidt t, sessionidt s, u8 * p, u16 l)
 	}
 	else if (*p == TerminateReq)
 	{
-		*p = TerminateAck;     // close
+		*p = TerminateAck;	// close
 		q = makeppp(b, sizeof(b),  p, l, t, s, PPPLCP);
 		if (!q) {
 			log(3, session[s].ip, s, t, "Failed to create PPP packet in processlcp.\n");
@@ -454,7 +456,7 @@ void processlcp(tunnelidt t, sessionidt s, u8 * p, u16 l)
 	}
 	else if (*p == EchoReq)
 	{
-		*p = EchoReply;      // reply
+		*p = EchoReply;		// reply
 		*(u32 *) (p + 4) = htonl(session[s].magic); // our magic number
 		q = makeppp(b, sizeof(b), p, l, t, s, PPPLCP);
 		if (!q) {
@@ -537,7 +539,7 @@ void processipcp(tunnelidt t, sessionidt s, u8 * p, u16 l)
 	if (!session[s].ip)
 	{
 		log(3, 0, s, t, "Waiting on radius reply\n");
-		return ;                   // have to wait on RADIUS reply
+		return;			// have to wait on RADIUS reply
 	}
 	// form a config reply quoting the IP in the session
 	{
@@ -602,7 +604,7 @@ void processipcp(tunnelidt t, sessionidt s, u8 * p, u16 l)
 					log(5, session[s].ip, s, t, "   DNS2 = %s\n", inet_toa(session[s].dns1));
 				}
 			}
-			i = findppp(p, 3);   // IP address
+			i = findppp(p, 3);		// IP address
 			if (!i || i[1] != 6)
 			{
 				log(1, 0, s, t, "No IP in IPCP request\n");
@@ -744,12 +746,12 @@ void processccp(tunnelidt t, sessionidt s, u8 * p, u16 l)
 			}
 			else
 			{
-				*p = ConfigRej;        // reject
+				*p = ConfigRej;		// reject
 				sendccp(t, s);
 			}
 		}
 		else
-			*p = TerminateAck;     // close
+			*p = TerminateAck;		// close
 		if (!(q = makeppp(b, sizeof(b), p, l, t, s, PPPCCP)))
 		{
 			log(1,0,0,0, "Failed to send CCP packet.\n");	
@@ -775,12 +777,13 @@ void sendchap(tunnelidt t, sessionidt s)
 		return ;
 	}
 	log(1, 0, s, t, "Send CHAP challenge\n");
-	{                            // new challenge
+	{
+		// new challenge
 		int n;
 		for (n = 0; n < 15; n++)
 			radius[r].auth[n] = rand();
 	}
-	radius[r].chap = 1;          // CHAP not PAP
+	radius[r].chap = 1;		// CHAP not PAP
 	radius[r].id++;
 	if (radius[r].state != RADIUSCHAP)
 		radius[r].try = 0;
@@ -797,11 +800,11 @@ void sendchap(tunnelidt t, sessionidt s)
 		log(1, 0, s, t, "failed to send CHAP challenge.\n");
 		return;
 	}
-	*q = 1;                      // challenhe
-	q[1] = radius[r].id;         // ID
-	q[4] = 16;                   // length
-	memcpy(q + 5, radius[r].auth, 16); // challenge
-	strcpy(q + 21, hostname);    // our name
+	*q = 1;					// challenge
+	q[1] = radius[r].id;			// ID
+	q[4] = 16;				// length
+	memcpy(q + 5, radius[r].auth, 16);	// challenge
+	strcpy(q + 21, hostname);		// our name
 	*(u16 *) (q + 2) = htons(strlen(hostname) + 21); // length
 	tunnelsend(b, strlen(hostname) + 21 + (q - b), t); // send it
 }
@@ -852,7 +855,7 @@ u8 *findppp(u8 * b, u8 mtype)
 	while (l)
 	{
 		if (l < b[1] || !b[1])
-			return 0;            // faulty
+			return 0;		// faulty
 		if (*b == mtype)
 			return b;
 		l -= b[1];
@@ -874,11 +877,14 @@ void initlcp(tunnelidt t, sessionidt s)
 	log(4, 0, s, t, "Sending LCP ConfigReq for PAP\n");
 	*q = ConfigReq;
 	*(u8 *)(q + 1) = (time_now % 255) + 1; // ID
-	*(u16 *)(q + 2) = htons(8); // Length
-	*(u8 *)(q + 4) = 3;
-	*(u8 *)(q + 5) = 4;
-	*(u16 *)(q + 6) = htons(0xC023); // PAP
-	tunnelsend(b, 12 + 8, t);
+	*(u16 *)(q + 2) = htons(14); // Length
+	*(u8 *)(q + 4) = 5;
+	*(u8 *)(q + 5) = 6;
+	*(u32 *)(q + 6) = htonl(session[s].magic);
+	*(u8 *)(q + 10) = 3;
+	*(u8 *)(q + 11) = 4;
+	*(u16 *)(q + 12) = htons(0xC023); // PAP
+	tunnelsend(b, 12 + 14, t);
 }
 
 // Send CCP reply

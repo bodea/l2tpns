@@ -10,7 +10,8 @@
 - Add startup script and monitor script from Yuri
 - Some logging correctness fixes from Iain Wade
 - Add support for LCP Ident and CallBack (rejection only) from Yuri
-- Initiate LCP if not attempted by the client
+- Initiate LCP if not attempted by the client, or in renegotiation - Yuri
+- Indentation and style cleanups
 
 * Tue Jul 13 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.1
 - Update INSTALL, Docs/manual.html documentation.
