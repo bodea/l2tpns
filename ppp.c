@@ -1,5 +1,5 @@
 // L2TPNS PPP Stuff
-// $Id: ppp.c,v 1.3 2004-03-05 00:22:06 fred_nerk Exp $
+// $Id: ppp.c,v 1.4 2004-05-24 04:26:01 fred_nerk Exp $
 
 #include <stdio.h>
 #include <string.h>
@@ -87,7 +87,7 @@ void processpap(tunnelidt t, sessionidt s, u8 * p, u16 l)
 	}
 	else
 	{                          // set up RADIUS request
-		u8 r = session[s].radius;
+		u16 r = session[s].radius;
 
 		// Run PRE_AUTH plugins
 		struct param_pre_auth packet = { &tunnel[t], &session[s], strdup(user), strdup(pass), PPPPAP, 1 };
@@ -115,7 +115,7 @@ void processpap(tunnelidt t, sessionidt s, u8 * p, u16 l)
 // Process CHAP messages
 void processchap(tunnelidt t, sessionidt s, u8 * p, u16 l)
 {
-	u8 r;
+	u16 r;
 	u16 len;
 
 #ifdef STAT_CALLS
@@ -187,8 +187,8 @@ void processchap(tunnelidt t, sessionidt s, u8 * p, u16 l)
 	}
 
 	radius[r].chap = 1;
-	radiussend(r, RADIUSAUTH);
 	log(3, 0, s, t, "CHAP login %s\n", session[s].user);
+	radiussend(r, RADIUSAUTH);
 }
 
 char *ppp_lcp_types[] = {
@@ -407,7 +407,7 @@ void processlcp(tunnelidt t, sessionidt s, u8 * p, u16 l)
 		*p = EchoReply;      // reply
 		*(u32 *) (p + 4) = htonl(session[s].magic); // our magic number
 		q = makeppp(b, p, l, t, s, PPPLCP);
-		log(4, session[s].ip, s, t, "LCP: Received EchoReq. Sending EchoReply\n");
+		log(5, session[s].ip, s, t, "LCP: Received EchoReq. Sending EchoReply\n");
 		tunnelsend(b, l + (q - b), t); // send it
 	}
 	else if (*p == EchoReply)
@@ -437,7 +437,7 @@ void processipcp(tunnelidt t, sessionidt s, u8 * p, u16 l)
 	}
 	if (*p == ConfigAck)
 	{                          // happy with our IPCP
-		u8 r = session[s].radius;
+		u16 r = session[s].radius;
 		if ((!r || radius[r].state == RADIUSIPCP) && !session[s].walled_garden)
 			if (!r)
 				r = radiusnew(s);
@@ -560,12 +560,6 @@ void processipin(tunnelidt t, sessionidt s, u8 * p, u16 l)
 	*(u32 *)p = htonl(0x00000800);
 	l += 4;
 
-	// Plugin hook
-	{
-		struct param_packet_rx packet = { &tunnel[t], &session[s], p, l };
-		run_plugins(PLUGIN_PACKET_TX, &packet);
-	}
-
 	// send to ethernet
 	if (write(tapfd, p, l) < 0)
 	{
@@ -622,7 +616,7 @@ void processccp(tunnelidt t, sessionidt s, u8 * p, u16 l)
 void sendchap(tunnelidt t, sessionidt s)
 {
 	u8 b[MAXCONTROL];
-	u8 r = session[s].radius;
+	u16 r = session[s].radius;
 	u8 *q;
 #ifdef STAT_CALLS
 	STAT(call_sendchap);
