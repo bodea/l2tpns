@@ -1,8 +1,8 @@
 // L2TPNS Command Line Interface
-// vim: sw=4 ts=8
+// vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.12 2004-08-26 04:38:40 fred_nerk Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.13 2004-08-26 06:22:37 fred_nerk Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -48,6 +48,7 @@ extern struct Tringbuffer *ringbuffer;
 #endif
 extern struct cli_session_actions *cli_session_actions;
 extern struct cli_tunnel_actions *cli_tunnel_actions;
+extern tbft *filter_list;
 
 char *debug_levels[] = {
 	"CRIT",
@@ -236,6 +237,9 @@ void init_cli(char *hostname)
 void cli_do(int sockfd)
 {
 	int i;
+	int require_auth = 1;
+	struct sockaddr_in addr;
+	int l = sizeof(addr);
 
 	if (fork()) return;
 	if (config->scheduler_fifo)
@@ -278,32 +282,27 @@ void cli_do(int sockfd)
 			close(bgp_peers[i].sock);
 #endif /* BGP */
 
+	if (getpeername(sockfd, (struct sockaddr *)&addr, &l) == 0)
 	{
-		int require_auth = 1;
-		struct sockaddr_in addr;
-		int l = sizeof(addr);
-		if (getpeername(sockfd, (struct sockaddr *)&addr, &l) == 0)
-		{
-			log(3, 0, 0, 0, "Accepted connection to CLI from %s\n", inet_toa(addr.sin_addr.s_addr));
-			require_auth = addr.sin_addr.s_addr != inet_addr("127.0.0.1");
-		}
-		else
-			log(0, 0, 0, 0, "getpeername() failed on cli socket. Requiring authentication: %s\n", strerror(errno));
+		log(3, 0, 0, 0, "Accepted connection to CLI from %s\n", inet_toa(addr.sin_addr.s_addr));
+		require_auth = addr.sin_addr.s_addr != inet_addr("127.0.0.1");
+	}
+	else
+		log(0, 0, 0, 0, "getpeername() failed on cli socket. Requiring authentication: %s\n", strerror(errno));
 
-		if (require_auth)
+	if (require_auth)
+	{
+		log(3, 0, 0, 0, "CLI is remote, requiring authentication\n");
+		if (!cli->users) /* paranoia */
 		{
-			log(3, 0, 0, 0, "CLI is remote, requiring authentication\n");
-			if (!cli->users) /* paranoia */
-			{
-				log(0, 0, 0, 0, "No users for remote authentication!  Exiting CLI\n");
-				exit(0);
-			}
+			log(0, 0, 0, 0, "No users for remote authentication!  Exiting CLI\n");
+			exit(0);
 		}
-		else
-		{
-			/* no username/pass required */
-			cli->users = 0;
-		}
+	}
+	else
+	{
+		/* no username/pass required */
+		cli->users = 0;
 	}
 
 	debug_session = 0;
@@ -317,7 +316,7 @@ void cli_do(int sockfd)
 	cli_loop(cli, sockfd);
 
 	close(sockfd);
-	log(3, 0, 0, 0, "Closed CLI connection\n");
+	log(3, 0, 0, 0, "Closed CLI connection from %s\n", inet_toa(addr.sin_addr.s_addr));
 	exit(0);
 }
 
@@ -385,7 +384,7 @@ int cmd_show_session(struct cli_def *cli, char *command, char **argv, int argc)
 		// Show individual session
 		for (i = 0; i < argc; i++)
 		{
-			unsigned int s;
+			unsigned int s, b_in, b_out;
 			s = atoi(argv[i]);
 			if (s <= 0 || s >= MAXSESSION)
 			{
@@ -414,8 +413,41 @@ int cmd_show_session(struct cli_def *cli, char *command, char **argv, int argc)
 				cli_print(cli, "		Intercepted:	no");
 			cli_print(cli, "		Throttled:		%s", session[s].throttle ? "YES" : "no");
 			cli_print(cli, "		Walled Garden:		%s", session[s].walled_garden ? "YES" : "no");
-			cli_print(cli, "		Filter BucketI:		%d", session[s].tbf_in);
-			cli_print(cli, "		Filter BucketO:		%d", session[s].tbf_out);
+			b_in = session[s].tbf_in;
+			b_out = session[s].tbf_out;
+			if (b_in || b_out)
+				cli_print(cli, "		%5s %6s %6s | %7s %7s %8s %8s %8s %8s",
+					"Rate", "Credit", "Queued", "ByteIn", "PackIn",
+					"ByteSent", "PackSent", "PackDrop", "PackDelay");
+
+			if (b_in)
+				cli_print(cli, "	TBFI#%d%1s	%5d %6d %6d | %7d %7d %8d %8d %8d %8d",
+					b_in,
+					(filter_list[b_in].next ? "*" : " "),
+					filter_list[b_in].rate * 8,
+					filter_list[b_in].credit,
+					filter_list[b_in].queued,
+					filter_list[b_in].b_queued,
+					filter_list[b_in].p_queued,
+					filter_list[b_in].b_sent,
+					filter_list[b_in].p_sent,
+					filter_list[b_in].p_dropped,
+					filter_list[b_in].p_delayed);
+
+			if (b_out)
+				cli_print(cli, "	TBFO#%d%1s	%5d %6d %6d | %7d %7d %8d %8d %8d %8d",
+					b_out,
+					(filter_list[b_out].next ? "*" : " "),
+					filter_list[b_out].rate * 8,
+					filter_list[b_out].credit,
+					filter_list[b_out].queued,
+					filter_list[b_out].b_queued,
+					filter_list[b_out].p_queued,
+					filter_list[b_out].b_sent,
+					filter_list[b_out].p_sent,
+					filter_list[b_out].p_dropped,
+					filter_list[b_out].p_delayed);
+
 		}
 		return CLI_OK;
 	}
@@ -1227,12 +1259,27 @@ int cmd_no_snoop(struct cli_def *cli, char *command, char **argv, int argc)
 
 int cmd_throttle(struct cli_def *cli, char *command, char **argv, int argc)
 {
-	int i;
+	int rate_in = 0;
+	int rate_out = 0;
 	sessionidt s;
 
 	if (CLI_HELP_REQUESTED)
-		return cli_arg_help(cli, argc > 1,
-			"USER", "Username of session to throttle", NULL);
+	{
+		switch (argc)
+		{
+			case 1:
+				return cli_arg_help(cli, 0, "user", "Username of session to throttle", NULL);
+
+			case 2:
+				return cli_arg_help(cli, 1, "rate", "Incoming rate in kb/s", NULL);
+
+			case 3:
+				return cli_arg_help(cli, 1, "rate", "Outgoing rate in kb/s", NULL);
+
+			default:
+				return cli_arg_help(cli, argc > 1, "user", "Username of session to throttle", NULL);
+		}
+	}
 
 	if (!config->cluster_iam_master)
 	{
@@ -1240,30 +1287,25 @@ int cmd_throttle(struct cli_def *cli, char *command, char **argv, int argc)
 		return CLI_OK;
 	}
 
-	if (!argc)
+	rate_in = rate_out = config->rl_rate;
+	if (argc >= 2) rate_in = atoi(argv[1]);
+	if (argc >= 3) rate_out = atoi(argv[2]);
+
+	if (!(s = sessionbyuser(argv[0])))
 	{
-		cli_print(cli, "Specify a user");
+		cli_print(cli, "User %s is not connected", argv[0]);
 		return CLI_OK;
 	}
 
-	for (i = 0; i < argc; i++)
+	if (session[s].throttle)
 	{
-		if (!(s = sessionbyuser(argv[i])))
-		{
-			cli_print(cli, "User %s is not connected", argv[i]);
-			continue;
-		}
-
-		if (session[s].throttle)
-		{
-			cli_print(cli, "User %s already throttled", argv[i]);
-			continue;
-		}
-
-		cli_print(cli, "Throttling user %s", argv[i]);
-		cli_session_actions[s].throttle = config->rl_rate; // could be configurable at some stage
-		cli_session_actions[s].action |= CLI_SESS_THROTTLE;
+		cli_print(cli, "User %s already throttled, unthrottle first", argv[0]);
+		return CLI_OK;
 	}
+
+	cli_print(cli, "Throttling user %s", argv[0]);
+	cli_session_actions[s].throttle = rate_in << 16 | rate_out;
+	cli_session_actions[s].action |= CLI_SESS_THROTTLE;
 
 	return CLI_OK;
 }
@@ -1576,7 +1618,7 @@ int cmd_set(struct cli_def *cli, char *command, char **argv, int argc)
 
 		case 3:
 			if (!argv[2][1])
-					return cli_arg_help(cli, 1, NULL);
+				return cli_arg_help(cli, 1, NULL);
 
 		default:
 			return CLI_OK;

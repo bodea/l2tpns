@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.23 2004-08-26 04:43:52 fred_nerk Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.24 2004-08-26 06:22:37 fred_nerk Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -978,6 +978,9 @@ int throttle_session(sessionidt s, int throttle)
 
 	if (throttle)
 	{
+		int rate_in = throttle & 0x0000FFFF;
+		int rate_out = throttle >> 16;
+
 		if (session[s].tbf_in || session[s].tbf_out)
 		{
 			if (throttle == session[s].throttle)
@@ -989,8 +992,8 @@ int throttle_session(sessionidt s, int throttle)
 			free_tbf(session[s].tbf_out);
 		}
 
-		session[s].tbf_in = new_tbf(s, throttle*1024/4, throttle*1024/8, send_ipin);
-		session[s].tbf_out = new_tbf(s, throttle*1024/4, throttle*1024/8, send_ipout);
+		if (rate_in) session[s].tbf_in = new_tbf(s, rate_in * 1024 / 4, rate_in * 1024 / 8, send_ipin);
+		if (rate_out) session[s].tbf_out = new_tbf(s, rate_out * 1024 / 4, rate_out * 1024 / 8, send_ipout);
 
 		if (throttle != session[s].throttle)
 		{
@@ -2144,8 +2147,9 @@ int regular_cleanups(void)
 
 			if (a & CLI_SESS_THROTTLE)
 			{
-				log(2, 0, s, session[s].tunnel, "Throttling session by CLI (to %d)\n",
-				    cli_session_actions[s].throttle);
+				log(2, 0, s, session[s].tunnel, "Throttling session by CLI (to %dkb/s up and %dkb/s down)\n",
+				    cli_session_actions[s].throttle & 0xFFFF,
+				    cli_session_actions[s].throttle >> 16);
 
 				throttle_session(s, cli_session_actions[s].throttle);
 			}
@@ -2879,10 +2883,10 @@ void dump_acct_info()
 
 		log(4, 0, 0, 0, "Dumping accounting information for %s\n", session[i].user);
 		fprintf(f, "%s %s %d %u %u\n",
-		        session[i].user, 		// username
-		        inet_toa(htonl(session[i].ip)), 	// ip
-		        (session[i].throttle) ? 2 : 1, 	// qos
-		        (u32)session[i].cin, 		// uptxoctets
+		        session[i].user,		// username
+		        inet_toa(htonl(session[i].ip)),	// ip
+		        (session[i].throttle) ? 2 : 1,	// qos
+		        (u32)session[i].cin,		// uptxoctets
 		        (u32)session[i].cout);		// downrxoctets
 
 		session[i].pin = session[i].cin = 0;

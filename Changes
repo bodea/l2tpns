@@ -12,6 +12,9 @@
 - Add support for LCP Ident and CallBack (rejection only) from Yuri
 - Initiate LCP if not attempted by the client, or in renegotiation - Yuri
 - Indentation and style cleanups
+- Per-user upload and download throttle rates - Yuri
+- Make autothrottle.so understand cisco lcp:interface-config - Yuri
+- Show filter stats in show session - Yuri
 
 * Tue Jul 13 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.1
 - Update INSTALL, Docs/manual.html documentation.
