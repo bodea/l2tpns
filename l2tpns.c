@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.57 2004-11-27 05:19:53 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.58 2004-11-28 02:53:11 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -1002,6 +1002,44 @@ void throttle_session(sessionidt s, int rate_in, int rate_out)
 	}
 }
 
+// add/remove filters from session (-1 = no change)
+void filter_session(sessionidt s, int filter_in, int filter_out)
+{
+	if (!session[s].tunnel)
+		return; // No-one home.
+
+	if (!*session[s].user)
+	        return; // User not logged in
+
+	// paranoia
+	if (filter_in > MAXFILTER) filter_in = -1;
+	if (filter_out > MAXFILTER) filter_out = -1;
+	if (session[s].filter_in > MAXFILTER) session[s].filter_in = 0;
+	if (session[s].filter_out > MAXFILTER) session[s].filter_out = 0;
+
+	if (filter_in >= 0)
+	{
+		if (session[s].filter_in)
+			ip_filters[session[s].filter_in - 1].used--;
+
+		if (filter_in > 0)
+			ip_filters[filter_in - 1].used++;
+
+		session[s].filter_in = filter_in;
+	}
+
+	if (filter_out >= 0)
+	{
+		if (session[s].filter_out)
+			ip_filters[session[s].filter_out - 1].used--;
+
+		if (filter_out > 0)
+			ip_filters[filter_out - 1].used++;
+
+		session[s].filter_out = filter_out;
+	}
+}
+
 // start tidy shutdown of session
 void sessionshutdown(sessionidt s, char *reason)
 {
@@ -1080,6 +1118,10 @@ void sessionshutdown(sessionidt s, char *reason)
 
 	if (!session[s].die)
 		session[s].die = now() + 150; // Clean up in 15 seconds
+
+	// update filter refcounts
+	if (session[s].filter_in) ip_filters[session[s].filter_in - 1].used--;
+	if (session[s].filter_out) ip_filters[session[s].filter_out - 1].used--;
 
 	cluster_send_session(s);
 }
@@ -2128,6 +2170,22 @@ static int regular_cleanups(void)
 				    cli_session_actions[s].throttle_out);
 
 				throttle_session(s, cli_session_actions[s].throttle_in, cli_session_actions[s].throttle_out);
+				send++;
+			}
+
+			if (a & CLI_SESS_NOFILTER)
+			{
+				LOG(2, 0, s, session[s].tunnel, "Un-filtering session by CLI\n");
+				filter_session(s, 0, 0);
+				send++;
+			}
+			else if (a & CLI_SESS_FILTER)
+			{
+				LOG(2, 0, s, session[s].tunnel, "Filtering session by CLI (in=%d, out=%d)\n",
+				    cli_session_actions[s].filter_in,
+				    cli_session_actions[s].filter_out);
+
+				filter_session(s, cli_session_actions[s].filter_in, cli_session_actions[s].filter_out);
 				send++;
 			}
 
@@ -3727,6 +3785,31 @@ int load_session(sessionidt s, sessiont *new)
 			else
 				cache_ipmap(new->ip, s);
 		}
+	}
+
+	// check filters
+	if (new->filter_in && (new->filter_in > MAXFILTER || !ip_filters[new->filter_in - 1].name[0]))
+	{
+		LOG(2, session[s].ip, s, session[s].tunnel, "Dropping invalid input filter %d\n", (int) new->filter_in);
+		new->filter_in = 0;
+	}
+
+	if (new->filter_out && (new->filter_out > MAXFILTER || !ip_filters[new->filter_out - 1].name[0]))
+	{
+		LOG(2, session[s].ip, s, session[s].tunnel, "Dropping invalid output filter %d\n", (int) new->filter_out);
+		new->filter_out = 0;
+	}
+
+	if (new->filter_in != session[s].filter_in)
+	{
+		if (session[s].filter_in) ip_filters[session[s].filter_in - 1].used--;
+		if (new->filter_in)       ip_filters[new->filter_in - 1].used++;
+	}
+
+	if (new->filter_out != session[s].filter_out)
+	{
+		if (session[s].filter_out) ip_filters[session[s].filter_out - 1].used--;
+		if (new->filter_out)       ip_filters[new->filter_out - 1].used++;
 	}
 
 	if (new->tunnel && s > config->cluster_highest_sessionid)	// Maintain this in the slave. It's used

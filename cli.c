@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.31 2004-11-27 21:10:50 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.32 2004-11-28 02:53:11 bodea Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -115,6 +115,8 @@ static int cmd_restart_bgp(struct cli_def *cli, char *command, char **argv, int 
 static int cmd_ip_access_list(struct cli_def *cli, char *command, char **argv, int argc);
 static int cmd_no_ip_access_list(struct cli_def *cli, char *command, char **argv, int argc);
 static int cmd_ip_access_list_rule(struct cli_def *cli, char *command, char **argv, int argc);
+static int cmd_filter(struct cli_def *cli, char *command, char **argv, int argc);
+static int cmd_no_filter(struct cli_def *cli, char *command, char **argv, int argc);
 
 /* match if b is a substr of a */
 #define MATCH(a,b) (!strncmp((a), (b), strlen(b)))
@@ -169,8 +171,9 @@ void init_cli(char *hostname)
 	cli_register_command(cli, c, "memory", cmd_write_memory, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Save the running config to flash");
 	cli_register_command(cli, c, "terminal", cmd_show_run, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Show the running config");
 
-	cli_register_command(cli, NULL, "snoop", cmd_snoop, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Temporarily enable interception for a user");
-	cli_register_command(cli, NULL, "throttle", cmd_throttle, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Temporarily enable throttling for a user");
+	cli_register_command(cli, NULL, "snoop", cmd_snoop, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Enable interception of a session");
+	cli_register_command(cli, NULL, "throttle", cmd_throttle, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Enable throttling of a session");
+	cli_register_command(cli, NULL, "filter", cmd_filter, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Add filtering to a session");
 	cli_register_command(cli, NULL, "debug", cmd_debug, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Set the level of logging that is shown on the console");
 
 #ifdef BGP
@@ -179,8 +182,9 @@ void init_cli(char *hostname)
 #endif /* BGP */
 
 	c = cli_register_command(cli, NULL, "no", NULL, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
-	cli_register_command(cli, c, "snoop", cmd_no_snoop, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Temporarily disable interception for a user");
-	cli_register_command(cli, c, "throttle", cmd_no_throttle, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Temporarily disable throttling for a user");
+	cli_register_command(cli, c, "snoop", cmd_no_snoop, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Disable interception of a session");
+	cli_register_command(cli, c, "throttle", cmd_no_throttle, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Disable throttling of a session");
+	cli_register_command(cli, c, "filter", cmd_no_filter, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Remove filtering from a session");
 	cli_register_command(cli, c, "debug", cmd_no_debug, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Turn off logging of a certain level of debugging");
 
 #ifdef BGP
@@ -406,9 +410,9 @@ static int cmd_show_session(struct cli_def *cli, char *command, char **argv, int
 			cli_print(cli, "\tRx Speed:\t%lu", session[s].rx_connect_speed);
 			cli_print(cli, "\tTx Speed:\t%lu", session[s].tx_connect_speed);
 			if (session[s].filter_in && session[s].filter_in <= MAXFILTER)
-				cli_print(cli, "\tFilter in:\t%u (%s)", session[s].filter_in, ip_filters[session[s].filter_in-1].name);
+				cli_print(cli, "\tFilter in:\t%u (%s)", session[s].filter_in, ip_filters[session[s].filter_in - 1].name);
 			if (session[s].filter_out && session[s].filter_out <= MAXFILTER)
-				cli_print(cli, "\tFilter out:\t%u (%s)", session[s].filter_out, ip_filters[session[s].filter_out-1].name);
+				cli_print(cli, "\tFilter out:\t%u (%s)", session[s].filter_out, ip_filters[session[s].filter_out - 1].name);
 			if (session[s].snoop_ip && session[s].snoop_port)
 				cli_print(cli, "\tIntercepted:\t%s:%d", inet_toa(session[s].snoop_ip), session[s] .snoop_port);
 			else
@@ -1426,11 +1430,10 @@ static int cmd_throttle(struct cli_def *cli, char *command, char **argv, int arg
 		int i;
 		for (i = 1; i < argc - 1; i += 2)
 		{
-			int len = strlen(argv[i]);
 			int r = 0;
-			if (!strncasecmp(argv[i], "in", len))
+			if (MATCH("in", argv[i]))
 				r = rate_in = atoi(argv[i+1]);
-			else if (!strncasecmp(argv[i], "out", len))
+			else if (MATCH("out", argv[i]))
 				r = rate_out = atoi(argv[i+1]);
 
 			if (r < 1)
@@ -1560,13 +1563,13 @@ static int cmd_debug(struct cli_def *cli, char *command, char **argv, int argc)
 		if (argv[i][0] == 'c' && len < 2)
 			len = 2; /* distinguish [cr]itical from [ca]lls */
 
-		if (!strncasecmp(argv[i], "critical", len)) { debug_flags.critical = 1; continue; }
-		if (!strncasecmp(argv[i], "error",    len)) { debug_flags.error = 1;    continue; }
-		if (!strncasecmp(argv[i], "warning",  len)) { debug_flags.warning = 1;  continue; }
-		if (!strncasecmp(argv[i], "info",     len)) { debug_flags.info = 1;     continue; }
-		if (!strncasecmp(argv[i], "calls",    len)) { debug_flags.calls = 1;    continue; }
-		if (!strncasecmp(argv[i], "data",     len)) { debug_flags.data = 1;     continue; }
-		if (!strncasecmp(argv[i], "all",      len))
+		if (!strncmp("critical", argv[i], len)) { debug_flags.critical = 1; continue; }
+		if (!strncmp("error",    argv[i], len)) { debug_flags.error = 1;    continue; }
+		if (!strncmp("warning",  argv[i], len)) { debug_flags.warning = 1;  continue; }
+		if (!strncmp("info",     argv[i], len)) { debug_flags.info = 1;     continue; }
+		if (!strncmp("calls",    argv[i], len)) { debug_flags.calls = 1;    continue; }
+		if (!strncmp("data",     argv[i], len)) { debug_flags.data = 1;     continue; }
+		if (!strncmp("all",      argv[i], len))
 		{
 			memset(&debug_flags, 1, sizeof(debug_flags));
 			debug_flags.data = 0;
@@ -1607,13 +1610,13 @@ static int cmd_no_debug(struct cli_def *cli, char *command, char **argv, int arg
 		if (argv[i][0] == 'c' && len < 2)
 			len = 2; /* distinguish [cr]itical from [ca]lls */
 
-		if (!strncasecmp(argv[i], "critical", len)) { debug_flags.critical = 0; continue; }
-		if (!strncasecmp(argv[i], "error",    len)) { debug_flags.error = 0;    continue; }
-		if (!strncasecmp(argv[i], "warning",  len)) { debug_flags.warning = 0;  continue; }
-		if (!strncasecmp(argv[i], "info",     len)) { debug_flags.info = 0;     continue; }
-		if (!strncasecmp(argv[i], "calls",    len)) { debug_flags.calls = 0;    continue; }
-		if (!strncasecmp(argv[i], "data",     len)) { debug_flags.data = 0;     continue; }
-		if (!strncasecmp(argv[i], "all",      len))
+		if (!strncmp("critical", argv[i], len)) { debug_flags.critical = 0; continue; }
+		if (!strncmp("error",    argv[i], len)) { debug_flags.error = 0;    continue; }
+		if (!strncmp("warning",  argv[i], len)) { debug_flags.warning = 0;  continue; }
+		if (!strncmp("info",     argv[i], len)) { debug_flags.info = 0;     continue; }
+		if (!strncmp("calls",    argv[i], len)) { debug_flags.calls = 0;    continue; }
+		if (!strncmp("data",     argv[i], len)) { debug_flags.data = 0;     continue; }
+		if (!strncmp("all",      argv[i], len))
 		{
 			memset(&debug_flags, 0, sizeof(debug_flags));
 			continue;
@@ -1769,7 +1772,7 @@ static int cmd_set(struct cli_def *cli, char *command, char **argv, int argc)
 			{
 				int len = strlen(argv[0])-1;
 				for (i = 0; config_values[i].key; i++)
-					if (!len || !strncmp(argv[0], config_values[i].key, len))
+					if (!len || !strncmp(config_values[i].key, argv[0], len))
 						cli_print(cli, "  %s", config_values[i].key);
 			}
 
@@ -2823,6 +2826,143 @@ static int cmd_ip_access_list_rule(struct cli_def *cli, char *command, char **ar
 	}
 
 	cli_print(cli, "Too many rules");
+	return CLI_OK;
+}
+
+static int cmd_filter(struct cli_def *cli, char *command, char **argv, int argc)
+{
+	sessionidt s;
+	int i;
+
+	/* filter USER {in|out} FILTER ... */
+	if (CLI_HELP_REQUESTED)
+	{
+		switch (argc)
+		{
+		case 1:
+			return cli_arg_help(cli, 0,
+				"USER", "Username of session to filter", NULL);
+
+		case 2:
+		case 4:
+			return cli_arg_help(cli, 0,
+				"in",   "Set incoming filter",
+				"out",  "Set outgoing filter", NULL);
+
+		case 3:
+		case 5:
+			return cli_arg_help(cli, argc == 5 && argv[4][1],
+				"NAME", "Filter name", NULL);
+
+		default:
+			return cli_arg_help(cli, argc > 1, NULL);
+		}
+	}
+
+	if (!config->cluster_iam_master)
+	{
+		cli_print(cli, "Can't do this on a slave.  Do it on %s", inet_toa(config->cluster_master_address));
+		return CLI_OK;
+	}
+
+	if (argc != 3 && argc != 5)
+	{
+		cli_print(cli, "Specify a user and filters");
+		return CLI_OK;
+	}
+
+	if (!(s = sessionbyuser(argv[0])))
+	{
+		cli_print(cli, "User %s is not connected", argv[0]);
+		return CLI_OK;
+	}
+
+	cli_session_actions[s].filter_in = cli_session_actions[s].filter_out = -1;
+	for (i = 1; i < argc; i += 2)
+	{
+		int *f = 0;
+		int v;
+
+		if (MATCH("in", argv[i]))
+		{
+			if (session[s].filter_in)
+			{
+				cli_print(cli, "Input already filtered");
+				return CLI_OK;
+			}
+			f = &cli_session_actions[s].filter_in;
+		}
+		else if (MATCH("out", argv[i]))
+		{
+			if (session[s].filter_out)
+			{
+				cli_print(cli, "Output already filtered");
+				return CLI_OK;
+			}
+			f = &cli_session_actions[s].filter_out;
+		}
+		else
+		{
+			cli_print(cli, "Invalid filter specification");
+			return CLI_OK;
+		}
+
+		v = find_access_list(argv[i+1]);
+		if (v < 0 || !*ip_filters[v].name)
+		{
+			cli_print(cli, "Access-list %s not defined", argv[i+1]);
+			return CLI_OK;
+		}
+
+		*f = v + 1;
+	}
+
+	cli_print(cli, "Filtering user %s", argv[0]);
+	cli_session_actions[s].action |= CLI_SESS_FILTER;
+
+	return CLI_OK;
+}
+
+static int cmd_no_filter(struct cli_def *cli, char *command, char **argv, int argc)
+{
+	int i;
+	sessionidt s;
+
+	if (CLI_HELP_REQUESTED)
+		return cli_arg_help(cli, argc > 1,
+			"USER", "Username of session to remove filters from", NULL);
+
+	if (!config->cluster_iam_master)
+	{
+		cli_print(cli, "Can't do this on a slave.  Do it on %s", inet_toa(config->cluster_master_address));
+		return CLI_OK;
+	}
+
+	if (!argc)
+	{
+		cli_print(cli, "Specify a user to remove filters from");
+		return CLI_OK;
+	}
+
+	for (i = 0; i < argc; i++)
+	{
+		if (!(s = sessionbyuser(argv[i])))
+		{
+			cli_print(cli, "User %s is not connected", argv[i]);
+			continue;
+		}
+
+		if (session[s].filter_in || session[s].filter_out)
+		{
+			cli_print(cli, "Removing filters from user %s", argv[i]);
+			cli_session_actions[s].action |= CLI_SESS_NOFILTER;
+		}
+		else
+		{
+			cli_print(cli, "User %s not filtered", argv[i]);
+		}
+	}
+
 	return CLI_OK;
 }
 

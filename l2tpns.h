@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.38 2004-11-27 05:19:53 bodea Exp $
+// $Id: l2tpns.h,v 1.39 2004-11-28 02:53:11 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -124,6 +124,8 @@ struct cli_session_actions {
 	u16 snoop_port;
 	int throttle_in;
 	int throttle_out;
+	int filter_in;
+	int filter_out;
 };
 
 #define CLI_SESS_KILL		0x01
@@ -131,6 +133,8 @@ struct cli_session_actions {
 #define CLI_SESS_NOSNOOP	0x04
 #define CLI_SESS_THROTTLE	0x08
 #define CLI_SESS_NOTHROTTLE	0x10
+#define CLI_SESS_FILTER		0x20
+#define CLI_SESS_NOFILTER	0x40
 
 struct cli_tunnel_actions {
 	char action;

@@ -1,6 +1,6 @@
 // L2TPNS Radius Stuff
 
-char const *cvs_id_radius = "$Id: radius.c,v 1.16 2004-11-27 21:10:51 bodea Exp $";
+char const *cvs_id_radius = "$Id: radius.c,v 1.17 2004-11-28 02:53:11 bodea Exp $";
 
 #include <time.h>
 #include <stdio.h>
@@ -573,7 +573,9 @@ void processrad(u8 *buf, int len, char socket_index)
 							    !strncmp(ip_filters[i].name, filter, l))
 								*f = i + 1;
 
-						if (!*f)
+						if (*f)
+							ip_filters[*f - 1].used++;
+						else
 							LOG(3, 0, s, session[s].tunnel, "    Unknown filter\n");
 
 					}
