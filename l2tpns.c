@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.66 2004-12-13 05:09:35 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.67 2004-12-13 05:20:39 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -2211,7 +2211,7 @@ static int regular_cleanups(void)
 		else if (next_shut_acct <= TIME)
 		{
 			// Dump accounting data for shutdown sessions
-			next_acct = TIME + ACCT_SHUT_TIME;
+			next_shut_acct = TIME + ACCT_SHUT_TIME;
 			if (shut_acct_n)
 				dump_acct_info(0);
 		}
