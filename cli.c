@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.29 2004-11-27 05:19:53 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.30 2004-11-27 20:41:41 bodea Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -405,6 +405,10 @@ static int cmd_show_session(struct cli_def *cli, char *command, char **argv, int
 			cli_print(cli, "\tRadius Session:\t%u", session[s].radius);
 			cli_print(cli, "\tRx Speed:\t%lu", session[s].rx_connect_speed);
 			cli_print(cli, "\tTx Speed:\t%lu", session[s].tx_connect_speed);
+			if (session[s].filter_in && session[s].filter_in <= MAXFILTER)
+				cli_print(cli, "\tFilter in:\t%u (%s)", session[s].filter_in, filters[session[s].filter_in-1].name);
+			if (session[s].filter_out && session[s].filter_out <= MAXFILTER)
+				cli_print(cli, "\tFilter out:\t%u (%s)", session[s].filter_out, filters[session[s].filter_out-1].name);
 			if (session[s].snoop_ip && session[s].snoop_port)
 				cli_print(cli, "\tIntercepted:\t%s:%d", inet_toa(session[s].snoop_ip), session[s] .snoop_port);
 			else
@@ -2315,7 +2319,7 @@ static int access_list(struct cli_def *cli, char **argv, int argc, int add)
 	}
 
 	if (strlen(argv[1]) > sizeof(ip_filters[0].name) - 1 ||
-	    strspn(argv[1], "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_") != strlen(argv[1]))
+	    strspn(argv[1], "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-") != strlen(argv[1]))
 	{
 		cli_print(cli, "Invalid access-list name");
 		return CLI_OK;
