@@ -1,6 +1,6 @@
 /* Misc util functions */
 
-char const *cvs_id_util = "$Id: util.c,v 1.6 2004-11-16 07:54:32 bodea Exp $";
+char const *cvs_id_util = "$Id: util.c,v 1.7 2004-11-29 02:17:18 bodea Exp $";
 
 #include <unistd.h>
 #include <errno.h>
@@ -16,11 +16,16 @@ char const *cvs_id_util = "$Id: util.c,v 1.6 2004-11-16 07:54:32 bodea Exp $";
 #include "bgp.h"
 #endif
 
-char *inet_toa(unsigned long addr)
+// format ipv4 addr as a dotted-quad; n chooses one of 4 static buffers
+// to use
+char *fmtaddr(ipt addr, int n)
 {
+	static char addrs[4][16];
 	struct in_addr in;
-	memcpy(&in, &addr, sizeof(unsigned long));
-	return inet_ntoa(in);
+
+	if (n < 0 || n >= 4) return "";
+	in.s_addr = addr;
+	return strcpy(addrs[n], inet_ntoa(in));
 }
 
 void *shared_malloc(unsigned int size)
@@ -51,8 +56,8 @@ pid_t fork_and_close()
 		params.sched_priority = 0;
 		if (sched_setscheduler(0, SCHED_OTHER, &params))
 		{
-			LOG(0, 0, 0, 0, "Error setting scheduler to OTHER after fork: %s\n", strerror(errno));
-			LOG(0, 0, 0, 0, "This is probably really really bad.\n");
+			LOG(0, 0, 0, "Error setting scheduler to OTHER after fork: %s\n", strerror(errno));
+			LOG(0, 0, 0, "This is probably really really bad.\n");
 		}
 	}
 

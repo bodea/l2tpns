@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.33 2004-11-28 20:09:53 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.34 2004-11-29 02:17:17 bodea Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -117,6 +117,7 @@ static int cmd_no_ip_access_list(struct cli_def *cli, char *command, char **argv
 static int cmd_ip_access_list_rule(struct cli_def *cli, char *command, char **argv, int argc);
 static int cmd_filter(struct cli_def *cli, char *command, char **argv, int argc);
 static int cmd_no_filter(struct cli_def *cli, char *command, char **argv, int argc);
+static int cmd_show_access_list(struct cli_def *cli, char *command, char **argv, int argc);
 
 /* match if b is a substr of a */
 #define MATCH(a,b) (!strncmp((a), (b), strlen(b)))
@@ -153,6 +154,7 @@ void init_cli(char *hostname)
 	cli_register_command(cli, c, "tunnels", cmd_show_tunnels, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Show a list of tunnels or details for a single tunnel");
 	cli_register_command(cli, c, "users", cmd_show_users, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Show a list of all connected users or details of selected user");
 	cli_register_command(cli, c, "version", cmd_show_version, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Show currently running software version");
+	cli_register_command(cli, c, "access-list", cmd_show_access_list, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Show named access-list");
 
 	c2 = cli_register_command(cli, c, "histogram", NULL, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
 	cli_register_command(cli, c2, "idle", cmd_show_hist_idle, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Show histogram of session idle times");
@@ -231,7 +233,7 @@ void init_cli(char *hostname)
 
 	if (!(f = fopen(CLIUSERS, "r")))
 	{
-		LOG(0, 0, 0, 0, "WARNING! No users specified. Command-line access is open to all\n");
+		LOG(0, 0, 0, "WARNING! No users specified. Command-line access is open to all\n");
 	}
 	else
 	{
@@ -247,12 +249,12 @@ void init_cli(char *hostname)
 			if (!strcmp(buf, "enable"))
 			{
 				cli_allow_enable(cli, p);
-				LOG(3, 0, 0, 0, "Setting enable password\n");
+				LOG(3, 0, 0, "Setting enable password\n");
 			}
 			else
 			{
 				cli_allow_user(cli, buf, p);
-				LOG(3, 0, 0, 0, "Allowing user %s to connect to the CLI\n", buf);
+				LOG(3, 0, 0, "Allowing user %s to connect to the CLI\n", buf);
 			}
 		}
 		fclose(f);
@@ -271,7 +273,7 @@ void init_cli(char *hostname)
 	addr.sin_port = htons(23);
 	if (bind(clifd, (void *) &addr, sizeof(addr)) < 0)
 	{
-		LOG(0, 0, 0, 0, "Error listening on cli port 23: %s\n", strerror(errno));
+		LOG(0, 0, 0, "Error listening on cli port 23: %s\n", strerror(errno));
 		return;
 	}
 	listen(clifd, 10);
@@ -286,18 +288,18 @@ void cli_do(int sockfd)
 	if (fork_and_close()) return;
 	if (getpeername(sockfd, (struct sockaddr *)&addr, &l) == 0)
 	{
-		LOG(3, 0, 0, 0, "Accepted connection to CLI from %s\n", inet_toa(addr.sin_addr.s_addr));
+		LOG(3, 0, 0, "Accepted connection to CLI from %s\n", fmtaddr(addr.sin_addr.s_addr, 0));
 		require_auth = addr.sin_addr.s_addr != inet_addr("127.0.0.1");
 	}
 	else
-		LOG(0, 0, 0, 0, "getpeername() failed on cli socket.  Requiring authentication: %s\n", strerror(errno));
+		LOG(0, 0, 0, "getpeername() failed on cli socket.  Requiring authentication: %s\n", strerror(errno));
 
 	if (require_auth)
 	{
-		LOG(3, 0, 0, 0, "CLI is remote, requiring authentication\n");
+		LOG(3, 0, 0, "CLI is remote, requiring authentication\n");
 		if (!cli->users) /* paranoia */
 		{
-			LOG(0, 0, 0, 0, "No users for remote authentication!  Exiting CLI\n");
+			LOG(0, 0, 0, "No users for remote authentication!  Exiting CLI\n");
 			exit(0);
 		}
 	}
@@ -318,18 +320,18 @@ void cli_do(int sockfd)
 	cli_loop(cli, sockfd);
 
 	close(sockfd);
-	LOG(3, 0, 0, 0, "Closed CLI connection from %s\n", inet_toa(addr.sin_addr.s_addr));
+	LOG(3, 0, 0, "Closed CLI connection from %s\n", fmtaddr(addr.sin_addr.s_addr, 0));
 	exit(0);
 }
 
 static void cli_print_log(struct cli_def *cli, char *string)
 {
-	LOG(3, 0, 0, 0, "%s\n", string);
+	LOG(3, 0, 0, "%s\n", string);
 }
 
 void cli_do_file(FILE *fh)
 {
-	LOG(3, 0, 0, 0, "Reading configuration file\n");
+	LOG(3, 0, 0, "Reading configuration file\n");
 	cli_print_callback(cli, cli_print_log);
 	cli_file(cli, fh, PRIVILEGE_PRIVILEGED, MODE_CONFIG);
 	cli_print_callback(cli, NULL);
@@ -398,7 +400,7 @@ static int cmd_show_session(struct cli_def *cli, char *command, char **argv, int
 			cli_print(cli, "\tCalling Num:\t%s", session[s].calling);
 			cli_print(cli, "\tCalled Num:\t%s", session[s].called);
 			cli_print(cli, "\tTunnel ID:\t%d", session[s].tunnel);
-			cli_print(cli, "\tIP address:\t%s", inet_toa(htonl(session[s].ip)));
+			cli_print(cli, "\tIP address:\t%s", fmtaddr(htonl(session[s].ip), 0));
 			cli_print(cli, "\tUnique SID:\t%lu", session[s].unique_id);
 			cli_print(cli, "\tIdle time:\t%u seconds", abs(time_now - session[s].last_packet));
 			cli_print(cli, "\tNext Recv:\t%u", session[s].nr);
@@ -414,7 +416,7 @@ static int cmd_show_session(struct cli_def *cli, char *command, char **argv, int
 			if (session[s].filter_out && session[s].filter_out <= MAXFILTER)
 				cli_print(cli, "\tFilter out:\t%u (%s)", session[s].filter_out, ip_filters[session[s].filter_out - 1].name);
 			if (session[s].snoop_ip && session[s].snoop_port)
-				cli_print(cli, "\tIntercepted:\t%s:%d", inet_toa(session[s].snoop_ip), session[s] .snoop_port);
+				cli_print(cli, "\tIntercepted:\t%s:%d", fmtaddr(session[s].snoop_ip, 0), session[s] .snoop_port);
 			else
 				cli_print(cli, "\tIntercepted:\tno");
 
@@ -488,15 +490,12 @@ static int cmd_show_session(struct cli_def *cli, char *command, char **argv, int
 
 	for (i = 1; i < MAXSESSION; i++)
 	{
-		char *userip, *tunnelip;
 		if (!session[i].opened) continue;
-		userip = strdup(inet_toa(htonl(session[i].ip)));
-		tunnelip = strdup(inet_toa(htonl(tunnel[ session[i].tunnel ].ip)));
 		cli_print(cli, "%5d %4d %-32s %-15s %s %s %s %10u %10lu %10lu %4u %-15s %s",
 				i,
 				session[i].tunnel,
 				session[i].user[0] ? session[i].user : "*",
-				userip,
+				fmtaddr(htonl(session[i].ip), 0),
 				(session[i].snoop_ip && session[i].snoop_port) ? "Y" : "N",
 				(session[i].throttle_in || session[i].throttle_out) ? "Y" : "N",
 				(session[i].walled_garden) ? "Y" : "N",
@@ -504,10 +503,8 @@ static int cmd_show_session(struct cli_def *cli, char *command, char **argv, int
 				(unsigned long)session[i].total_cout,
 				(unsigned long)session[i].total_cin,
 				abs(time_now - (session[i].last_packet ? session[i].last_packet : time_now)),
-				tunnelip,
+				fmtaddr(htonl(tunnel[ session[i].tunnel ].ip), 1),
 				session[i].calling[0] ? session[i].calling : "*");
-		if (userip) free(userip);
-		if (tunnelip) free(tunnelip);
 	}
 	return CLI_OK;
 }
@@ -558,7 +555,7 @@ static int cmd_show_tunnels(struct cli_def *cli, char *command, char **argv, int
 				cli_print(cli, "\r\nTunnel %d:", t);
 				cli_print(cli, "\tState:\t\t%s", states[tunnel[t].state]);
 				cli_print(cli, "\tHostname:\t%s", tunnel[t].hostname[0] ? tunnel[t].hostname : "(none)");
-				cli_print(cli, "\tRemote IP:\t%s", inet_toa(htonl(tunnel[t].ip)));
+				cli_print(cli, "\tRemote IP:\t%s", fmtaddr(htonl(tunnel[t].ip), 0));
 				cli_print(cli, "\tRemote Port:\t%d", tunnel[t].port);
 				cli_print(cli, "\tRx Window:\t%u", tunnel[t].window);
 				cli_print(cli, "\tNext Recv:\t%u", tunnel[t].nr);
@@ -593,7 +590,7 @@ static int cmd_show_tunnels(struct cli_def *cli, char *command, char **argv, int
 		cli_print(cli, "%4d %20s %20s %6s %6d",
 				i,
 				*tunnel[i].hostname ? tunnel[i].hostname : "(null)",
-				inet_toa(htonl(tunnel[i].ip)),
+				fmtaddr(htonl(tunnel[i].ip), 0),
 				states[tunnel[i].state],
 				sessions);
 	}
@@ -802,7 +799,9 @@ static int cmd_show_pool(struct cli_def *cli, char *command, char **argv, int ar
 
 	if (!config->cluster_iam_master)
 	{
-		cli_print(cli, "Can't do this on a slave.  Do it on %s", inet_toa(config->cluster_master_address));
+		cli_print(cli, "Can't do this on a slave.  Do it on %s",
+			fmtaddr(config->cluster_master_address, 0));
+
 		return CLI_OK;
 	}
 
@@ -827,7 +826,9 @@ static int cmd_show_pool(struct cli_def *cli, char *command, char **argv, int ar
 		if (ip_address_pool[i].assigned)
 		{
 			cli_print(cli, "%-15s\tY %8d %s",
-				inet_toa(htonl(ip_address_pool[i].address)), ip_address_pool[i].session, session[ip_address_pool[i].session].user);
+				fmtaddr(htonl(ip_address_pool[i].address), 0),
+				ip_address_pool[i].session,
+				session[ip_address_pool[i].session].user);
 
 			used++;
 		}
@@ -835,10 +836,11 @@ static int cmd_show_pool(struct cli_def *cli, char *command, char **argv, int ar
 		{
 			if (ip_address_pool[i].last)
 				cli_print(cli, "%-15s\tN %8s [%s] %ds",
-					inet_toa(htonl(ip_address_pool[i].address)), "",
+					fmtaddr(htonl(ip_address_pool[i].address), 0), "",
 					ip_address_pool[i].user, time_now - ip_address_pool[i].last);
+
 			else if (show_all)
-				cli_print(cli, "%-15s\tN", inet_toa(htonl(ip_address_pool[i].address)));
+				cli_print(cli, "%-15s\tN", fmtaddr(htonl(ip_address_pool[i].address), 0));
 
 			free++;
 		}
@@ -896,7 +898,7 @@ static int cmd_show_run(struct cli_def *cli, char *command, char **argv, int arg
 		if (config_values[i].type == STRING)
 			cli_print(cli, "set %s \"%.*s\"", config_values[i].key, config_values[i].size, (char *)value);
 		else if (config_values[i].type == IP)
-			cli_print(cli, "set %s %s", config_values[i].key, inet_toa(*(unsigned *)value));
+			cli_print(cli, "set %s %s", config_values[i].key, fmtaddr(*(unsigned *)value, 0));
 		else if (config_values[i].type == SHORT)
 			cli_print(cli, "set %s %hu", config_values[i].key, *(short *)value);
 		else if (config_values[i].type == BOOL)
@@ -1123,7 +1125,9 @@ static int cmd_drop_user(struct cli_def *cli, char *command, char **argv, int ar
 
 	if (!config->cluster_iam_master)
 	{
-		cli_print(cli, "Can't do this on a slave.  Do it on %s", inet_toa(config->cluster_master_address));
+		cli_print(cli, "Can't do this on a slave.  Do it on %s",
+			fmtaddr(config->cluster_master_address, 0));
+
 		return CLI_OK;
 	}
 
@@ -1162,7 +1166,9 @@ static int cmd_drop_tunnel(struct cli_def *cli, char *command, char **argv, int 
 
 	if (!config->cluster_iam_master)
 	{
-		cli_print(cli, "Can't do this on a slave.  Do it on %s", inet_toa(config->cluster_master_address));
+		cli_print(cli, "Can't do this on a slave.  Do it on %s",
+			fmtaddr(config->cluster_master_address, 0));
+
 		return CLI_OK;
 	}
 
@@ -1210,7 +1216,9 @@ static int cmd_drop_session(struct cli_def *cli, char *command, char **argv, int
 
 	if (!config->cluster_iam_master)
 	{
-		cli_print(cli, "Can't do this on a slave.  Do it on %s", inet_toa(config->cluster_master_address));
+		cli_print(cli, "Can't do this on a slave.  Do it on %s",
+			fmtaddr(config->cluster_master_address, 0));
+
 		return CLI_OK;
 	}
 
@@ -1275,7 +1283,9 @@ static int cmd_snoop(struct cli_def *cli, char *command, char **argv, int argc)
 
 	if (!config->cluster_iam_master)
 	{
-		cli_print(cli, "Can't do this on a slave.  Do it on %s", inet_toa(config->cluster_master_address));
+		cli_print(cli, "Can't do this on a slave.  Do it on %s",
+			fmtaddr(config->cluster_master_address, 0));
+
 		return CLI_OK;
 	}
 
@@ -1305,7 +1315,7 @@ static int cmd_snoop(struct cli_def *cli, char *command, char **argv, int argc)
 		return CLI_OK;
 	}
 
-	cli_print(cli, "Snooping user %s to %s:%d", argv[0], inet_toa(ip), port);
+	cli_print(cli, "Snooping user %s to %s:%d", argv[0], fmtaddr(ip, 0), port);
 	cli_session_actions[s].snoop_ip = ip;
 	cli_session_actions[s].snoop_port = port;
 	cli_session_actions[s].action |= CLI_SESS_SNOOP;
@@ -1324,7 +1334,9 @@ static int cmd_no_snoop(struct cli_def *cli, char *command, char **argv, int arg
 
 	if (!config->cluster_iam_master)
 	{
-		cli_print(cli, "Can't do this on a slave.  Do it on %s", inet_toa(config->cluster_master_address));
+		cli_print(cli, "Can't do this on a slave.  Do it on %s",
+			fmtaddr(config->cluster_master_address, 0));
+
 		return CLI_OK;
 	}
 
@@ -1396,7 +1408,9 @@ static int cmd_throttle(struct cli_def *cli, char *command, char **argv, int arg
 
 	if (!config->cluster_iam_master)
 	{
-		cli_print(cli, "Can't do this on a slave.  Do it on %s", inet_toa(config->cluster_master_address));
+		cli_print(cli, "Can't do this on a slave.  Do it on %s",
+			fmtaddr(config->cluster_master_address, 0));
+
 		return CLI_OK;
 	}
 
@@ -1486,7 +1500,9 @@ static int cmd_no_throttle(struct cli_def *cli, char *command, char **argv, int 
 
 	if (!config->cluster_iam_master)
 	{
-		cli_print(cli, "Can't do this on a slave.  Do it on %s", inet_toa(config->cluster_master_address));
+		cli_print(cli, "Can't do this on a slave.  Do it on %s",
+			fmtaddr(config->cluster_master_address, 0));
+
 		return CLI_OK;
 	}
 
@@ -1866,16 +1882,8 @@ int regular_stuff(struct cli_def *cli)
 
 		if (show_message)
 		{
-			ipt address = htonl(ringbuffer->buffer[i].address);
-			char *ipaddr;
-			struct in_addr addr;
-
-			memcpy(&addr, &address, sizeof(ringbuffer->buffer[i].address));
-			ipaddr = inet_ntoa(addr);
-
-			cli_print(cli, "\r%s-%s-%u-%u %s",
+			cli_print(cli, "\r%s-%u-%u %s",
 					debug_levels[(int)ringbuffer->buffer[i].level],
-					ipaddr,
 					ringbuffer->buffer[i].tunnel,
 					ringbuffer->buffer[i].session,
 					ringbuffer->buffer[i].message);
@@ -2128,7 +2136,7 @@ static int cmd_show_bgp(struct cli_def *cli, char *command, char **argv, int arg
 			NULL);
 
 	cli_print(cli, "BGPv%d router identifier %s, local AS number %d",
-		BGP_VERSION, inet_toa(my_address), (int) config->as_number);
+		BGP_VERSION, fmtaddr(my_address, 0), (int) config->as_number);
 
 	time(&time_now);
 
@@ -2137,7 +2145,7 @@ static int cmd_show_bgp(struct cli_def *cli, char *command, char **argv, int arg
 		if (!*bgp_peers[i].name)
 			continue;
 
-		addr = inet_toa(bgp_peers[i].addr);
+		addr = fmtaddr(bgp_peers[i].addr, 0);
 		if (argc && strcmp(addr, argv[0]) &&
 		    strncmp(bgp_peers[i].name, argv[0], strlen(argv[0])))
 			continue;
@@ -2189,7 +2197,7 @@ static int cmd_suspend_bgp(struct cli_def *cli, char *command, char **argv, int 
 		if (!bgp_peers[i].routing)
 			continue;
 
-		addr = inet_toa(bgp_peers[i].addr);
+		addr = fmtaddr(bgp_peers[i].addr, 0);
 		if (argc && strcmp(addr, argv[0]) && strcmp(bgp_peers[i].name, argv[0]))
 			continue;
 
@@ -2222,7 +2230,7 @@ static int cmd_no_suspend_bgp(struct cli_def *cli, char *command, char **argv, i
 		if (bgp_peers[i].routing)
 			continue;
 
-		addr = inet_toa(bgp_peers[i].addr);
+		addr = fmtaddr(bgp_peers[i].addr, 0);
 		if (argc && strcmp(addr, argv[0]) &&
 		    strncmp(bgp_peers[i].name, argv[0], strlen(argv[0])))
 			continue;
@@ -2253,7 +2261,7 @@ static int cmd_restart_bgp(struct cli_def *cli, char *command, char **argv, int 
 		if (!*bgp_peers[i].name)
 			continue;
 
-		addr = inet_toa(bgp_peers[i].addr);
+		addr = fmtaddr(bgp_peers[i].addr, 0);
 		if (argc && strcmp(addr, argv[0]) &&
 		    strncmp(bgp_peers[i].name, argv[0], strlen(argv[0])))
 			continue;
@@ -2385,15 +2393,13 @@ static int cmd_no_ip_access_list(struct cli_def *cli, char *command, char **argv
 
 static int show_ip_wild(char *buf, ipt ip, ipt wild)
 {
-	int i;
 	if (ip == INADDR_ANY && wild == INADDR_BROADCAST)
 		return sprintf(buf, " any");
 
 	if (wild == INADDR_ANY)
-		return sprintf(buf, " host %s", inet_toa(ip));
+		return sprintf(buf, " host %s", fmtaddr(ip, 0));
 
-	i = sprintf(buf, " %s", inet_toa(ip));
-	return i + sprintf(buf + i, " %s", inet_toa(wild));
+	return sprintf(buf, " %s %s", fmtaddr(ip, 0), fmtaddr(wild, 1));
 }
 
 static int show_ports(char *buf, ip_filter_portt *ports)
@@ -2435,14 +2441,14 @@ static char const *show_access_list_rule(int extended, ip_filter_rulet *rule)
 
 	if (rule->proto == IPPROTO_TCP && rule->tcp_flag_op)
 	{
-		if (rule->tcp_flag_op == FILTER_FLAG_OP_ANY &&
-		    rule->tcp_sflags == (TCP_FLAG_ACK|TCP_FLAG_RST) &&
-		    rule->tcp_cflags == TCP_FLAG_SYN)
+		switch (rule->tcp_flag_op)
 		{
+		case FILTER_FLAG_OP_EST:
 			p += sprintf(p, " established");
-		}
-		else
-		{
+			break;
+
+		case FILTER_FLAG_OP_ANY:
+		case FILTER_FLAG_OP_ALL:
 		    	p += sprintf(p, " match-%s", rule->tcp_flag_op == FILTER_FLAG_OP_ALL ? "all" : "any");
 			if (rule->tcp_sflags & TCP_FLAG_FIN) p += sprintf(p, " +fin");
 			if (rule->tcp_cflags & TCP_FLAG_FIN) p += sprintf(p, " -fin");
@@ -2456,8 +2462,12 @@ static char const *show_access_list_rule(int extended, ip_filter_rulet *rule)
 			if (rule->tcp_cflags & TCP_FLAG_ACK) p += sprintf(p, " -ack");
 			if (rule->tcp_sflags & TCP_FLAG_URG) p += sprintf(p, " +urg");
 			if (rule->tcp_cflags & TCP_FLAG_URG) p += sprintf(p, " -urg");
+			break;
 		}
 	}
+
+	if (rule->frag)
+		p += sprintf(p, " fragments");
 
 	return buf;
 }
@@ -2637,9 +2647,7 @@ ip_filter_rulet *access_list_rule_ext(struct cli_def *cli, char *command, char *
 	{
 		if (MATCH("established", argv[a]))
 		{
-			rule.tcp_flag_op = FILTER_FLAG_OP_ANY;
-			rule.tcp_sflags = (TCP_FLAG_ACK|TCP_FLAG_RST);
-			rule.tcp_cflags = TCP_FLAG_SYN;
+			rule.tcp_flag_op = FILTER_FLAG_OP_EST;
 		    	a++;
 		}
 		else if (!strcmp(argv[a], "match-any") || !strcmp(argv[a], "match-an") ||
@@ -2676,6 +2684,12 @@ ip_filter_rulet *access_list_rule_ext(struct cli_def *cli, char *command, char *
 				a++;
 			}
 		}
+	}
+
+	if (a < argc && MATCH("fragments", argv[a]))
+	{
+	    	rule.frag = 1;
+		a++;
 	}
 
 	if (a < argc)
@@ -2861,7 +2875,9 @@ static int cmd_filter(struct cli_def *cli, char *command, char **argv, int argc)
 
 	if (!config->cluster_iam_master)
 	{
-		cli_print(cli, "Can't do this on a slave.  Do it on %s", inet_toa(config->cluster_master_address));
+		cli_print(cli, "Can't do this on a slave.  Do it on %s",
+			fmtaddr(config->cluster_master_address, 0));
+
 		return CLI_OK;
 	}
 
@@ -2934,7 +2950,9 @@ static int cmd_no_filter(struct cli_def *cli, char *command, char **argv, int ar
 
 	if (!config->cluster_iam_master)
 	{
-		cli_print(cli, "Can't do this on a slave.  Do it on %s", inet_toa(config->cluster_master_address));
+		cli_print(cli, "Can't do this on a slave.  Do it on %s",
+			fmtaddr(config->cluster_master_address, 0));
+
 		return CLI_OK;
 	}
 
@@ -2960,6 +2978,48 @@ static int cmd_no_filter(struct cli_def *cli, char *command, char **argv, int ar
 		else
 		{
 			cli_print(cli, "User %s not filtered", argv[i]);
+		}
+	}
+
+	return CLI_OK;
+}
+
+static int cmd_show_access_list(struct cli_def *cli, char *command, char **argv, int argc)
+{
+	int i;
+
+	if (CLI_HELP_REQUESTED)
+		return cli_arg_help(cli, argc > 1, "NAME", "Filter name", NULL);
+
+	if (argc < 1)
+	{
+		cli_print(cli, "Specify a filter name");
+		return CLI_OK;
+	}
+
+	for (i = 0; i < argc; i++)
+	{
+		int f = find_access_list(argv[i]);
+		ip_filter_rulet *rules;
+
+		if (f < 0 || !*ip_filters[f].name)
+		{
+			cli_print(cli, "Access-list %s not defined", argv[i]);
+			return CLI_OK;
+		}
+
+		cli_print(cli, "%s IP access list %s",
+			ip_filters[f].extended ? "Extended" : "Standard",
+			ip_filters[f].name);
+
+		for (rules = ip_filters[f].rules; rules->action; rules++)
+		{
+			char const *r = show_access_list_rule(ip_filters[f].extended, rules);
+		    	if (rules->counter)
+				cli_print(cli, "%s (%d match%s)", r,
+					rules->counter, rules->counter > 1 ? "es" : "");
+			else
+				cli_print(cli, "%s", r);
 		}
 	}
 

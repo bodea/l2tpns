@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.40 2004-11-28 20:10:04 bodea Exp $
+// $Id: l2tpns.h,v 1.41 2004-11-29 02:17:17 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -277,7 +277,6 @@ struct Tringbuffer
 		char level;
 		sessionidt session;
 		tunnelidt tunnel;
-		ipt address;
 		char message[MAX_LOG_LENGTH];
 	} buffer[RINGBUFFER_SIZE];
 	int head;
@@ -513,11 +512,14 @@ typedef struct
 	ipt dst_ip;		// dest ip
 	ipt dst_wild;
 	ip_filter_portt dst_ports;
-	u8 tcp_flag_op;		// match type: any, all
+	u8 frag;		// apply to non-initial fragments
+	u8 tcp_flag_op;		// match type: any, all, established
 #define FILTER_FLAG_OP_ANY	1
 #define FILTER_FLAG_OP_ALL	2
+#define FILTER_FLAG_OP_EST	3
 	u8 tcp_sflags;		// flags set
 	u8 tcp_cflags;		// flags clear
+	u32 counter;		// match count
 } ip_filter_rulet;
 
 #define TCP_FLAG_FIN	0x01
@@ -580,10 +582,10 @@ int cmd_show_hist_open(struct cli_def *cli, char *command, char **argv, int argc
 
 #undef LOG
 #undef LOG_HEX
-#define LOG(D, a, s, t, f, ...)	({ if (D <= config->debug) _log(D, a, s, t, f, ## __VA_ARGS__); })
+#define LOG(D, s, t, f, ...)	({ if (D <= config->debug) _log(D, s, t, f, ## __VA_ARGS__); })
 #define LOG_HEX(D, t, d, s)	({ if (D <= config->debug) _log_hex(D, t, d, s); })
 
-void _log(int level, ipt address, sessionidt s, tunnelidt t, const char *format, ...) __attribute__((format (printf, 5, 6)));
+void _log(int level, sessionidt s, tunnelidt t, const char *format, ...) __attribute__((format (printf, 4, 5)));
 void _log_hex(int level, const char *title, const char *data, int maxsize);
 
 int sessionsetup(tunnelidt t, sessionidt s);
@@ -616,12 +618,12 @@ if (count++ < max) { \
 	void *array[20]; \
 	char **strings; \
 	int size, i; \
-	LOG(0, 0, 0, t, "Backtrace follows"); \
+	LOG(0, 0, t, "Backtrace follows"); \
 	size = backtrace(array, 10); \
 	strings = backtrace_symbols(array, size); \
 	if (strings) for (i = 0; i < size; i++) \
 	{ \
-		LOG(0, 0, 0, t, "%s\n", strings[i]); \
+		LOG(0, 0, t, "%s\n", strings[i]); \
 	} \
 	free(strings); \
 }

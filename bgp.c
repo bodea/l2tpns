@@ -10,7 +10,7 @@
  *   nor RFC2385 (which requires a kernel patch on 2.4 kernels).
  */
 
-char const *cvs_id_bgp = "$Id: bgp.c,v 1.7 2004-11-15 06:49:56 bodea Exp $";
+char const *cvs_id_bgp = "$Id: bgp.c,v 1.8 2004-11-29 02:17:17 bodea Exp $";
 
 #include <stdlib.h>
 #include <unistd.h>
@@ -69,7 +69,7 @@ int bgp_setup(int as)
 	if (!((peer->outbuf = malloc(sizeof(*peer->outbuf)))
 	    && (peer->inbuf = malloc(sizeof(*peer->inbuf)))))
 	{
-	    LOG(0, 0, 0, 0, "Can't allocate buffers for bgp peer (%s)\n",
+	    LOG(0, 0, 0, "Can't allocate buffers for bgp peer (%s)\n",
 		strerror(errno));
 
 	    return 0;
@@ -111,7 +111,7 @@ int bgp_start(struct bgp_peer *peer, char *name, int as, int keepalive, int hold
 
     if (!(h = gethostbyname(name)) || h->h_addrtype != AF_INET)
     {
-	LOG(0, 0, 0, 0, "Can't get address for BGP peer %s (%s)\n",
+	LOG(0, 0, 0, "Can't get address for BGP peer %s (%s)\n",
 	    name, h ? "no address" : hstrerror(h_errno));
 
 	return 0;
@@ -225,7 +225,7 @@ int bgp_start(struct bgp_peer *peer, char *name, int as, int keepalive, int hold
 
     if (!(peer->path_attrs = malloc(peer->path_attr_len)))
     {
-	LOG(0, 0, 0, 0, "Can't allocate path_attrs for %s (%s)\n",
+	LOG(0, 0, 0, "Can't allocate path_attrs for %s (%s)\n",
 	    name, strerror(errno));
 
 	return 0;
@@ -233,7 +233,7 @@ int bgp_start(struct bgp_peer *peer, char *name, int as, int keepalive, int hold
 
     memcpy(peer->path_attrs, path_attrs, peer->path_attr_len);
 
-    LOG(4, 0, 0, 0, "Initiating BGP connection to %s (routing %s)\n",
+    LOG(4, 0, 0, "Initiating BGP connection to %s (routing %s)\n",
 	name, enable ? "enabled" : "suspended");
 
     /* we have at least one peer configured */
@@ -274,7 +274,7 @@ static void bgp_clear(struct bgp_peer *peer)
 	peer->state = peer->next_state;
 	peer->state_time = time_now;
 
-	LOG(4, 0, 0, 0, "BGP peer %s: state %s\n", peer->name,
+	LOG(4, 0, 0, "BGP peer %s: state %s\n", peer->name,
 	    bgp_state_str(peer->next_state));
     }
 }
@@ -282,14 +282,14 @@ static void bgp_clear(struct bgp_peer *peer)
 /* initiate a clean shutdown */
 void bgp_stop(struct bgp_peer *peer)
 {
-    LOG(4, 0, 0, 0, "Terminating BGP connection to %s\n", peer->name);
+    LOG(4, 0, 0, "Terminating BGP connection to %s\n", peer->name);
     bgp_send_notification(peer, BGP_ERR_CEASE, 0);
 }
 
 /* drop connection (if any) and set state to Disabled */
 void bgp_halt(struct bgp_peer *peer)
 {
-    LOG(4, 0, 0, 0, "Aborting BGP connection to %s\n", peer->name);
+    LOG(4, 0, 0, "Aborting BGP connection to %s\n", peer->name);
     peer->next_state = Disabled;
     bgp_clear(peer);
 }
@@ -399,8 +399,8 @@ int bgp_add_route(in_addr_t ip, in_addr_t mask)
     /* insert into route list; sorted */
     if (!(r = malloc(sizeof(*r))))
     {
-	LOG(0, 0, 0, 0, "Can't allocate route for %s/%d (%s)\n",
-	    inet_toa(add.dest.prefix), add.dest.len, strerror(errno));
+	LOG(0, 0, 0, "Can't allocate route for %s/%d (%s)\n",
+	    fmtaddr(add.dest.prefix, 0), add.dest.len, strerror(errno));
 
 	return 0;
     }
@@ -413,8 +413,8 @@ int bgp_add_route(in_addr_t ip, in_addr_t mask)
 	if (bgp_peers[i].state == Established)
 	    bgp_peers[i].update_routes = 1;
 
-    LOG(4, 0, 0, 0, "Registered BGP route %s/%d\n", inet_toa(add.dest.prefix),
-	add.dest.len);
+    LOG(4, 0, 0, "Registered BGP route %s/%d\n",
+	fmtaddr(add.dest.prefix, 0), add.dest.len);
 
     return 1;
 }
@@ -462,8 +462,8 @@ int bgp_del_route(in_addr_t ip, in_addr_t mask)
 	if (bgp_peers[i].state == Established)
 	    bgp_peers[i].update_routes = 1;
 
-    LOG(4, 0, 0, 0, "Removed BGP route %s/%d\n", inet_toa(del.dest.prefix),
-	del.dest.len);
+    LOG(4, 0, 0, "Removed BGP route %s/%d\n",
+	fmtaddr(del.dest.prefix, 0), del.dest.len);
 
     return 1;
 }
@@ -482,7 +482,7 @@ void bgp_enable_routing(int enable)
 	    bgp_peers[i].update_routes = 1;
     }
 
-    LOG(4, 0, 0, 0, "%s BGP routing\n", enable ? "Enabled" : "Suspended");
+    LOG(4, 0, 0, "%s BGP routing\n", enable ? "Enabled" : "Suspended");
 }
 
 /* return a bitmask indicating if the socket should be added to the
@@ -588,7 +588,7 @@ int bgp_process(struct bgp_peer *peer, int readable, int writable)
     {
 	if (time_now > peer->expire_time)
 	{
-	    LOG(1, 0, 0, 0, "No message from BGP peer %s in %ds\n",
+	    LOG(1, 0, 0, "No message from BGP peer %s in %ds\n",
 		peer->name, peer->hold);
 
 	    bgp_send_notification(peer, BGP_ERR_HOLD_TIMER_EXP, 0);
@@ -605,7 +605,7 @@ int bgp_process(struct bgp_peer *peer, int readable, int writable)
     }
     else if (time_now > peer->state_time + BGP_STATE_TIME)
     {
-	LOG(1, 0, 0, 0, "%s timer expired for BGP peer %s\n",
+	LOG(1, 0, 0, "%s timer expired for BGP peer %s\n",
 	    bgp_state_str(peer->state), peer->name);
 
 	return bgp_restart(peer);
@@ -665,7 +665,7 @@ static int bgp_connect(struct bgp_peer *peer)
 	struct servent *serv;
 	if (!(serv = getservbyname("bgp", "tcp")))
 	{
-	    LOG(0, 0, 0, 0, "Can't get bgp service (%s)\n", strerror(errno));
+	    LOG(0, 0, 0, "Can't get bgp service (%s)\n", strerror(errno));
 	    return 0;
 	}
 
@@ -674,7 +674,7 @@ static int bgp_connect(struct bgp_peer *peer)
 
     if ((peer->sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
     {
-	LOG(0, 0, 0, 0, "Can't create a socket for BGP peer %s (%s)\n",
+	LOG(0, 0, 0, "Can't create a socket for BGP peer %s (%s)\n",
 	    peer->name, strerror(errno));
 
 	peer->state = peer->next_state = Disabled;
@@ -697,7 +697,7 @@ static int bgp_connect(struct bgp_peer *peer)
 
 	if (errno != EINPROGRESS)
 	{
-	    LOG(1, 0, 0, 0, "Can't connect to BGP peer %s (%s)\n",
+	    LOG(1, 0, 0, "Can't connect to BGP peer %s (%s)\n",
 		inet_ntoa(addr.sin_addr), strerror(errno));
 
 	    bgp_set_retry(peer);
@@ -707,7 +707,7 @@ static int bgp_connect(struct bgp_peer *peer)
 	peer->state = Connect;
 	peer->state_time = time_now;
 
-	LOG(4, 0, 0, 0, "BGP peer %s: state Connect\n", peer->name);
+	LOG(4, 0, 0, "BGP peer %s: state Connect\n", peer->name);
 	return 1;
     }
 
@@ -715,7 +715,7 @@ static int bgp_connect(struct bgp_peer *peer)
     peer->state_time = time_now;
     peer->retry_time = peer->retry_count = 0;
 
-    LOG(4, 0, 0, 0, "BGP peer %s: state Active\n", inet_ntoa(addr.sin_addr));
+    LOG(4, 0, 0, "BGP peer %s: state Active\n", inet_ntoa(addr.sin_addr));
 
     return bgp_send_open(peer);
 }
@@ -728,7 +728,7 @@ static int bgp_handle_connect(struct bgp_peer *peer)
     getsockopt(peer->sock, SOL_SOCKET, SO_ERROR, &err, &len);
     if (err)
     {
-	LOG(1, 0, 0, 0, "Can't connect to BGP peer %s (%s)\n", peer->name,
+	LOG(1, 0, 0, "Can't connect to BGP peer %s (%s)\n", peer->name,
 	    strerror(err));
 
 	bgp_set_retry(peer);
@@ -738,7 +738,7 @@ static int bgp_handle_connect(struct bgp_peer *peer)
     peer->state = Active;
     peer->state_time = time_now;
 
-    LOG(4, 0, 0, 0, "BGP peer %s: state Active\n", peer->name);
+    LOG(4, 0, 0, "BGP peer %s: state Active\n", peer->name);
 
     return bgp_send_open(peer);
 }
@@ -759,9 +759,9 @@ static int bgp_write(struct bgp_peer *peer)
 	    return 1;
 
 	if (errno == EPIPE)
-	    LOG(1, 0, 0, 0, "Connection to BGP peer %s closed\n", peer->name);
+	    LOG(1, 0, 0, "Connection to BGP peer %s closed\n", peer->name);
 	else
-	    LOG(1, 0, 0, 0, "Can't write to BGP peer %s (%s)\n", peer->name,
+	    LOG(1, 0, 0, "Can't write to BGP peer %s (%s)\n", peer->name,
 		strerror(errno));
 
 	bgp_set_retry(peer);
@@ -774,7 +774,7 @@ static int bgp_write(struct bgp_peer *peer)
 	return 1;
     }
 
-    LOG(4, 0, 0, 0, "Sent %s to BGP peer %s\n",
+    LOG(4, 0, 0, "Sent %s to BGP peer %s\n",
 	bgp_msg_type_str(peer->outbuf->packet.header.type), peer->name);
 
     peer->outbuf->packet.header.len = 0;
@@ -794,7 +794,7 @@ static int bgp_write(struct bgp_peer *peer)
 	peer->state = peer->next_state;
 	peer->state_time = time_now;
 
-	LOG(4, 0, 0, 0, "BGP peer %s: state %s\n", peer->name,
+	LOG(4, 0, 0, "BGP peer %s: state %s\n", peer->name,
 	    bgp_state_str(peer->state));
     }
 
@@ -811,7 +811,7 @@ static int bgp_read(struct bgp_peer *peer)
     {
 	if (!r)
 	{
-	    LOG(1, 0, 0, 0, "Connection to BGP peer %s closed\n", peer->name);
+	    LOG(1, 0, 0, "Connection to BGP peer %s closed\n", peer->name);
 	}
 	else
 	{
@@ -821,7 +821,7 @@ static int bgp_read(struct bgp_peer *peer)
 	    if (errno == EAGAIN)
 		return 1;
 
-	    LOG(1, 0, 0, 0, "Can't read from BGP peer %s (%s)\n", peer->name,
+	    LOG(1, 0, 0, "Can't read from BGP peer %s (%s)\n", peer->name,
 		strerror(errno));
 	}
 
@@ -841,7 +841,7 @@ static int bgp_handle_input(struct bgp_peer *peer)
 
     if (len > BGP_MAX_PACKET_SIZE)
     {
-	LOG(1, 0, 0, 0, "Bad header length from BGP %s\n", peer->name);
+	LOG(1, 0, 0, "Bad header length from BGP %s\n", peer->name);
 	bgp_send_notification(peer, BGP_ERR_HEADER, BGP_ERR_HDR_BAD_LEN);
 	return 0;
     }
@@ -849,7 +849,7 @@ static int bgp_handle_input(struct bgp_peer *peer)
     if (peer->inbuf->done < len)
 	return 0;
 
-    LOG(4, 0, 0, 0, "Received %s from BGP peer %s\n",
+    LOG(4, 0, 0, "Received %s from BGP peer %s\n",
 	bgp_msg_type_str(p->header.type), peer->name);
 
     switch (p->header.type)
@@ -864,7 +864,7 @@ static int bgp_handle_input(struct bgp_peer *peer)
 	    {
 		if ((unsigned char) p->header.marker[i] != 0xff)
 		{
-		    LOG(1, 0, 0, 0, "Invalid marker from BGP peer %s\n",
+		    LOG(1, 0, 0, "Invalid marker from BGP peer %s\n",
 			peer->name);
 
 		    bgp_send_notification(peer, BGP_ERR_HEADER,
@@ -876,7 +876,7 @@ static int bgp_handle_input(struct bgp_peer *peer)
 
 	    if (peer->state != OpenSent)
 	    {
-		LOG(1, 0, 0, 0, "OPEN from BGP peer %s in %s state\n",
+		LOG(1, 0, 0, "OPEN from BGP peer %s in %s state\n",
 		    peer->name, bgp_state_str(peer->state));
 
 		bgp_send_notification(peer, BGP_ERR_FSM, 0);
@@ -887,7 +887,7 @@ static int bgp_handle_input(struct bgp_peer *peer)
 
 	    if (data.version != BGP_VERSION)
 	    {
-		LOG(1, 0, 0, 0, "Bad version (%d) sent by BGP peer %s\n",
+		LOG(1, 0, 0, "Bad version (%d) sent by BGP peer %s\n",
 		    (int) data.version, peer->name);
 
 		bgp_send_notification(peer, BGP_ERR_OPEN, BGP_ERR_OPN_VERSION);
@@ -896,7 +896,7 @@ static int bgp_handle_input(struct bgp_peer *peer)
 
 	    if (ntohs(data.as) != peer->as)
 	    {
-		LOG(1, 0, 0, 0, "Bad AS sent by BGP peer %s (got %d, "
+		LOG(1, 0, 0, "Bad AS sent by BGP peer %s (got %d, "
 		    "expected %d)\n", peer->name, (int) htons(data.as),
 		    (int) peer->as);
 
@@ -906,7 +906,7 @@ static int bgp_handle_input(struct bgp_peer *peer)
 
 	    if ((hold = ntohs(data.hold_time)) < 3)
 	    {
-		LOG(1, 0, 0, 0, "Bad hold time (%d) from BGP peer %s\n",
+		LOG(1, 0, 0, "Bad hold time (%d) from BGP peer %s\n",
 		    hold, peer->name);
 
 		bgp_send_notification(peer, BGP_ERR_OPEN, BGP_ERR_OPN_HOLD_TIME);
@@ -939,7 +939,7 @@ static int bgp_handle_input(struct bgp_peer *peer)
 	    peer->retry_count = 0;
 	    peer->retry_time = 0;
 
-	    LOG(4, 0, 0, 0, "BGP peer %s: state Established\n", peer->name);
+	    LOG(4, 0, 0, "BGP peer %s: state Established\n", peer->name);
 	}
 
 	break;
@@ -952,13 +952,13 @@ static int bgp_handle_input(struct bgp_peer *peer)
 
 	    if (notification->error_code == BGP_ERR_CEASE)
 	    {
-		LOG(4, 0, 0, 0, "BGP peer %s sent CEASE\n", peer->name);
+		LOG(4, 0, 0, "BGP peer %s sent CEASE\n", peer->name);
 		bgp_halt(peer);
 		return 0;
 	    }
 
 	    /* FIXME: should handle more notifications */
-	    LOG(4, 0, 0, 0, "BGP peer %s sent unhandled NOTIFICATION %d\n",
+	    LOG(4, 0, 0, "BGP peer %s sent unhandled NOTIFICATION %d\n",
 		peer->name, (int) notification->error_code);
 	}
 
@@ -1077,8 +1077,8 @@ static int bgp_send_update(struct bgp_peer *peer)
 	    unf_len += s;
 	    len += s;
 
-	    LOG(5, 0, 0, 0, "Withdrawing route %s/%d from BGP peer %s\n",
-		inet_toa(tmp->dest.prefix), tmp->dest.len, peer->name);
+	    LOG(5, 0, 0, "Withdrawing route %s/%d from BGP peer %s\n",
+		fmtaddr(tmp->dest.prefix, 0), tmp->dest.len, peer->name);
 
 	    free(tmp);
 
@@ -1127,8 +1127,8 @@ static int bgp_send_update(struct bgp_peer *peer)
     {
 	if (!(e = malloc(sizeof(*e))))
 	{
-	    LOG(0, 0, 0, 0, "Can't allocate route for %s/%d (%s)\n",
-		inet_toa(add->dest.prefix), add->dest.len, strerror(errno));
+	    LOG(0, 0, 0, "Can't allocate route for %s/%d (%s)\n",
+		fmtaddr(add->dest.prefix, 0), add->dest.len, strerror(errno));
 
 	    return 0;
 	}
@@ -1151,8 +1151,8 @@ static int bgp_send_update(struct bgp_peer *peer)
 	data += s;
 	len += s;
 
-	LOG(5, 0, 0, 0, "Advertising route %s/%d to BGP peer %s\n",
-	    inet_toa(add->dest.prefix), add->dest.len, peer->name);
+	LOG(5, 0, 0, "Advertising route %s/%d to BGP peer %s\n",
+	    fmtaddr(add->dest.prefix, 0), add->dest.len, peer->name);
     }
     else
     {

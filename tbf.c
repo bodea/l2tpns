@@ -1,6 +1,6 @@
 // L2TPNS: token bucket filters
 
-char const *cvs_id_tbf = "$Id: tbf.c,v 1.9 2004-11-05 04:55:27 bodea Exp $";
+char const *cvs_id_tbf = "$Id: tbf.c,v 1.10 2004-11-29 02:17:18 bodea Exp $";
 
 #include <string.h>
 #include "l2tpns.h"
@@ -54,7 +54,7 @@ static void del_from_timer(int id)
 
 	if (filter_list[id].next == id) {	// Last element in chain?
 		if (timer_chain != id) { // WTF?
-			LOG(0,0,0,0, "Removed a singleton element from TBF, but tc didn't point to it!\n");
+			LOG(0, 0, 0, "Removed a singleton element from TBF, but tc didn't point to it!\n");
 		} else
 			timer_chain = -1;
 		filter_list[id].next = filter_list[id].prev = 0;
@@ -96,7 +96,7 @@ int new_tbf(int sid, int max_credit, int rate, void (*f)(sessionidt, u8 *, int))
 	int i;
 	static int p = 0;
 
-	LOG(4,0,0,0, "Allocating new TBF (sess %d, rate %d, helper %p)\n", sid, rate, f);
+	LOG(4, 0, 0, "Allocating new TBF (sess %d, rate %d, helper %p)\n", sid, rate, f);
 
 	if (!filter_list)
 		return 0;	// Couldn't alloc memory!
@@ -116,7 +116,7 @@ int new_tbf(int sid, int max_credit, int rate, void (*f)(sessionidt, u8 *, int))
 		return p;
 	}
 
-	LOG(0,0,0,0, "Ran out of token bucket filters!  Sess %d will be un-throttled\n", sid);
+	LOG(0, 0, 0, "Ran out of token bucket filters!  Sess %d will be un-throttled\n", sid);
 	return 0;
 }
 
@@ -300,7 +300,7 @@ int tbf_run_timer(void)
 		if (filter_list[i].lasttime == TIME)	// Did we just run it?
 			continue;
 
-		LOG(1,0,0,0, "Missed tbf %d! Not on the timer chain?(n %d, p %d, tc %d)\n", i,
+		LOG(1, 0, 0, "Missed tbf %d! Not on the timer chain?(n %d, p %d, tc %d)\n", i,
 			filter_list[i].next, filter_list[i].prev, timer_chain);
 		tbf_run_queue(i);
 	}
@@ -318,7 +318,9 @@ int cmd_show_tbf(struct cli_def *cli, char *command, char **argv, int argc)
 		return CLI_HELP_NO_ARGS;
 
 	if (!config->cluster_iam_master) {
-		cli_print(cli, "Can't do this on a slave.  Do it on %s", inet_toa(config->cluster_master_address));
+		cli_print(cli, "Can't do this on a slave.  Do it on %s",
+			fmtaddr(config->cluster_master_address, 0));
+
 		return CLI_OK;
 	}
 

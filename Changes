@@ -7,6 +7,7 @@
   setup in some instances.
 - Implement named access-lists which may be applied to a session
   either via Filter-Id RADIUS responses, or using the CLI.
+- Drop ip address from LOG.
 
 * Sat Nov 20 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.8
 - Ignore gateway address in Framed-Route (from Jonathan McDowell).

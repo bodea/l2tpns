@@ -9,7 +9,7 @@
 
 /* walled garden */
 
-char const *cvs_id = "$Id: garden.c,v 1.16 2004-11-18 06:41:03 bodea Exp $";
+char const *cvs_id = "$Id: garden.c,v 1.17 2004-11-29 02:17:17 bodea Exp $";
 
 int plugin_api_version = PLUGIN_API_VERSION;
 static struct pluginfuncs *p = 0;
@@ -47,7 +47,7 @@ int plugin_post_auth(struct param_post_auth *data)
 	// Ignore if user authentication was successful
 	if (data->auth_allowed) return PLUGIN_RET_OK;
 
-	p->log(3, 0, 0, 0, "Walled Garden allowing login\n");
+	p->log(3, p->get_id_by_session(data->s), data->s->tunnel, "Walled Garden allowing login\n");
 	data->auth_allowed = 1;
 	data->s->walled_garden = 1;
 	return PLUGIN_RET_OK;
@@ -147,7 +147,7 @@ int plugin_become_master(void)
 
 	for (i = 0; up_commands[i] && *up_commands[i]; i++)
 	{
-		p->log(3, 0, 0, 0, "Running %s\n", up_commands[i]);
+		p->log(3, 0, 0, "Running %s\n", up_commands[i]);
 		system(up_commands[i]);
 	}
 
@@ -169,15 +169,17 @@ int plugin_new_session_master(sessiont *s)
 int garden_session(sessiont *s, int flag)
 {
 	char cmd[2048];
+	sessionidt sess;
 
 	if (!s) return 0;
 	if (!s->opened) return 0;
 
+	sess = p->get_id_by_session(s);
 	if (flag == 1)
 	{
-		p->log(2, 0, 0, s->tunnel, "Garden user %s (%s)\n", s->user, p->inet_toa(htonl(s->ip)));
-		snprintf(cmd, sizeof(cmd), "iptables -t nat -A garden_users -s %s -j garden", p->inet_toa(htonl(s->ip)));
-		p->log(3, 0, 0, s->tunnel, "%s\n", cmd);
+		p->log(2, sess, s->tunnel, "Garden user %s (%s)\n", s->user, p->fmtaddr(htonl(s->ip), 0));
+		snprintf(cmd, sizeof(cmd), "iptables -t nat -A garden_users -s %s -j garden", p->fmtaddr(htonl(s->ip), 0));
+		p->log(3, sess, s->tunnel, "%s\n", cmd);
 		system(cmd);
 		s->walled_garden = 1;
 	}
@@ -187,7 +189,7 @@ int garden_session(sessiont *s, int flag)
 		int count = 40;
 
 		// Normal User
-		p->log(2, 0, 0, s->tunnel, "Un-Garden user %s (%s)\n", s->user, p->inet_toa(htonl(s->ip)));
+		p->log(2, sess, s->tunnel, "Un-Garden user %s (%s)\n", s->user, p->fmtaddr(htonl(s->ip), 0));
 		// Kick off any duplicate usernames
 		// but make sure not to kick off ourself
 		if (s->ip && !s->die && (other = p->get_session_by_username(s->user)) && s != p->get_session_by_id(other)) {
@@ -197,8 +199,8 @@ int garden_session(sessiont *s, int flag)
 		s->cin = s->cout = 0;
 		s->pin = s->pout = 0;
 
-		snprintf(cmd, sizeof(cmd), "iptables -t nat -D garden_users -s %s -j garden", p->inet_toa(htonl(s->ip)));
-		p->log(3, 0, 0, s->tunnel, "%s\n", cmd);
+		snprintf(cmd, sizeof(cmd), "iptables -t nat -D garden_users -s %s -j garden", p->fmtaddr(htonl(s->ip), 0));
+		p->log(3, sess, s->tunnel, "%s\n", cmd);
 		while (--count)
 		{
 			int status = system(cmd);
@@ -242,7 +244,7 @@ int plugin_init(struct pluginfuncs *funcs)
 		int i;
 		for (i = 0; down_commands[i] && *down_commands[i]; i++)
 		{
-			p->log(3, 0, 0, 0, "Running %s\n", down_commands[i]);
+			p->log(3, 0, 0, "Running %s\n", down_commands[i]);
 			system(down_commands[i]);
 		}
 	}
@@ -259,7 +261,7 @@ void plugin_done()
 
 	for (i = 0; down_commands[i] && *down_commands[i]; i++)
 	{
-		p->log(3, 0, 0, 0, "Running %s\n", down_commands[i]);
+		p->log(3, 0, 0, "Running %s\n", down_commands[i]);
 		system(down_commands[i]);
 	}
 }

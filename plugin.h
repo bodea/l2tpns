@@ -1,7 +1,7 @@
 #ifndef __PLUGIN_H__
 #define __PLUGIN_H__
 
-#define PLUGIN_API_VERSION	3
+#define PLUGIN_API_VERSION	4
 #define MAX_PLUGIN_TYPES	30
 
 enum
@@ -26,9 +26,9 @@ enum
 
 struct pluginfuncs
 {
-	void (*log)(int level, ipt address, sessionidt s, tunnelidt t, const char *format, ...);
+	void (*log)(int level, sessionidt s, tunnelidt t, const char *format, ...);
 	void (*log_hex)(int level, const char *title, const char *data, int maxsize);
-	char *(*inet_toa)(unsigned long addr);
+	char *(*fmtaddr)(ipt addr, int n);
 	sessionidt (*get_session_by_username)(char *username);
 	sessiont *(*get_session_by_id)(sessionidt s);
 	sessionidt (*get_id_by_session)(sessiont *s);
