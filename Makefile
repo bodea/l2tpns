@@ -26,7 +26,7 @@ OBJS=	md5.o \
 	control.o \
 	util.o \
 
-PLUGINS=garden.so
+PLUGINS=garden.so autothrottle.so autosnoop.so
 
 all:	l2tpns cluster_master nsctl $(PLUGINS)
 
