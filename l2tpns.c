@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.64 2004-12-09 13:05:00 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.65 2004-12-13 02:27:31 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -141,6 +141,10 @@ static char *plugin_functions[] = {
 
 #define max_plugin_functions (sizeof(plugin_functions) / sizeof(char *))
 
+// Counters for shutdown sessions
+static sessiont shut_acct[8192];
+static sessionidt shut_acct_n = 0;
+
 tunnelt *tunnel = NULL;			// Array of tunnel structures.
 sessiont *session = NULL;		// Array of session structures.
 sessioncountt *sess_count = NULL;	// Array of partial per-session traffic counters.
@@ -156,7 +160,7 @@ struct Tringbuffer *ringbuffer = NULL;
 static void cache_ipmap(ipt ip, int s);
 static void uncache_ipmap(ipt ip);
 static void free_ip_address(sessionidt s);
-static void dump_acct_info(void);
+static void dump_acct_info(int all);
 static void sighup_handler(int sig);
 static void sigalrm_handler(int sig);
 static void sigterm_handler(int sig);
@@ -1063,9 +1067,9 @@ void sessionshutdown(sessionidt s, char *reason)
 		run_plugins(PLUGIN_KILL_SESSION, &data);
 	}
 
-	// RADIUS Stop message
 	if (session[s].opened && !walled_garden && !session[s].die)
 	{
+		// RADIUS Stop message
 		u16 r = session[s].radius;
 		if (!r)
 		{
@@ -1081,8 +1085,13 @@ void sessionshutdown(sessionidt s, char *reason)
 					radius[r].auth[n] = rand();
 			}
 		}
+
 		if (r && radius[r].state != RADIUSSTOP)
 			radiussend(r, RADIUSSTOP); // stop, if not already trying
+
+	    	// Save counters to dump to accounting file
+		if (*config->accounting_dir && shut_acct_n < sizeof(shut_acct) / sizeof(*shut_acct))
+			memcpy(&shut_acct[shut_acct_n++], &session[s], sizeof(session[s]));
 	}
 
 	if (session[s].ip)
@@ -2003,6 +2012,7 @@ static int regular_cleanups(void)
 	int count=0,i;
 	u16 r;
 	static clockt next_acct = 0;
+	static clockt next_shut_acct = 0;
 	int a;
 
 	LOG(3, 0, 0, "Begin regular cleanup\n");
@@ -2095,7 +2105,7 @@ static int regular_cleanups(void)
 		// Drop sessions who have not responded within IDLE_TIMEOUT seconds
 		if (session[s].last_packet && (time_now - session[s].last_packet >= IDLE_TIMEOUT))
 		{
-			sessionkill(s, "No response to LCP ECHO requests");
+			sessionshutdown(s, "No response to LCP ECHO requests");
 			STAT(session_timeout);
 			if (++count >= MAX_ACTIONS) break;
 			continue;
@@ -2190,11 +2200,21 @@ static int regular_cleanups(void)
 		}
 	}
 
-	if (*config->accounting_dir && next_acct <= TIME)
+	if (*config->accounting_dir)
 	{
-		// Dump accounting data
-		next_acct = TIME + ACCT_TIME;
-		dump_acct_info();
+		if (next_acct <= TIME)
+		{
+			// Dump accounting data
+			next_acct = TIME + ACCT_TIME;
+			dump_acct_info(1);
+		}
+		else if (next_shut_acct <= TIME)
+		{
+			// Dump accounting data for shutdown sessions
+			next_acct = TIME + ACCT_SHUT_TIME;
+			if (shut_acct_n)
+				dump_acct_info(0);
+		}
 	}
 
 	if (count >= MAX_ACTIONS)
@@ -2964,54 +2984,70 @@ void snoop_send_packet(char *packet, u16 size, ipt destination, u16 port)
 	STAT(packets_snooped);
 }
 
-static void dump_acct_info()
+static int dump_session(FILE **f, sessiont *s)
 {
-	char filename[1024];
-	char timestr[64];
-	time_t t = time(NULL);
+	if (!s->opened || !s->ip || !(s->cin || s->cout) || !*s->user || s->walled_garden)
+		return 1;
+
+	if (!*f)
+	{
+		char filename[1024];
+		char timestr[64];
+		time_t now = time(NULL);
+
+		strftime(timestr, sizeof(timestr), "%Y%m%d%H%M%S", localtime(&now));
+		snprintf(filename, sizeof(filename), "%s/%s", config->accounting_dir, timestr);
+
+		if (!(*f = fopen(filename, "w")))
+		{
+			LOG(0, 0, 0, "Can't write accounting info to %s: %s\n", filename, strerror(errno));
+			return 0;
+		}
+
+		LOG(3, 0, 0, "Dumping accounting information to %s\n", filename);
+		fprintf(*f, "# dslwatch.pl dump file V1.01\n"
+			"# host: %s\n"
+			"# time: %ld\n"
+			"# uptime: %ld\n"
+			"# format: username ip qos uptxoctets downrxoctets\n",
+			hostname,
+			now,
+			now - basetime);
+	}
+
+	LOG(4, 0, 0, "Dumping accounting information for %s\n", s->user);
+	fprintf(*f, "%s %s %d %u %u\n",
+		s->user,						// username
+		fmtaddr(htonl(s->ip), 0),				// ip
+		(s->throttle_in || s->throttle_out) ? 2 : 1,		// qos
+		(u32) s->cin,						// uptxoctets
+		(u32) s->cout);						// downrxoctets
+
+	s->pin = s->cin = 0;
+	s->pout = s->cout = 0;
+
+	return 1;
+}
+
+static void dump_acct_info(int all)
+{
 	int i;
 	FILE *f = NULL;
 
 
 	CSTAT(call_dump_acct_info);
 
-	strftime(timestr, 64, "%Y%m%d%H%M%S", localtime(&t));
-	snprintf(filename, 1024, "%s/%s", config->accounting_dir, timestr);
-
-	for (i = 0; i < MAXSESSION; i++)
+	if (shut_acct_n)
 	{
-		if (!session[i].opened || !session[i].ip || !(session[i].cin || session[i].cout) || !*session[i].user || session[i].walled_garden)
-			continue;
-		if (!f)
-		{
-			time_t now = time(NULL);
-			if (!(f = fopen(filename, "w")))
-			{
-				LOG(0, 0, 0, "Can't write accounting info to %s: %s\n", filename, strerror(errno));
-				return ;
-			}
-			LOG(3, 0, 0, "Dumping accounting information to %s\n", filename);
-			fprintf(f, "# dslwatch.pl dump file V1.01\n"
-			        "# host: %s\n"
-			        "# time: %ld\n"
-			        "# uptime: %ld\n"
-			        "# format: username ip qos uptxoctets downrxoctets\n",
-			        hostname,
-			        now,
-			        now - basetime);
-		}
+		for (i = 0; i < shut_acct_n; i++)
+			dump_session(&f, &shut_acct[i]);
 
-		LOG(4, 0, 0, "Dumping accounting information for %s\n", session[i].user);
-		fprintf(f, "%s %s %d %u %u\n",
-		        session[i].user,						// username
-		        fmtaddr(htonl(session[i].ip), 0),				// ip
-		        (session[i].throttle_in || session[i].throttle_out) ? 2 : 1,	// qos
-		        (u32)session[i].cin,						// uptxoctets
-		        (u32)session[i].cout);						// downrxoctets
-
-		session[i].pin = session[i].cin = 0;
-		session[i].pout = session[i].cout = 0;
+		shut_acct_n = 0;
 	}
+
+	if (all)
+		for (i = 1; i <= config->cluster_highest_sessionid; i++)
+			dump_session(&f, &session[i]);
 
 	if (f)
 		fclose(f);
@@ -3240,15 +3276,19 @@ static void sigquit_handler(int sig)
 	int i;
 
 	LOG(1, 0, 0, "Shutting down without saving sessions\n");
-	for (i = 1; i < MAXSESSION; i++)
+
+	if (config->cluster_iam_master)
 	{
-		if (session[i].opened)
-			sessionkill(i, "L2TPNS Closing");
-	}
-	for (i = 1; i < MAXTUNNEL; i++)
-	{
-		if (tunnel[i].ip || tunnel[i].state)
-			tunnelshutdown(i, "L2TPNS Closing");
+		for (i = 1; i < MAXSESSION; i++)
+		{
+			if (session[i].opened)
+				sessionkill(i, "L2TPNS Closing");
+		}
+		for (i = 1; i < MAXTUNNEL; i++)
+		{
+			if (tunnel[i].ip || tunnel[i].state)
+				tunnelshutdown(i, "L2TPNS Closing");
+		}
 	}
 
 	main_quit++;

@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.45 2004-12-03 06:40:02 bodea Exp $
+// $Id: l2tpns.h,v 1.46 2004-12-13 02:27:31 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -77,6 +77,7 @@
 #define CLIUSERS	FLASHDIR "/users"		// CLI Users file
 #define IPPOOLFILE	FLASHDIR "/ip_pool"		// Address pool configuration
 #define ACCT_TIME	3000		// 5 minute accounting interval
+#define ACCT_SHUT_TIME	600		// 1 minute for counters of shutdown sessions
 #define	L2TPPORT	1701		// L2TP port
 #define RADPORT		1645		// old radius port...
 #define	PKTARP		0x0806		// ARP packet type
