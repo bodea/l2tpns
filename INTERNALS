@@ -223,3 +223,43 @@ TODO:
 a packet from a non-existant session then forward it to the master??
 In normal practice, a slave with undefined session shouldn't be 
 handling packets, but ...
+
+	There is far too much walking of large arrays (in the master
+specifically).  Although this is mitigated somewhat by the
+cluster_high_{sess,tun}, this benefit is lost as that value gets
+closer to MAX{SESSION,TUNNEL}.  There are two issues here:
+	
+	* The tunnel, radius and tbf arrays should probably use a
+	  mechanism like sessions, where grabbing a new one is a
+	  single lookup rather than a walk.
+
+	* A list structure (simillarly rooted at [0].interesting) is
+	  required to avoid having to walk tables periodically.  As a
+	  back-stop the code in the master which *does* walk the
+	  arrays can mark any entry it processes as "interesting" to
+	  ensure it gets looked at even if a bug causes it to be
+	  otherwiase overlooked.
+
+	Support for more than 64k sessions per cluster. There is
+currently a 64k session limit because each session gets an id that global
+over the cluster (as opposed to local to the tunnel). Obviously, the tunnel
+id needs to be used in conjunction with the session id to index into
+the session table. But how?
+
+	I think the best way is to use something like page tables.
+for a given <tid,sid>, the appropriate session index is
+session[ tunnel[tid].page[sid>>10] + (sid & 1023) ]
+Where tunnel[].page[] is a 64 element array. As a tunnel
+fills up it's page block, it allocated a new 1024 session block
+from the session table and fills in the appropriate .page[] 
+entry.
+
+	This should be a reasonable compromise between wasting memory
+(average 500 sessions per tunnel wasted) and speed. (Still a direct
+index without searching, but extra lookups required). Obviously
+the <6,10> split on the sid can be moved around to tune the size
+of the page table v the session table block size.
+
+	This unfortunately means that the tunnel structure HAS to
+be filled on the slave before any of the sessions on it can be used.
+
