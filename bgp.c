@@ -10,7 +10,7 @@
  *   nor RFC2385 (which requires a kernel patch on 2.4 kernels).
  */
 
-char const *cvs_id_bgp = "$Id: bgp.c,v 1.6 2004-11-11 03:07:42 bodea Exp $";
+char const *cvs_id_bgp = "$Id: bgp.c,v 1.7 2004-11-15 06:49:56 bodea Exp $";
 
 #include <stdlib.h>
 #include <unistd.h>
@@ -857,6 +857,7 @@ static int bgp_handle_input(struct bgp_peer *peer)
     case BGP_MSG_OPEN:
 	{
 	    struct bgp_data_open data;
+	    int hold;
 	    int i;
 
 	    for (i = 0; i < sizeof(p->header.marker); i++)
@@ -903,14 +904,18 @@ static int bgp_handle_input(struct bgp_peer *peer)
 		return 0;
 	    }
 
-	    if ((peer->hold = ntohs(data.hold_time)) < 3)
+	    if ((hold = ntohs(data.hold_time)) < 3)
 	    {
 		LOG(1, 0, 0, 0, "Bad hold time (%d) from BGP peer %s\n",
-		    peer->hold, peer->name);
+		    hold, peer->name);
 
 		bgp_send_notification(peer, BGP_ERR_OPEN, BGP_ERR_OPN_HOLD_TIME);
 		return 0;
 	    }
+
+	    /* pick lowest hold time */
+	    if (hold < peer->hold)
+	    	peer->hold = hold;
 
 	    /* adjust our keepalive based on negotiated hold value */
 	    if (peer->keepalive * 3 > peer->hold)
