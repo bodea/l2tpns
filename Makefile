@@ -7,8 +7,8 @@ CC = gcc
 DEFINES = -DBGP -DRINGBUFFER -DSTAT_CALLS -DSTATISTICS
 OPTIM = -g -O3 -funroll-loops -fomit-frame-pointer -finline-functions
 CFLAGS = -Wall $(OPTIM) $(DEFINES)
-LDFLAGS = 
-LIBS = -lm -ldl -lcli
+LDFLAGS = -rdynamic
+LIBS = -lm
 INSTALL = /usr/bin/install -c
 
 OBJS=	md5.o \
@@ -30,12 +30,6 @@ OBJS=	md5.o \
 PLUGINS=garden.so autothrottle.so autosnoop.so
 
 all:	l2tpns nsctl $(PLUGINS)
-
-l2tpns:	$(OBJS)
-	$(CC) $(CFLAGS) -o $@ $^ $(LIBS) $(DEFS)
-
-nsctl:	nsctl.o control.o
-	$(CC) $(CFLAGS) -o $@ $^ $(DEFS)
 
 clean:
 	/bin/rm -f *.o *.so l2tpns nsctl
@@ -61,11 +55,17 @@ install: all
 		mknod /dev/net/tun c 10 200; \
 	fi
 
+l2tpns:	$(OBJS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS) $(LIBS) -lcli -ldl
+
+nsctl:	nsctl.o control.o
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS) $(LIBS)
+
 %.o: %.c
 	$(CC) -c $(CFLAGS) -o $@ $<
 
 %.so: %.c
-	$(CC) -fPIC -shared $(CFLAGS) -o $@ $< $(LDFLAGS) $(LIBS) $(LIBPATH)
+	$(CC) -fPIC -shared $(CFLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 
 .PHONY: all clean depend
 
