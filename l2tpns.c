@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.65 2004-12-13 02:27:31 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.66 2004-12-13 05:09:35 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -2431,9 +2431,9 @@ static void mainloop(void)
 				// incoming IP
 				if (FD_ISSET(tunfd, &r))
 				{
-					if ((n = read(tunfd, buf, sizeof(buf))) > 0)
+					if ((s = read(tunfd, buf, sizeof(buf))) > 0)
 					{
-						processtun(buf, n);
+						processtun(buf, s);
 					}
 					else
 					{
