@@ -1,3 +1,6 @@
+? Brendan O'Dea <bod@optusnet.com.au> 2.0.5
+- Handle routing properly in lone-master case 
+
 * Mon Nov 8 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.4
 - Added setrxspeed plugin
 - Added peer_address config option

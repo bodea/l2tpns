@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.16 2004-11-05 04:55:26 bodea Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.17 2004-11-09 03:09:12 bodea Exp $";
 
 #include <stdio.h>
 #include <sys/file.h>
@@ -188,6 +188,18 @@ static void add_type(char ** p, int type, int more, char * data, int size)
 	}
 }
 
+// advertise our presence via BGP or gratuitous ARP
+static void advertise(void)
+{
+#ifdef BGP
+	if (bgp_configured)
+		bgp_enable_routing(1);
+	else
+#endif /* BGP */
+		if (config->send_garp)
+			send_garp(config->bind_address);	// Start taking traffic.
+}
+
 void cluster_uptodate(void)
 {
 	if (config->cluster_iam_uptodate)
@@ -199,14 +211,7 @@ void cluster_uptodate(void)
 	config->cluster_iam_uptodate = 1;
 
 	LOG(0,0,0,0, "Now uptodate with master.\n");
-
-#ifdef BGP
-	if (bgp_configured)
-		bgp_enable_routing(1);
-	else
-#endif /* BGP */
-		if (config->send_garp)
-			send_garp(config->bind_address);	// Start taking traffic.
+	advertise();
 }
 
 //
@@ -456,11 +461,9 @@ void cluster_check_slaves(void)
 	}
 
 #ifdef BGP
-	// master lost all slaves, need to handle traffic ourself
-	if (bgp_configured && had_peers && !have_peers)
-		bgp_enable_routing(1);
-	else if (bgp_configured && !had_peers && have_peers)
-		bgp_enable_routing(0);
+	// in a cluster, withdraw/add routes when we get a peer/lose all peers
+	if (bgp_configured && have_peers != had_peers)
+		bgp_enable_routing(!have_peers);
 #endif /* BGP */
 }
 
@@ -609,6 +612,9 @@ void cluster_check_master(void)
 	config->cluster_undefined_sessions = 0;
 	config->cluster_undefined_tunnels = 0;
 	config->cluster_iam_uptodate = 1; // assume all peers are up-to-date
+
+	if (!num_peers) // lone master
+		advertise();
 
 	// FIXME. We need to fix up the tunnel control message
 	// queue here! There's a number of other variables we
