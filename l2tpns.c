@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.41 2004-11-04 06:05:55 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.42 2004-11-05 02:25:25 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -1668,39 +1668,23 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 				case 27:    // last send lcp
 					{        // find magic number
 						u8 *p = b, *e = p + n;
-						while (p < e && p[1])
+						while (p + 1 < e && p[1] && p + p[1] <= e)
 						{
-							if (*p == 5 && p[1] == 6)
+							if (*p == 5 && p[1] == 6) // Magic-Number
 								amagic = ntohl(*(u32 *) (p + 2));
-							else if (*p == 3 && p[1] == 5 && *(u16 *) (p + 2) == htons(PPPCHAP) && p[4] == 5)
+							else if (*p == 3 && p[1] == 5 && *(u16 *) (p + 2) == htons(PPPCHAP) && p[4] == 5) // Authentication-Protocol
 								chap = 1;
-							else if (*p == 7)
+							else if (*p == 7) // Protocol-Field-Compression
 								aflags |= SESSIONPFC;
-							else if (*p == 8)
+							else if (*p == 8) // Address-and-Control-Field-Compression
 								aflags |= SESSIONACFC;
 							p += p[1];
-						}
-
-						{
-							char tmp[500] = {0};
-							tmp[0] = ConfigReq;
-							memcpy((tmp + 1), b, n);
 						}
 					}
 					break;
 				case 28:    // last recv lcp confreq
-					{
-						char tmp[500] = {0};
-						tmp[0] = ConfigReq;
-						memcpy((tmp + 1), b, n);
-						break;
-					}
+					break;
 				case 26:    // Initial Received LCP CONFREQ
-					{
-						char tmp[500] = {0};
-						tmp[0] = ConfigReq;
-						memcpy((tmp + 1), b, n);
-					}
 					break;
 				case 39:    // seq required - we control it as an LNS anyway...
 					break;
