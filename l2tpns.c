@@ -2254,10 +2254,15 @@ int main(int argc, char *argv[])
 	time(&basetime);             // start clock
 	// scan args
 
-	while ((o = getopt(argc, argv, "vc:h:a:")) >= 0)
+	while ((o = getopt(argc, argv, "vc:h:a:d")) >= 0)
 	{
 		switch (o)
 		{
+			case 'd':
+				// Double fork to detach from terminal
+				if (fork()) exit(0);
+				if (fork()) exit(0);
+				break;
 			case 'v':
 				config->debug++;
 				break;
@@ -2266,7 +2271,7 @@ int main(int argc, char *argv[])
 				break;
 			case '?':
 			default:
-				printf("Args are:\n\t-c <file>\tConfig file\n\t-h <hostname>\tForce hostname\n\t-a <address>\tUse specific address\n\t-v\t\tDebug\n");
+				printf("Args are:\n\t-d\tDetach from terminal\n\t-c <file>\tConfig file\n\t-h <hostname>\tForce hostname\n\t-a <address>\tUse specific address\n\t-v\t\tDebug\n");
 				return (0);
 				break;
 		}
@@ -2283,7 +2288,7 @@ int main(int argc, char *argv[])
 	initdata();
 	init_cli();
 	read_config_file();
-	log(0, 0, 0, 0, "$Id: l2tpns.c,v 1.6 2004-05-24 04:20:28 fred_nerk Exp $\n(c) Copyright 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced\n");
+	log(0, 0, 0, 0, "$Id: l2tpns.c,v 1.7 2004-05-24 04:42:50 fred_nerk Exp $\n(c) Copyright 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced\n");
 	{
 		struct rlimit rlim;
 		rlim.rlim_cur = RLIM_INFINITY;
