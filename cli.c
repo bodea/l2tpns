@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.22 2004-11-04 23:41:54 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.23 2004-11-05 02:47:47 bodea Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -538,7 +538,7 @@ int cmd_show_tunnels(struct cli_def *cli, char *command, char **argv, int argc)
 	for (i = 1; i < MAXTUNNEL; i++)
 	{
 		int sessions = 0;
-		if (!show_all && (!tunnel[i].ip || tunnel[i].die || !tunnel[i].hostname[0])) continue;
+		if (!show_all && (!tunnel[i].ip || tunnel[i].die)) continue;
 
 		for (x = 0; x < MAXSESSION; x++) if (session[x].tunnel == i && session[x].opened && !session[x].die) sessions++;
 		cli_print(cli, "%4d %20s %20s %6s %6d",

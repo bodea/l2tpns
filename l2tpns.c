@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.42 2004-11-05 02:25:25 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.43 2004-11-05 02:47:47 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -107,6 +107,7 @@ struct config_descriptt config_values[] = {
 	CONFIG("radius_accounting", radius_accounting, BOOL),
 	CONFIG("radius_secret", radiussecret, STRING),
 	CONFIG("bind_address", bind_address, IP),
+	CONFIG("peer_address", peer_address, IP),
 	CONFIG("send_garp", send_garp, BOOL),
 	CONFIG("throttle_speed", rl_rate, UNSIGNED_LONG),
 	CONFIG("throttle_buckets", num_tbfs, INT),
@@ -1127,7 +1128,10 @@ void sendipcp(tunnelidt t, sessionidt s)
 	*(u16 *) (q + 2) = htons(10);
 	q[4] = 3;
 	q[5] = 6;
-	*(u32 *) (q + 6) = config->bind_address ? config->bind_address : my_address; // send my IP
+	*(u32 *) (q + 6) = config->peer_address ? config->peer_address :
+	    		   config->bind_address ? config->bind_address :
+			   my_address; // send my IP
+
 	tunnelsend(buf, 10 + (q - buf), t); // send it
 	session[s].flags &= ~SF_IPCP_ACKED;	// Clear flag.
 }

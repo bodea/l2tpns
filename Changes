@@ -1,3 +1,7 @@
+? Brendan O'Dea <bod@optusnet.com.au> 2.0.4
+- Added setrxspeed plugin
+- Added peer_address config option
+
 * Wed Nov 3 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.3
 - Added support for hidden AVPs by Robert Clark
 - l2tpns-chap-response.patch from Robert Clark
