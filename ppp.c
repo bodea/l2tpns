@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.42 2005-01-25 04:19:06 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.43 2005-01-25 04:38:49 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -852,15 +852,19 @@ void processipin(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 
 	// Add on the tun header
 	p -= 4;
-	*(uint32_t *) p = htonl(0x00000800);
+	*(uint32_t *) p = htonl(PKTIP);
 	l += 4;
 
-	if (session[s].tbf_in && !config->cluster_iam_master) { // Are we throttled and a slave?
-		master_throttle_packet(session[s].tbf_in, p, l); // Pass it to the master for handling.
+	// Are we throttled and a slave?
+	if (session[s].tbf_in && !config->cluster_iam_master) {
+		// Pass it to the master for handling.
+		master_throttle_packet(session[s].tbf_in, p, l);
 		return;
 	}
 
-	if (session[s].tbf_in && config->cluster_iam_master) { // Are we throttled and a master?? actually handle the throttled packets.
+	// Are we throttled and a master??
+	if (session[s].tbf_in && config->cluster_iam_master) {
+		// Actually handle the throttled packets.
 		tbf_queue_packet(session[s].tbf_in, p, l);
 		return;
 	}
@@ -936,7 +940,7 @@ void processipv6in(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 
 	// Add on the tun header
 	p -= 4;
-	*(uint32_t *)p = htonl(PKTIPV6);
+	*(uint32_t *) p = htonl(PKTIPV6);
 	l += 4;
 
 	// Are we throttled and a slave?
@@ -946,9 +950,9 @@ void processipv6in(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 		return;
 	}
 
-	// Are we throttled and a master?? actually handle the throttled
-	// packets.
+	// Are we throttled and a master??
 	if (session[s].tbf_in && config->cluster_iam_master) {
+		// Actually handle the throttled packets.
 		tbf_queue_packet(session[s].tbf_in, p, l);
 		return;
 	}
@@ -957,14 +961,16 @@ void processipv6in(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 	if (tun_write(p, l) < 0)
 	{
 		STAT(tun_tx_errors);
-		LOG(0, s, t, "Error writing %d bytes to TUN device: %s" " (tunfd=%d, p=%p)\n",
+		LOG(0, s, t, "Error writing %d bytes to TUN device: %s (tunfd=%d, p=%p)\n",
 			l, strerror(errno), tunfd, p);
+
+		return;
 	}
 
 	if (session[s].snoop_ip && session[s].snoop_port)
 	{
 		// Snooping this session
-		snoop_send_packet(p, l, session[s].snoop_ip, session[s].snoop_port);
+		snoop_send_packet(p + 4, l - 4, session[s].snoop_ip, session[s].snoop_port);
 	}
 
 	session[s].cin += l - 4;
