@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.34 2004-10-29 04:01:11 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.35 2004-10-30 06:58:55 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -2964,9 +2964,9 @@ int main(int argc, char *argv[])
 	initplugins();
 	initdata(optdebug, optconfig);
 
+	init_cli(hostname);
 	read_config_file();
 	init_tbf(config->num_tbfs);
-	init_cli(hostname);
 
 	log(0, 0, 0, 0, "L2TPNS version " VERSION "\n");
 	log(0, 0, 0, 0, "Copyright (c) 2003, 2004 Optus Internet Engineering\n");
