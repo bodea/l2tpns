@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.32 2004-11-28 02:53:11 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.33 2004-11-28 20:09:53 bodea Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -2433,10 +2433,10 @@ static char const *show_access_list_rule(int extended, ip_filter_rulet *rule)
 	if (rule->proto == IPPROTO_TCP || rule->proto == IPPROTO_UDP)
 		p += show_ports(p, &rule->dst_ports);
 
-	if (rule->proto == IPPROTO_TCP && (rule->tcp_sflags || rule->tcp_cflags))
+	if (rule->proto == IPPROTO_TCP && rule->tcp_flag_op)
 	{
 		if (rule->tcp_flag_op == FILTER_FLAG_OP_ANY &&
-		    rule->tcp_sflags == (TCP_FLAG_ACK|TCP_FLAG_FIN) &&
+		    rule->tcp_sflags == (TCP_FLAG_ACK|TCP_FLAG_RST) &&
 		    rule->tcp_cflags == TCP_FLAG_SYN)
 		{
 			p += sprintf(p, " established");
@@ -2638,7 +2638,7 @@ ip_filter_rulet *access_list_rule_ext(struct cli_def *cli, char *command, char *
 		if (MATCH("established", argv[a]))
 		{
 			rule.tcp_flag_op = FILTER_FLAG_OP_ANY;
-			rule.tcp_sflags = (TCP_FLAG_ACK|TCP_FLAG_FIN);
+			rule.tcp_sflags = (TCP_FLAG_ACK|TCP_FLAG_RST);
 			rule.tcp_cflags = TCP_FLAG_SYN;
 		    	a++;
 		}

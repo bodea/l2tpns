@@ -1,11 +1,12 @@
-* Sat Nov 27 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.9
+* Mon Nov 29 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.9
 - Revise CCP, send ConfigReq once only.
 - Don't copy the old buffer into Config{Nak,Rej} LCP responses (oops);
   add length checks when appending.
 - Have makeppp print a backtrace on overflow.
 - Check control serial before clearing window, prevents looping tunnel
   setup in some instances.
-- Add configuration syntax for adding named access lists (work in progress).
+- Implement named access-lists which may be applied to a session
+  either via Filter-Id RADIUS responses, or using the CLI.
 
 * Sat Nov 20 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.8
 - Ignore gateway address in Framed-Route (from Jonathan McDowell).

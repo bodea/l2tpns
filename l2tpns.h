@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.39 2004-11-28 02:53:11 bodea Exp $
+// $Id: l2tpns.h,v 1.40 2004-11-28 20:10:04 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -497,8 +497,8 @@ typedef struct
 #define FILTER_PORT_OP_GT	3
 #define FILTER_PORT_OP_LT	4
 #define FILTER_PORT_OP_RANGE	5
-	portt port;
-	portt port2;	// for range
+	portt port;	// port (host byte order)
+	portt port2;	// range
 } ip_filter_portt;
 
 typedef struct
@@ -506,16 +506,16 @@ typedef struct
 	int action;		// permit/deny
 #define FILTER_ACTION_DENY	1
 #define FILTER_ACTION_PERMIT	2
-	int proto;		// protocol: IPPROTO_* (netinet/in.h)
-	ipt src_ip;		// source ip
+	u8 proto;		// protocol: IPPROTO_* (netinet/in.h)
+	ipt src_ip;		// source ip (network byte order)
 	ipt src_wild;
 	ip_filter_portt src_ports;
 	ipt dst_ip;		// dest ip
 	ipt dst_wild;
 	ip_filter_portt dst_ports;
 	u8 tcp_flag_op;		// match type: any, all
-#define FILTER_FLAG_OP_ANY	0
-#define FILTER_FLAG_OP_ALL	1
+#define FILTER_FLAG_OP_ANY	1
+#define FILTER_FLAG_OP_ALL	2
 	u8 tcp_sflags;		// flags set
 	u8 tcp_cflags;		// flags clear
 } ip_filter_rulet;
@@ -573,6 +573,7 @@ void tunnelsend(u8 * buf, u16 l, tunnelidt t);
 void sendipcp(tunnelidt t, sessionidt s);
 void processudp(u8 * buf, int len, struct sockaddr_in *addr);
 void snoop_send_packet(char *packet, u16 size, ipt destination, u16 port);
+int ip_filter(u8 *buf, int len, u8 filter);
 int cmd_show_ipcache(struct cli_def *cli, char *command, char **argv, int argc);
 int cmd_show_hist_idle(struct cli_def *cli, char *command, char **argv, int argc);
 int cmd_show_hist_open(struct cli_def *cli, char *command, char **argv, int argc);

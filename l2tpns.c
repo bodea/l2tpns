@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.58 2004-11-28 02:53:11 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.59 2004-11-28 20:10:04 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -763,6 +763,10 @@ static void processipout(u8 * buf, int len)
 	}
 	t = session[s].tunnel;
 	sp = &session[s];
+
+	// run access-list if any
+	if (session[s].filter_out && !ip_filter(buf, len, session[s].filter_out - 1))
+		return;
 
 	if (sp->tbf_out)
 	{
@@ -4380,3 +4384,107 @@ static int unhide_avp(u8 *avp, tunnelidt t, sessionidt s, u16 length)
 	return hidden_length + 6;
 }
 
+static int ip_filter_port(ip_filter_portt *p, portt port)
+{
+	switch (p->op)
+	{
+	case FILTER_PORT_OP_EQ:    return port == p->port;
+	case FILTER_PORT_OP_NEQ:   return port != p->port;
+	case FILTER_PORT_OP_GT:    return port > p->port;
+	case FILTER_PORT_OP_LT:    return port < p->port;
+	case FILTER_PORT_OP_RANGE: return port >= p->port && port <= p->port2;
+	}
+
+	return 0;
+}
+
+static int ip_filter_flag(u8 op, u8 sflags, u8 cflags, u8 flags)
+{
+	switch (op)
+	{
+	/*
+	 * NOTE: "match-any +A +B -C -D" is interpreted as "match if
+	 * either A or B is set *and* C or D is clear".  While "or" is
+	 * possibly more correct, the way "established" is currently
+	 * implemented depends on this behaviour.
+	 */
+	case FILTER_FLAG_OP_ANY:
+		return (flags & sflags) && !(flags & cflags);
+
+	case FILTER_FLAG_OP_ALL:
+		return (flags & sflags) == sflags && (~flags & cflags) == cflags;
+	}
+
+	return 0;
+}
+
+int ip_filter(u8 *buf, int len, u8 filter)
+{
+	u8 proto;
+    	ipt src_ip;
+	ipt dst_ip;
+	portt src_port = 0;
+	portt dst_port = 0;
+	u8 flags = 0;
+	ip_filter_rulet *rule;
+
+    	if (len < 20) // up to end of destination address
+		return 0;
+
+	if (*buf >> 4) // IPv4
+		return 0;
+
+	proto = buf[9];
+	src_ip = *(u32 *) (buf + 12);
+	dst_ip = *(u32 *) (buf + 16);
+
+	if (proto == IPPROTO_TCP || proto == IPPROTO_UDP)
+	{
+	    	int l = buf[0] & 0xf;
+		if (len < l + 4) // ports
+			return 0;
+
+		src_port = ntohs(*(u16 *) (buf + l));
+		dst_port = ntohs(*(u16 *) (buf + l + 2));
+		if (proto == IPPROTO_TCP)
+		{
+		    	if (len < l + 15) // flags
+				return 0;
+
+			flags = buf[l + 14] & 0x3f;
+		}
+	}
+
+	for (rule = ip_filters[filter].rules; rule->action; rule++)
+	{
+		if (proto && proto != rule->proto)
+			continue;
+
+		if (rule->src_wild != INADDR_BROADCAST &&
+		    (src_ip & ~rule->src_wild) != (rule->src_ip & ~rule->src_wild))
+			continue;
+
+		if (rule->dst_wild != INADDR_BROADCAST &&
+		    (dst_ip & ~rule->dst_wild) != (rule->dst_ip & ~rule->dst_wild))
+			continue;
+
+		if (proto == IPPROTO_TCP || proto == IPPROTO_UDP)
+		{
+			if (rule->src_ports.op && !ip_filter_port(&rule->src_ports, src_port))
+				continue;
+
+			if (rule->dst_ports.op && !ip_filter_port(&rule->dst_ports, dst_port))
+				continue;
+
+			if (proto == IPPROTO_TCP && rule->tcp_flag_op &&
+			    !ip_filter_flag(rule->tcp_flag_op, rule->tcp_sflags, rule->tcp_cflags, flags))
+				continue;
+		}
+
+		// matched
+		return rule->action == FILTER_ACTION_PERMIT;
+	}
+
+	// default deny
+    	return 0;
+}

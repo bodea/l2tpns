@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.31 2004-11-27 05:19:53 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.32 2004-11-28 20:10:04 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -718,6 +718,10 @@ void processipin(tunnelidt t, sessionidt s, u8 *p, u16 l)
 		LOG(5, ip, s, t, "Dropping packet with spoofed IP %s\n", inet_toa(htonl(ip)));
 		return;
 	}
+
+	// run access-list if any
+	if (session[s].filter_in && !ip_filter(p, l, session[s].filter_in - 1))
+		return;
 
 	// Add on the tun header
 	p -= 4;
