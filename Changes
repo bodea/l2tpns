@@ -1,4 +1,4 @@
-* ??? 2.0.2
+* Thu Sep 02 2004 David Parrish <david@dparrish.com> 2.0.2
 - Combined LCP patches from Iain and Yuri. This should allow Windows 2k/XP
   clients to connect, as well Linksys DSL modems.
 - Apply patch to fix -v option from Juergen Kammer.
@@ -17,6 +17,7 @@
 - Show filter stats in show session - Yuri
 - Cleanup from Michael to change sid to unique_id
 - Add plugin to remove domain name from auth requests
+- Add .spec file for RPM generation
 
 * Tue Jul 13 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.1
 - Update INSTALL, Docs/manual.html documentation.
