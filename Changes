@@ -1,8 +1,14 @@
 * ??? 2.0.2
+- Combined LCP patches from Iain and Yuri. This should allow Windows 2k/XP
+  clients to connect, as well Linksys DSL modems.
 - Apply patch to fix -v option from Juergen Kammer.
 - Makefile fix from Juergen Kammer to not overwrite existing config files on
   make install
 - Configurable radius port patch from Juergen Kammer.
+- Send my_address if no bind_address when doing IPCP
+- Write pid file if filename is set
+- Add startup script and monitor script from Yuri
+- Some logging correctness fixes from Iain Wade
 
 * Tue Jul 13 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.1
 - Update INSTALL, Docs/manual.html documentation.

@@ -1,0 +1,93 @@
+#!/bin/bash
+#
+# Startup script for l2tpns
+#
+# chkconfig: 2345 83 25
+# description: l2tpns.
+# processname: l2tpns
+# pidfile: /var/run/l2tpns.pid
+# config: /etc/l2tpns
+
+# Source function library.
+. /etc/rc.d/init.d/functions
+
+if [ -f /etc/sysconfig/lt2pns ]; then
+        . /etc/sysconfig/lt2pns
+fi
+
+# Path to the l2tpns-monitor script, server binary, and short-form for messages.
+l2tpns_monitor=/usr/sbin/l2tpns-monitor
+l2tpns=/usr/sbin/l2tpns
+prog=${l2tpns##*/}
+RETVAL=0
+
+start() {
+        echo -n $"Starting $prog: "
+	rm -f /tmp/l2tpns.stop
+        daemon --check=$prog $l2tpns_monitor $OPTIONS
+        RETVAL=$?
+	echo
+	sleep 5
+	pid=`pidofproc $l2tpns_monitor`
+	if [ -z "$pid" ] || [ "$pid" -eq 0 ]; then
+		echo -n "Error starting $prog"
+		echo_failure
+		echo
+		return 99
+	fi
+        [ $RETVAL = 0 ] && touch /var/lock/subsys/l2tpns
+        return $RETVAL
+}
+stop() {
+	echo -n $"Stopping $prog: "
+	echo >/tmp/l2tpns.stop
+	killproc $l2tpns
+	RETVAL=$?
+	echo
+	[ $RETVAL = 0 ] && rm -f /var/lock/subsys/l2tpns /var/run/l2tpns.pid
+}
+reload() {
+	echo -n $"Reloading $prog: "
+	killproc $l2tpns -HUP
+	RETVAL=$?
+	echo
+}
+
+# See how we were called.
+case "$1" in
+  start)
+	start
+	;;
+  stop)
+	stop
+	;;
+  status)
+        status $l2tpns
+	RETVAL=$?
+	;;
+  restart)
+	stop
+	sleep 5
+	start
+	;;
+  condrestart)
+	if [ -f /var/run/l2tpns.pid ] ; then
+		stop
+		start
+	fi
+	;;
+  reload)
+        reload
+	;;
+  coldrestart)
+	stop
+	sleep 10
+	rm -f /tmp/l2tpns.dump
+	start
+	;;
+  *)
+	echo $"Usage: $prog {start|stop|restart|condrestart|reload|status|coldrestart}"
+	exit 1
+esac
+
+exit $RETVAL

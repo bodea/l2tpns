@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.18 2004-07-28 06:12:30 fred_nerk Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.19 2004-08-02 03:38:01 fred_nerk Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -94,6 +94,7 @@ int bgp_configured = 0;
 struct config_descriptt config_values[] = {
 	CONFIG("debug", debug, INT),
 	CONFIG("log_file", log_filename, STRING),
+	CONFIG("pid_file", pid_file, STRING),
 	CONFIG("l2tp_secret", l2tpsecret, STRING),
 	CONFIG("primary_dns", default_dns1, IP),
 	CONFIG("secondary_dns", default_dns2, IP),
@@ -2995,6 +2996,10 @@ int main(int argc, char *argv[])
 	/* remove plugins (so cleanup code gets run) */
 	plugins_done();
 
+	// Remove the PID file if we wrote it
+	if (config->wrote_pid && *config->pid_file == '/')
+		unlink(config->pid_file);
+
 	/* kill CLI children */
 	signal(SIGTERM, SIG_IGN);
 	kill(0, SIGTERM);
@@ -3399,6 +3404,22 @@ void update_config()
 
 		interval = config->cluster_hb_interval;
 		timeout = config->cluster_hb_timeout;
+	}
+
+	// Write PID file
+	if (*config->pid_file == '/' && !config->wrote_pid)
+	{
+		FILE *f;
+		if ((f = fopen(config->pid_file, "w")))
+		{
+			fprintf(f, "%d\n", getpid());
+			fclose(f);
+			config->wrote_pid = 1;
+		}
+		else
+		{
+			log(0, 0, 0, 0, "Can't write to PID file %s: %s\n", config->pid_file, strerror(errno));
+		}
 	}
 
 	config->reload_config = 0;

@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.13 2004-07-26 00:20:41 fred_nerk Exp $
+// $Id: l2tpns.h,v 1.14 2004-08-02 03:38:01 fred_nerk Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -119,7 +119,7 @@ struct cli_session_actions {
 #define CLI_SESS_NOTHROTTLE	0x10
 
 struct cli_tunnel_actions {
-    	char action;
+	char action;
 };
 
 #define CLI_TUN_KILL		0x01
@@ -195,6 +195,7 @@ typedef struct {
 
 #define	SESSIONPFC	1            // PFC negotiated flags
 #define	SESSIONACFC	2           // ACFC negotiated flags
+#define SESSIONLCPACK	4	// LCP negotiated
 
 // 168 bytes per tunnel
 typedef struct tunnels
@@ -379,6 +380,8 @@ struct configt
 	int		debug;				// debugging level
 	time_t		start_time;			// time when l2tpns was started
 	char		bandwidth[256];			// current bandwidth
+	char		pid_file[256];			// file to write PID to on startup
+	int		wrote_pid;
 	clockt		current_time;			// 1/10ths of a second since the process started.
 							// means that we can only run a given process
 							// for 13 years without re-starting!

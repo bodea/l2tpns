@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.8 2004-07-11 07:57:35 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.9 2004-08-02 03:38:01 fred_nerk Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -230,9 +230,9 @@ void dumplcp(u8 *p, int l)
 	{
 		int type = o[0];
 		int length = o[1];
-		if (length == 0)
+		if (length < 2)
 		{
-			log(4, 0, 0, 0, "	Option length is 0...\n");
+			log(4, 0, 0, 0, "	Option length is %d...\n", length);
 			break;
 		}
 		if (type == 0)
@@ -245,13 +245,22 @@ void dumplcp(u8 *p, int l)
 		switch (type)
 		{
 			case 1: // Maximum-Receive-Unit
+				if (length == 4)
 				log(4, 0, 0, 0, "    %s %d\n", lcp_types[type], ntohs(*(u16 *)(o + 2)));
+				else
+					log(4, 0, 0, 0, "    %s odd length %d\n", lcp_types[type], length);
 				break;
 			case 3: // Authentication-Protocol
 				{
+					if (length == 4)
+					{
 					int proto = ntohs(*(u16 *)(o + 2));
-					log(4, 0, 0, 0, "    %s %s\n", lcp_types[type],
-							proto == 0xC223 ? "CHAP" : "PAP");
+						log(4, 0, 0, 0, "   %s 0x%x (%s)\n", lcp_types[type], proto,
+							proto == 0xC223 ? "CHAP" :
+							proto == 0xC023 ? "PAP"  : "UNKNOWN");
+					}
+					else
+						log(4, 0, 0, 0, "   %s odd length %d\n", lcp_types[type], length);
 					break;
 				}
 			case 4: // Quality-Protocol
@@ -262,20 +271,23 @@ void dumplcp(u8 *p, int l)
 				}
 			case 5: // Magic-Number
 				{
+					if (length == 6)
+					{
 					u32 magicno = ntohl(*(u32 *)(o + 2));
 					log(4, 0, 0, 0, "    %s %x\n", lcp_types[type], magicno);
+					}
+					else
+						log(4, 0, 0, 0, "   %s odd length %d\n", lcp_types[type], length);
 					break;
 				}
 			case 7: // Protocol-Field-Compression
 				{
-					u32 pfc = ntohl(*(u32 *)(o + 2));
-					log(4, 0, 0, 0, "    %s %x\n", lcp_types[type], pfc);
+					log(4, 0, 0, 0, "    %s\n", lcp_types[type]);
 					break;
 				}
 			case 8: // Address-And-Control-Field-Compression
 				{
-					u32 afc = ntohl(*(u32 *)(o + 2));
-					log(4, 0, 0, 0, "    %s %x\n", lcp_types[type], afc);
+					log(4, 0, 0, 0, "    %s\n", lcp_types[type]);
 					break;
 				}
 			default:
@@ -306,6 +318,7 @@ void processlcp(tunnelidt t, sessionidt s, u8 * p, u16 l)
 	if (*p == ConfigAck)
 	{
 		log(3, session[s].ip, s, t, "LCP: Discarding ConfigAck\n");
+		session[s].flags |= SESSIONLCPACK;
 	}
 	else if (*p == ConfigReq)
 	{
@@ -392,15 +405,10 @@ void processlcp(tunnelidt t, sessionidt s, u8 * p, u16 l)
 			// Already built a ConfigNak... send it
 			log(3, session[s].ip, s, t, "Sending ConfigNak\n");
 			tunnelsend(b, l + (q - b), t);
-
-			log(3, session[s].ip, s, t, "Sending ConfigReq, requesting PAP login\n");
-			q = makeppp(b, sizeof(b), NULL, 0, t, s, PPPLCP);
-			*q++ = ConfigReq;
-			*(u8 *)(q++) = 3;
-			*(u8 *)(q++) = 4;
-			*(u16 *)(q += 2) = htons(0xC023);
-			tunnelsend(b, l + (q - b), t);
 		}
+
+		if (!(session[s].flags & SESSIONLCPACK))
+			initlcp(t, s);
 	}
 	else if (*p == ConfigNak)
 	{

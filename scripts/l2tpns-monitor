@@ -1,0 +1,28 @@
+#!/bin/sh
+stopfile=/tmp/l2tpns.stop
+first=`date +%s`
+min_first_time=3
+restart_delay=5
+prog=${0##*/}
+
+while :
+do
+	echo "`date`: Starting l2tpns $@"
+	start=`date +%s`
+	/usr/sbin/l2tpns ${1+"$@"}
+	RETVAL=$?
+	stop=`date +%s`
+	t=$(($stop - $start));
+	first=$(($stop - $first));
+	echo "`date`: l2tpns exited after $t seconds, status $RETVAL"
+	if [ $first -lt $min_first_time ]; then
+		echo "`date`: l2tpns exited immediately, $prog exiting"
+		exit $RETVAL
+	fi
+	if [ -f $stopfile ]; then
+		ls -l $stopfile
+		echo "`date`: stop file found, $prog exiting"
+		exit
+	fi
+	sleep $restart_delay
+done >>/var/log/$prog 2>&1	&	# execute in background
