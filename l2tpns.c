@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.29 2004-09-23 03:59:09 fred_nerk Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.30 2004-10-05 02:50:03 fred_nerk Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -3526,7 +3526,6 @@ int sessionsetup(tunnelidt t, sessionidt s)
 
 	CSTAT(call_sessionsetup);
 
-
 	log(3, session[s].ip, s, t, "Doing session setup for session\n");
 
 	if (!session[s].ip || session[s].ip == 0xFFFFFFFE)
@@ -3536,7 +3535,11 @@ int sessionsetup(tunnelidt t, sessionidt s)
 			log(3, 0, s, t, "   No IP allocated. Assigned %s from pool\n",
 					inet_toa(htonl(session[s].ip)));
 		else
+		{
 			log(0, 0, s, t, "   No IP allocated. The IP address pool is FULL!\n");
+			sessionshutdown(s, "No IP addresses available");
+			return 0;
+		}
 	}
 
 
