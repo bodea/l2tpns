@@ -5,7 +5,7 @@
 
 /* throttle control */
 
-char const *cvs_id = "$Id: throttlectl.c,v 1.3 2004-11-18 06:41:03 bodea Exp $";
+char const *cvs_id = "$Id: throttlectl.c,v 1.4 2004-12-01 03:37:20 bodea Exp $";
 
 int plugin_api_version = PLUGIN_API_VERSION;
 static struct pluginfuncs *p = 0;
@@ -44,7 +44,7 @@ int plugin_control(struct param_control *data)
 	if (!data->iam_master)
 		return PLUGIN_RET_NOTMASTER;
 
-	flag = data->argv[0][0] != 'g';
+	flag = data->argv[0][0] == 't';
 
 	if (flag)
 	{
