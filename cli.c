@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.37 2004-11-29 12:36:54 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.38 2004-12-01 02:51:06 bodea Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -1003,7 +1003,7 @@ static int cmd_show_radius(struct cli_def *cli, char *command, char **argv, int 
 			NULL);
 	}
 
-	cli_print(cli, "%6s%6s%5s%6s%9s%9s%4s", "ID", "Radius", "Sock", "State", "Session", "Retry", "Try");
+	cli_print(cli, "%6s%7s%5s%6s%9s%9s%4s", "ID", "Radius", "Sock", "State", "Session", "Retry", "Try");
 
 	time(&time_now);
 
@@ -1019,7 +1019,7 @@ static int cmd_show_radius(struct cli_def *cli, char *command, char **argv, int 
 
 		if (!show_all && radius[i].state == RADIUSNULL) continue;
 
-		cli_print(cli, "%6d%6d%5d%6s%9d%9u%4d",
+		cli_print(cli, "%6d%7d%5d%6s%9d%9u%4d",
 				i,
 				i >> RADIUS_SHIFT,
 				i & RADIUS_MASK,
