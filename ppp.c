@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.19 2004-11-04 23:33:13 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.20 2004-11-05 02:21:55 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -194,10 +194,14 @@ void processchap(tunnelidt t, sessionidt s, u8 *p, u16 l)
 	{
 		struct param_pre_auth packet = { &tunnel[t], &session[s], NULL, NULL, PPPCHAP, 1 };
 
-		packet.username = calloc(l - 16 + 1, 1);
-		packet.password = calloc(16, 1);
-		memcpy(packet.username, p + 16, l - 16);
+		packet.password = calloc(17, 1);
 		memcpy(packet.password, p, 16);
+
+		p += 16;
+		l -= 16;
+
+		packet.username = calloc(l + 1, 1);
+		memcpy(packet.username, p, l);
 
 		run_plugins(PLUGIN_PRE_AUTH, &packet);
 		if (!packet.continue_auth)
@@ -277,8 +281,8 @@ void dumplcp(u8 *p, int l)
 					{
 						int proto = ntohs(*(u16 *)(o + 2));
 						log(4, 0, 0, 0, "   %s 0x%x (%s)\n", lcp_types[type], proto,
-							proto == 0xC223 ? "CHAP" :
-							proto == 0xC023 ? "PAP"  : "UNKNOWN");
+							proto == PPPCHAP ? "CHAP" :
+							proto == PPPPAP  ? "PAP"  : "UNKNOWN");
 					}
 					else
 						log(4, 0, 0, 0, "   %s odd length %d\n", lcp_types[type], length);
@@ -376,7 +380,7 @@ void processlcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 				case 3: // Authentication-Protocol
 					{
 						int proto = ntohs(*(u16 *)(o + 2));
-						if (proto == 0xC223)
+						if (proto == PPPCHAP)
 						{
 							log(2, session[s].ip, s, t, "    Remote end is trying to do CHAP. Rejecting it.\n");
 
@@ -390,7 +394,7 @@ void processlcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 								*q++ = ConfigNak;
 							}
 							memcpy(q, o, length);
-							*(u16 *)(q += 2) = htons(0xC023); // NAK -> Use PAP instead
+							*(u16 *)(q += 2) = htons(PPPPAP); // NAK -> Use PAP instead
 							q += length;
 						}
 						break;
@@ -912,7 +916,7 @@ void initlcp(tunnelidt t, sessionidt s)
 	*(u32 *)(q + 6) = htonl(session[s].magic);
 	*(u8 *)(q + 10) = 3;
 	*(u8 *)(q + 11) = 4;
-	*(u16 *)(q + 12) = htons(0xC023); // PAP
+	*(u16 *)(q + 12) = htons(PPPPAP); // PAP
 	tunnelsend(b, 12 + 14, t);
 }
 
