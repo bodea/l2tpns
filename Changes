@@ -1,3 +1,7 @@
+* Fri Apr 1 2005 Brendan O'Dea <bod@optusnet.com.au> 2.0.17
+- Only send RADIUS stop record in sessionshutdown when there's an ip address.
+- Reset .die on master takeover.
+
 * Mon Feb 14 2005 Brendan O'Dea <bod@optusnet.com.au> 2.0.16
 - Ensure that sessionkill is not called on an unopened session (borks
   the freelist).
