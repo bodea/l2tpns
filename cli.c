@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.23 2004-11-05 02:47:47 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.24 2004-11-05 04:55:26 bodea Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -186,7 +186,7 @@ void init_cli(char *hostname)
 
 	if (!(f = fopen(CLIUSERS, "r")))
 	{
-		log(0, 0, 0, 0, "WARNING! No users specified. Command-line access is open to all\n");
+		LOG(0, 0, 0, 0, "WARNING! No users specified. Command-line access is open to all\n");
 	}
 	else
 	{
@@ -202,12 +202,12 @@ void init_cli(char *hostname)
 			if (!strcmp(buf, "enable"))
 			{
 				cli_allow_enable(cli, p);
-				log(3, 0, 0, 0, "Setting enable password\n");
+				LOG(3, 0, 0, 0, "Setting enable password\n");
 			}
 			else
 			{
 				cli_allow_user(cli, buf, p);
-				log(3, 0, 0, 0, "Allowing user %s to connect to the CLI\n", buf);
+				LOG(3, 0, 0, 0, "Allowing user %s to connect to the CLI\n", buf);
 			}
 		}
 		fclose(f);
@@ -226,7 +226,7 @@ void init_cli(char *hostname)
 	addr.sin_port = htons(23);
 	if (bind(clifd, (void *) &addr, sizeof(addr)) < 0)
 	{
-		log(0, 0, 0, 0, "Error listening on cli port 23: %s\n", strerror(errno));
+		LOG(0, 0, 0, 0, "Error listening on cli port 23: %s\n", strerror(errno));
 		return;
 	}
 	listen(clifd, 10);
@@ -241,18 +241,18 @@ void cli_do(int sockfd)
 	if (fork_and_close()) return;
 	if (getpeername(sockfd, (struct sockaddr *)&addr, &l) == 0)
 	{
-		log(3, 0, 0, 0, "Accepted connection to CLI from %s\n", inet_toa(addr.sin_addr.s_addr));
+		LOG(3, 0, 0, 0, "Accepted connection to CLI from %s\n", inet_toa(addr.sin_addr.s_addr));
 		require_auth = addr.sin_addr.s_addr != inet_addr("127.0.0.1");
 	}
 	else
-		log(0, 0, 0, 0, "getpeername() failed on cli socket. Requiring authentication: %s\n", strerror(errno));
+		LOG(0, 0, 0, 0, "getpeername() failed on cli socket. Requiring authentication: %s\n", strerror(errno));
 
 	if (require_auth)
 	{
-		log(3, 0, 0, 0, "CLI is remote, requiring authentication\n");
+		LOG(3, 0, 0, 0, "CLI is remote, requiring authentication\n");
 		if (!cli->users) /* paranoia */
 		{
-			log(0, 0, 0, 0, "No users for remote authentication!  Exiting CLI\n");
+			LOG(0, 0, 0, 0, "No users for remote authentication!  Exiting CLI\n");
 			exit(0);
 		}
 	}
@@ -273,18 +273,18 @@ void cli_do(int sockfd)
 	cli_loop(cli, sockfd);
 
 	close(sockfd);
-	log(3, 0, 0, 0, "Closed CLI connection from %s\n", inet_toa(addr.sin_addr.s_addr));
+	LOG(3, 0, 0, 0, "Closed CLI connection from %s\n", inet_toa(addr.sin_addr.s_addr));
 	exit(0);
 }
 
 void cli_print_log(struct cli_def *cli, char *string)
 {
-	log(3, 0, 0, 0, "%s\n", string);
+	LOG(3, 0, 0, 0, "%s\n", string);
 }
 
 void cli_do_file(FILE *fh)
 {
-	log(3, 0, 0, 0, "Reading configuration file\n");
+	LOG(3, 0, 0, 0, "Reading configuration file\n");
 	cli_print_callback(cli, cli_print_log);
 	cli_file(cli, fh, PRIVILEGE_PRIVILEGED, MODE_CONFIG);
 	cli_print_callback(cli, NULL);

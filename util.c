@@ -1,6 +1,6 @@
 /* Misc util functions */
 
-char const *cvs_id_util = "$Id: util.c,v 1.4 2004-11-02 04:35:04 bodea Exp $";
+char const *cvs_id_util = "$Id: util.c,v 1.5 2004-11-05 04:55:27 bodea Exp $";
 
 #include <unistd.h>
 #include <errno.h>
@@ -51,8 +51,8 @@ pid_t fork_and_close()
 		params.sched_priority = 0;
 		if (sched_setscheduler(0, SCHED_OTHER, &params))
 		{
-			log(0, 0, 0, 0, "Error setting scheduler to OTHER after fork: %s\n", strerror(errno));
-			log(0, 0, 0, 0, "This is probably really really bad.\n");
+			LOG(0, 0, 0, 0, "Error setting scheduler to OTHER after fork: %s\n", strerror(errno));
+			LOG(0, 0, 0, 0, "This is probably really really bad.\n");
 		}
 	}
 

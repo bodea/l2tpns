@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.20 2004-11-05 02:21:55 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.21 2004-11-05 04:55:27 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -34,17 +34,17 @@ void processpap(tunnelidt t, sessionidt s, u8 *p, u16 l)
 
 	CSTAT(call_processpap);
 
-	log_hex(5, "PAP", p, l);
+	LOG_HEX(5, "PAP", p, l);
 	if (l < 4)
 	{
-		log(1, 0, s, t, "Short PAP %u bytes\n", l);
+		LOG(1, 0, s, t, "Short PAP %u bytes\n", l);
 		STAT(tunnel_rx_errors);
 		return ;
 	}
 
 	if ((hl = ntohs(*(u16 *) (p + 2))) > l)
 	{
-		log(1, 0, s, t, "Length mismatch PAP %u/%u\n", hl, l);
+		LOG(1, 0, s, t, "Length mismatch PAP %u/%u\n", hl, l);
 		STAT(tunnel_rx_errors);
 		return ;
 	}
@@ -52,7 +52,7 @@ void processpap(tunnelidt t, sessionidt s, u8 *p, u16 l)
 
 	if (*p != 1)
 	{
-		log(1, 0, s, t, "Unexpected PAP code %d\n", *p);
+		LOG(1, 0, s, t, "Unexpected PAP code %d\n", *p);
 		STAT(tunnel_rx_errors);
 		return ;
 	}
@@ -67,7 +67,7 @@ void processpap(tunnelidt t, sessionidt s, u8 *p, u16 l)
 		if (*b && *b < sizeof(pass))
 			memcpy(pass, b + 1, *b);
 		pass[*b] = 0;
-		log(3, 0, s, t, "PAP login %s/%s\n", user, pass);
+		LOG(3, 0, s, t, "PAP login %s/%s\n", user, pass);
 	}
 	if (session[s].ip || !session[s].radius)
 	{
@@ -76,7 +76,7 @@ void processpap(tunnelidt t, sessionidt s, u8 *p, u16 l)
 		u8 id = p[1];
 		u8 *p = makeppp(b, sizeof(b), 0, 0, t, s, PPPPAP);
 		if (!p) {	// Failed to make ppp header!
-			log(1,0,0,0, "Failed to make PPP header in process pap!\n");
+			LOG(1,0,0,0, "Failed to make PPP header in process pap!\n");
 			return;
 		}
 		if (session[s].ip)
@@ -88,14 +88,14 @@ void processpap(tunnelidt t, sessionidt s, u8 *p, u16 l)
 		p[4] = 0;			// no message
 		if (session[s].ip)
 		{
-			log(3, session[s].ip, s, t, "%d Already an IP allocated: %s (%d)\n", getpid(), inet_toa(htonl(session[s].ip)), session[s].ip_pool_index);
+			LOG(3, session[s].ip, s, t, "Already an IP allocated: %s (%d)\n", inet_toa(htonl(session[s].ip)), session[s].ip_pool_index);
 			session[s].flags &= ~SF_IPCP_ACKED;
 		}
 		else
 		{
-			log(1, 0, s, t, "No radius session available to authenticate session...\n");
+			LOG(1, 0, s, t, "No radius session available to authenticate session...\n");
 		}
-		log(3, 0, s, t, "Fallback response to PAP (%s)\n", (session[s].ip) ? "ACK" : "NAK");
+		LOG(3, 0, s, t, "Fallback response to PAP (%s)\n", (session[s].ip) ? "ACK" : "NAK");
 		tunnelsend(b, 5 + (p - b), t); // send it
 	}
 	else
@@ -108,7 +108,7 @@ void processpap(tunnelidt t, sessionidt s, u8 *p, u16 l)
 		run_plugins(PLUGIN_PRE_AUTH, &packet);
 		if (!packet.continue_auth)
 		{
-			log(3, 0, s, t, "A plugin rejected PRE_AUTH\n");
+			LOG(3, 0, s, t, "A plugin rejected PRE_AUTH\n");
 			if (packet.username) free(packet.username);
 			if (packet.password) free(packet.password);
 			return;
@@ -121,7 +121,7 @@ void processpap(tunnelidt t, sessionidt s, u8 *p, u16 l)
 		free(packet.password);
 
 		radius[r].id = p[1];
-		log(3, 0, s, t, "Sending login for %s/%s to radius\n", user, pass);
+		LOG(3, 0, s, t, "Sending login for %s/%s to radius\n", user, pass);
 		radiussend(r, RADIUSAUTH);
 	}
 }
@@ -134,11 +134,11 @@ void processchap(tunnelidt t, sessionidt s, u8 *p, u16 l)
 
 	CSTAT(call_processchap);
 
-	log_hex(5, "CHAP", p, l);
+	LOG_HEX(5, "CHAP", p, l);
 	r = session[s].radius;
 	if (!r)
 	{
-		log(1, 0, s, t, "Unexpected CHAP message\n");
+		LOG(1, 0, s, t, "Unexpected CHAP message\n");
 
 // FIXME: Need to drop the session here.
 
@@ -148,14 +148,14 @@ void processchap(tunnelidt t, sessionidt s, u8 *p, u16 l)
 
 	if (l < 4)
 	{
-		log(1, 0, s, t, "Short CHAP %u bytes\n", l);
+		LOG(1, 0, s, t, "Short CHAP %u bytes\n", l);
 		STAT(tunnel_rx_errors);
 		return ;
 	}
 
 	if ((hl = ntohs(*(u16 *) (p + 2))) > l)
 	{
-		log(1, 0, s, t, "Length mismatch CHAP %u/%u\n", hl, l);
+		LOG(1, 0, s, t, "Length mismatch CHAP %u/%u\n", hl, l);
 		STAT(tunnel_rx_errors);
 		return ;
 	}
@@ -163,20 +163,20 @@ void processchap(tunnelidt t, sessionidt s, u8 *p, u16 l)
 
 	if (*p != 2)
 	{
-		log(1, 0, s, t, "Unexpected CHAP response code %d\n", *p);
+		LOG(1, 0, s, t, "Unexpected CHAP response code %d\n", *p);
 		STAT(tunnel_rx_errors);
 		return;
 	}
 	if (p[1] != radius[r].id)
 	{
-		log(1, 0, s, t, "Wrong CHAP response ID %d (should be %d) (%d)\n", p[1], radius[r].id, r);
+		LOG(1, 0, s, t, "Wrong CHAP response ID %d (should be %d) (%d)\n", p[1], radius[r].id, r);
 		STAT(tunnel_rx_errors);
 		return ;
 	}
 
 	if (l < 5 || p[4] != 16)
 	{
-		log(1, 0, s, t, "Bad CHAP response length %d\n", l < 5 ? -1 : p[4]);
+		LOG(1, 0, s, t, "Bad CHAP response length %d\n", l < 5 ? -1 : p[4]);
 		STAT(tunnel_rx_errors);
 		return ;
 	}
@@ -185,7 +185,7 @@ void processchap(tunnelidt t, sessionidt s, u8 *p, u16 l)
 	p += 5;
 	if (l < 16 || l - 16 >= sizeof(session[s].user))
 	{
-		log(1, 0, s, t, "CHAP user too long %d\n", l - 16);
+		LOG(1, 0, s, t, "CHAP user too long %d\n", l - 16);
 		STAT(tunnel_rx_errors);
 		return ;
 	}
@@ -206,7 +206,7 @@ void processchap(tunnelidt t, sessionidt s, u8 *p, u16 l)
 		run_plugins(PLUGIN_PRE_AUTH, &packet);
 		if (!packet.continue_auth)
 		{
-			log(3, 0, s, t, "A plugin rejected PRE_AUTH\n");
+			LOG(3, 0, s, t, "A plugin rejected PRE_AUTH\n");
 			if (packet.username) free(packet.username);
 			if (packet.password) free(packet.password);
 			return;
@@ -220,7 +220,7 @@ void processchap(tunnelidt t, sessionidt s, u8 *p, u16 l)
 	}
 
 	radius[r].chap = 1;
-	log(3, 0, s, t, "CHAP login %s\n", session[s].user);
+	LOG(3, 0, s, t, "CHAP login %s\n", session[s].user);
 	radiussend(r, RADIUSAUTH);
 }
 
@@ -245,9 +245,9 @@ void dumplcp(u8 *p, int l)
 	int x = l - 4;
 	u8 *o = (p + 4);
 
-	log_hex(5, "PPP LCP Packet", p, l);
-	log(4, 0, 0, 0, "PPP LCP Packet type %d (%s len %d)\n", *p, ppp_lcp_types[(int)*p], ntohs( ((u16 *) p)[1]) );
-	log(4, 0, 0, 0, "Length: %d\n", l);
+	LOG_HEX(5, "PPP LCP Packet", p, l);
+	LOG(4, 0, 0, 0, "PPP LCP Packet type %d (%s len %d)\n", *p, ppp_lcp_types[(int)*p], ntohs( ((u16 *) p)[1]) );
+	LOG(4, 0, 0, 0, "Length: %d\n", l);
 	if (*p != ConfigReq && *p != ConfigRej && *p != ConfigAck)
 		return;
 
@@ -257,12 +257,12 @@ void dumplcp(u8 *p, int l)
 		int length = o[1];
 		if (length < 2)
 		{
-			log(4, 0, 0, 0, "	Option length is %d...\n", length);
+			LOG(4, 0, 0, 0, "	Option length is %d...\n", length);
 			break;
 		}
 		if (type == 0)
 		{
-			log(4, 0, 0, 0, "	Option type is 0...\n");
+			LOG(4, 0, 0, 0, "	Option type is 0...\n");
 			x -= length;
 			o += length;
 			continue;
@@ -271,27 +271,27 @@ void dumplcp(u8 *p, int l)
 		{
 			case 1: // Maximum-Receive-Unit
 				if (length == 4)
-					log(4, 0, 0, 0, "    %s %d\n", lcp_types[type], ntohs(*(u16 *)(o + 2)));
+					LOG(4, 0, 0, 0, "    %s %d\n", lcp_types[type], ntohs(*(u16 *)(o + 2)));
 				else
-					log(4, 0, 0, 0, "    %s odd length %d\n", lcp_types[type], length);
+					LOG(4, 0, 0, 0, "    %s odd length %d\n", lcp_types[type], length);
 				break;
 			case 3: // Authentication-Protocol
 				{
 					if (length == 4)
 					{
 						int proto = ntohs(*(u16 *)(o + 2));
-						log(4, 0, 0, 0, "   %s 0x%x (%s)\n", lcp_types[type], proto,
+						LOG(4, 0, 0, 0, "   %s 0x%x (%s)\n", lcp_types[type], proto,
 							proto == PPPCHAP ? "CHAP" :
 							proto == PPPPAP  ? "PAP"  : "UNKNOWN");
 					}
 					else
-						log(4, 0, 0, 0, "   %s odd length %d\n", lcp_types[type], length);
+						LOG(4, 0, 0, 0, "   %s odd length %d\n", lcp_types[type], length);
 					break;
 				}
 			case 4: // Quality-Protocol
 				{
 					u32 qp = ntohl(*(u32 *)(o + 2));
-					log(4, 0, 0, 0, "    %s %x\n", lcp_types[type], qp);
+					LOG(4, 0, 0, 0, "    %s %x\n", lcp_types[type], qp);
 					break;
 				}
 			case 5: // Magic-Number
@@ -299,24 +299,24 @@ void dumplcp(u8 *p, int l)
 					if (length == 6)
 					{
 						u32 magicno = ntohl(*(u32 *)(o + 2));
-						log(4, 0, 0, 0, "    %s %x\n", lcp_types[type], magicno);
+						LOG(4, 0, 0, 0, "    %s %x\n", lcp_types[type], magicno);
 					}
 					else
-						log(4, 0, 0, 0, "   %s odd length %d\n", lcp_types[type], length);
+						LOG(4, 0, 0, 0, "   %s odd length %d\n", lcp_types[type], length);
 					break;
 				}
 			case 7: // Protocol-Field-Compression
 				{
-					log(4, 0, 0, 0, "    %s\n", lcp_types[type]);
+					LOG(4, 0, 0, 0, "    %s\n", lcp_types[type]);
 					break;
 				}
 			case 8: // Address-And-Control-Field-Compression
 				{
-					log(4, 0, 0, 0, "    %s\n", lcp_types[type]);
+					LOG(4, 0, 0, 0, "    %s\n", lcp_types[type]);
 					break;
 				}
 			default:
-				log(2, 0, 0, 0, "    Unknown PPP LCP Option type %d\n", type);
+				LOG(2, 0, 0, 0, "    Unknown PPP LCP Option type %d\n", type);
 				break;
 		}
 		x -= length;
@@ -334,17 +334,17 @@ void processlcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 
 	CSTAT(call_processlcp);
 
-	log_hex(5, "LCP", p, l);
+	LOG_HEX(5, "LCP", p, l);
 	if (l < 4)
 	{
-		log(1, session[s].ip, s, t, "Short LCP %d bytes\n", l);
+		LOG(1, session[s].ip, s, t, "Short LCP %d bytes\n", l);
 		STAT(tunnel_rx_errors);
 		return ;
 	}
 
 	if ((hl = ntohs(*(u16 *) (p + 2))) > l)
 	{
-		log(1, 0, s, t, "Length mismatch LCP %u/%u\n", hl, l);
+		LOG(1, 0, s, t, "Length mismatch LCP %u/%u\n", hl, l);
 		STAT(tunnel_rx_errors);
 		return ;
 	}
@@ -352,15 +352,15 @@ void processlcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 
 	if (*p == ConfigAck)
 	{
-		log(3, session[s].ip, s, t, "LCP: Discarding ConfigAck\n");
-		session[s].flags |= SESSIONLCPACK;
+		LOG(3, session[s].ip, s, t, "LCP: Discarding ConfigAck\n");
+		session[s].flags |= SF_LCP_ACKED;
 	}
 	else if (*p == ConfigReq)
 	{
 		int x = l - 4;
 		u8 *o = (p + 4);
 
-		log(3, session[s].ip, s, t, "LCP: ConfigReq (%d bytes)...\n", l);
+		LOG(3, session[s].ip, s, t, "LCP: ConfigReq (%d bytes)...\n", l);
 		if (config->debug > 3) dumplcp(p, l);
 
 		while (x > 2)
@@ -374,21 +374,21 @@ void processlcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 					session[s].mru = ntohs(*(u16 *)(o + 2));
 					break;
 				case 2: // asyncmap
-					log_hex(2, "PPP LCP Packet", p, l);
-					log(2, 0, 0, 0, "PPP LCP Packet type %d (%s len %d)\n", *p, ppp_lcp_types[(int)*p], ntohs( ((u16 *) p)[1]) );
+					LOG_HEX(2, "PPP LCP Packet", p, l);
+					LOG(2, 0, 0, 0, "PPP LCP Packet type %d (%s len %d)\n", *p, ppp_lcp_types[(int)*p], ntohs( ((u16 *) p)[1]) );
 					break;
 				case 3: // Authentication-Protocol
 					{
 						int proto = ntohs(*(u16 *)(o + 2));
 						if (proto == PPPCHAP)
 						{
-							log(2, session[s].ip, s, t, "    Remote end is trying to do CHAP. Rejecting it.\n");
+							LOG(2, session[s].ip, s, t, "    Remote end is trying to do CHAP. Rejecting it.\n");
 
 							if (!q)
 							{
 								q = makeppp(b, sizeof(b), p, l, t, s, PPPLCP);
 								if (!q) {
-									log(2, session[s].ip, s, t, " Failed to send packet.\n");
+									LOG(2, session[s].ip, s, t, " Failed to send packet.\n");
 									break;
 								}
 								*q++ = ConfigNak;
@@ -413,7 +413,7 @@ void processlcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 				case 18:
 				{
 					// Reject LCP CallBack
-					log(2, session[s].ip, s, t, "    PPP LCP Option type %d, len=%d\n", type, length);
+					LOG(2, session[s].ip, s, t, "    PPP LCP Option type %d, len=%d\n", type, length);
 					memcpy(p + 4, o, length);
 					*(u16 *)(p + 2) = htons(length + 4);
 					*p = ConfigRej;
@@ -424,7 +424,7 @@ void processlcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 
 				default:
 					// Reject Unknown LCP Option to stop to send it again
-					log(2, session[s].ip, s, t, "    Unknown PPP LCP Option type %d\n", type);
+					LOG(2, session[s].ip, s, t, "    Unknown PPP LCP Option type %d\n", type);
 					memcpy(p + 4, o, length);
 					*(u16 *)(p + 2) = htons(length + 4);
 					*p = ConfigRej;
@@ -436,16 +436,17 @@ void processlcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 			o += length;
 		}
 
+		if (!(session[s].flags & SF_LCP_ACKED))
+			initlcp(t, s);
+
 		if (!q)
 		{
 			// Send back a ConfigAck
-			log(3, session[s].ip, s, t, "ConfigReq accepted, sending as Ack\n");
-			// for win2k L2TP clients and LCP renegotiation of alive session
-			if (magicno || l == 4 || (session[s].mru && l == 8)) initlcp(t, s);
+			LOG(3, session[s].ip, s, t, "ConfigReq accepted, sending as Ack\n");
 			q = makeppp(b, sizeof(b), p, l, t, s, PPPLCP);
 			if (!q)
 			{
-				log(3, session[s].ip, s, t, " failed to create packet.\n");
+				LOG(3, session[s].ip, s, t, " failed to create packet.\n");
 				return;
 			}
 			*q = ConfigAck;
@@ -454,16 +455,13 @@ void processlcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 		else
 		{
 			// Already built a ConfigNak... send it
-			log(3, session[s].ip, s, t, "Sending ConfigNak\n");
+			LOG(3, session[s].ip, s, t, "Sending ConfigNak\n");
 			tunnelsend(b, l + (q - b), t);
 		}
-
-		if (!(session[s].flags & SESSIONLCPACK))
-			initlcp(t, s);
 	}
 	else if (*p == ConfigNak)
 	{
-		log(1, session[s].ip, s, t, "Remote end sent a ConfigNak. Ignoring\n");
+		LOG(1, session[s].ip, s, t, "Remote end sent a ConfigNak. Ignoring\n");
 		if (config->debug > 3) dumplcp(p, l);
 		return ;
 	}
@@ -472,10 +470,10 @@ void processlcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 		*p = TerminateAck;	// close
 		q = makeppp(b, sizeof(b),  p, l, t, s, PPPLCP);
 		if (!q) {
-			log(3, session[s].ip, s, t, "Failed to create PPP packet in processlcp.\n");
+			LOG(3, session[s].ip, s, t, "Failed to create PPP packet in processlcp.\n");
 			return;
 		}
-		log(3, session[s].ip, s, t, "LCP: Received TerminateReq. Sending TerminateAck\n");
+		LOG(3, session[s].ip, s, t, "LCP: Received TerminateReq. Sending TerminateAck\n");
 		sessionshutdown(s, "Remote end closed connection.");
 		tunnelsend(b, l + (q - b), t); // send it
 	}
@@ -489,10 +487,10 @@ void processlcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 		*(u32 *) (p + 4) = htonl(session[s].magic); // our magic number
 		q = makeppp(b, sizeof(b), p, l, t, s, PPPLCP);
 		if (!q) {
-			log(3, session[s].ip, s, t, " failed to send EchoReply.\n");
+			LOG(3, session[s].ip, s, t, " failed to send EchoReply.\n");
 			return;
 		}
-		log(5, session[s].ip, s, t, "LCP: Received EchoReq. Sending EchoReply\n");
+		LOG(5, session[s].ip, s, t, "LCP: Received EchoReq. Sending EchoReply\n");
 		tunnelsend(b, l + (q - b), t); // send it
 	}
 	else if (*p == EchoReply)
@@ -504,21 +502,21 @@ void processlcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 		*p = CodeRej;
 		if (l > MAXCONTROL)
 		{
-			log(1, 0, s, t, "Truncated Ident Packet (length=%d) to 1400 bytes\n", l);
+			LOG(1, 0, s, t, "Truncated Ident Packet (length=%d) to 1400 bytes\n", l);
 			l = 1400;
 		}
 		q = makeppp(b, sizeof(b), p, l, t, s, PPPLCP);
 		if (!q)
 		{
-			log(3, session[s].ip, s, t, "Failed to create IdentRej.\n");
+			LOG(3, session[s].ip, s, t, "Failed to create IdentRej.\n");
 			return;
 		}
-		log_hex(5, "LCPIdentRej", q, l + 4);
+		LOG_HEX(5, "LCPIdentRej", q, l + 4);
 		tunnelsend(b, 12 + 4 + l, t);
 	}
 	else
 	{
-		log(1, session[s].ip, s, t, "Unexpected LCP code %d\n", *p);
+		LOG(1, session[s].ip, s, t, "Unexpected LCP code %d\n", *p);
 		STAT(tunnel_rx_errors);
 		return ;
 	}
@@ -531,17 +529,17 @@ void processipcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 
 	CSTAT(call_processipcp);
 
-	log_hex(5, "IPCP", p, l);
+	LOG_HEX(5, "IPCP", p, l);
 	if (l < 5)
 	{
-		log(1, 0, s, t, "Short IPCP %d bytes\n", l);
+		LOG(1, 0, s, t, "Short IPCP %d bytes\n", l);
 		STAT(tunnel_rx_errors);
 		return ;
 	}
 
 	if ((hl = ntohs(*(u16 *) (p + 2))) > l)
 	{
-		log(1, 0, s, t, "Length mismatch IPCP %u/%u\n", hl, l);
+		LOG(1, 0, s, t, "Length mismatch IPCP %u/%u\n", hl, l);
 		STAT(tunnel_rx_errors);
 		return ;
 	}
@@ -560,20 +558,20 @@ void processipcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 		}
 		session[s].flags |= SF_IPCP_ACKED;
 
-		log(3, session[s].ip, s, t, "IPCP Acked, session is now active\n");
+		LOG(3, session[s].ip, s, t, "IPCP Acked, session is now active\n");
 		return;
 	}
 	if (*p != ConfigReq)
 	{
-		log(1, 0, s, t, "Unexpected IPCP code %d\n", *p);
+		LOG(1, 0, s, t, "Unexpected IPCP code %d\n", *p);
 		STAT(tunnel_rx_errors);
 		return ;
 	}
-	log(4, session[s].ip, s, t, "IPCP ConfigReq received\n");
+	LOG(4, session[s].ip, s, t, "IPCP ConfigReq received\n");
 
 	if (!session[s].ip)
 	{
-		log(3, 0, s, t, "Waiting on radius reply\n");
+		LOG(3, 0, s, t, "Waiting on radius reply\n");
 		return;			// have to wait on RADIUS reply
 	}
 	// form a config reply quoting the IP in the session
@@ -597,7 +595,7 @@ void processipcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 			i = p + l;
 			if (!(q = makeppp(b, sizeof(b), p, l, t, s, PPPIPCP)))
 			{
-				log(2, 0, s, t, "Failed to send IPCP ConfigRej\n");
+				LOG(2, 0, s, t, "Failed to send IPCP ConfigRej\n");
 				return;
 			}
 			*q = ConfigRej;
@@ -606,19 +604,19 @@ void processipcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 			{
 				if (*p != 0x81 && *p != 0x83 && *p != 3)
 				{
-					log(2, 0, s, t, "IPCP reject %d\n", *p);
+					LOG(2, 0, s, t, "IPCP reject %d\n", *p);
 					memcpy(q + n, p, p[1]);
 					n += p[1];
 				}
 				p += p[1];
 			}
 			*(u16 *) (q + 2) = htons(n);
-			log(4, session[s].ip, s, t, "Sending ConfigRej\n");
+			LOG(4, session[s].ip, s, t, "Sending ConfigRej\n");
 			tunnelsend(b, n + (q - b), t); // send it
 		}
 		else
 		{
-			log(4, session[s].ip, s, t, "Sending ConfigAck\n");
+			LOG(4, session[s].ip, s, t, "Sending ConfigAck\n");
 			*p = ConfigAck;
 			if ((i = findppp(p, 0x81))) // Primary DNS address
 			{
@@ -626,7 +624,7 @@ void processipcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 				{
 					*(u32 *) (i + 2) = htonl(session[s].dns1);
 					*p = ConfigNak;
-					log(5, session[s].ip, s, t, "   DNS1 = %s\n", inet_toa(session[s].dns1));
+					LOG(5, session[s].ip, s, t, "   DNS1 = %s\n", inet_toa(session[s].dns1));
 				}
 			}
 			if ((i = findppp(p, 0x83))) // Secondary DNS address (TBA, is it)
@@ -635,13 +633,13 @@ void processipcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 				{
 					*(u32 *) (i + 2) = htonl(session[s].dns2);
 					*p = ConfigNak;
-					log(5, session[s].ip, s, t, "   DNS2 = %s\n", inet_toa(session[s].dns1));
+					LOG(5, session[s].ip, s, t, "   DNS2 = %s\n", inet_toa(session[s].dns2));
 				}
 			}
 			i = findppp(p, 3);		// IP address
 			if (!i || i[1] != 6)
 			{
-				log(1, 0, s, t, "No IP in IPCP request\n");
+				LOG(1, 0, s, t, "No IP in IPCP request\n");
 				STAT(tunnel_rx_errors);
 				return ;
 			}
@@ -649,12 +647,12 @@ void processipcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 			{
 				*(u32 *) (i + 2) = htonl(session[s].ip);
 				*p = ConfigNak;
-				log(4, session[s].ip, s, t, " No, a ConfigNak, client is requesting IP - sending %s\n",
+				LOG(4, session[s].ip, s, t, " No, a ConfigNak, client is requesting IP - sending %s\n",
 						inet_toa(htonl(session[s].ip)));
 			}
 			if (!(q = makeppp(b, sizeof(b), p, l, t, s, PPPIPCP)))
 			{
-				log(2, 0, s, t, " Failed to send IPCP packet.\n");
+				LOG(2, 0, s, t, " Failed to send IPCP packet.\n");
 				return;
 			}
 			tunnelsend(b, l + (q - b), t); // send it
@@ -672,13 +670,13 @@ void processipin(tunnelidt t, sessionidt s, u8 *p, u16 l)
 
 	CSTAT(call_processipin);
 
-	log_hex(5, "IP", p, l);
+	LOG_HEX(5, "IP", p, l);
 
 	ip = ntohl(*(u32 *)(p + 12));
 
 	if (l > MAXETHER)
 	{
-		log(1, ip, s, t, "IP packet too long %d\n", l);
+		LOG(1, ip, s, t, "IP packet too long %d\n", l);
 		STAT(tunnel_rx_errors);
 		return ;
 	}
@@ -686,7 +684,7 @@ void processipin(tunnelidt t, sessionidt s, u8 *p, u16 l)
 	// no spoof (do sessionbyip to handled statically routed subnets)
 	if (ip != session[s].ip && sessionbyip(htonl(ip)) != s)
 	{
-		log(5, ip, s, t, "Dropping packet with spoofed IP %s\n", inet_toa(htonl(ip)));
+		LOG(5, ip, s, t, "Dropping packet with spoofed IP %s\n", inet_toa(htonl(ip)));
 		return;
 	}
 
@@ -725,7 +723,7 @@ void processipin(tunnelidt t, sessionidt s, u8 *p, u16 l)
 	if (tun_write(p, l) < 0)
 	{
 		STAT(tun_tx_errors);
-		log(0, 0, s, t, "Error writing %d bytes to TUN device: %s (tunfd=%d, p=%p)\n",
+		LOG(0, 0, s, t, "Error writing %d bytes to TUN device: %s (tunfd=%d, p=%p)\n",
 			l, strerror(errno), tunfd, p);
 	}
 
@@ -737,11 +735,11 @@ void processipin(tunnelidt t, sessionidt s, u8 *p, u16 l)
 //
 void send_ipin(sessionidt s, u8 *buf, int len)
 {
-	log_hex(5, "IP in throttled", buf, len);
+	LOG_HEX(5, "IP in throttled", buf, len);
 	if (write(tunfd, buf, len) < 0)
 	{
 		STAT(tun_tx_errors);
-		log(0, 0, 0, 0, "Error writing %d bytes to TUN device: %s (tunfd=%d, p=%p)\n",
+		LOG(0, 0, 0, 0, "Error writing %d bytes to TUN device: %s (tunfd=%d, p=%p)\n",
 			len, strerror(errno), tunfd, buf);
 	}
 
@@ -755,16 +753,16 @@ void send_ipin(sessionidt s, u8 *buf, int len)
 }
 
 
-// Process LCP messages
+// Process CCP messages
 void processccp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 {
 
 	CSTAT(call_processccp);
 
-	log_hex(5, "CCP", p, l);
+	LOG_HEX(5, "CCP", p, l);
 	if (l < 2 || (*p != ConfigReq && *p != TerminateReq))
 	{
-		log(1, 0, s, t, "Unexpected CCP request code %d\n", *p);
+		LOG(1, 0, s, t, "Unexpected CCP request code %d\n", *p);
 		STAT(tunnel_rx_errors);
 		return ;
 	}
@@ -788,7 +786,7 @@ void processccp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 			*p = TerminateAck;		// close
 		if (!(q = makeppp(b, sizeof(b), p, l, t, s, PPPCCP)))
 		{
-			log(1,0,0,0, "Failed to send CCP packet.\n");	
+			LOG(1,0,0,0, "Failed to send CCP packet.\n");	
 			return;
 		}
 		tunnelsend(b, l + (q - b), t); // send it
@@ -806,11 +804,11 @@ void sendchap(tunnelidt t, sessionidt s)
 
 	if (!r)
 	{
-		log(1, 0, s, t, "No RADIUS to send challenge\n");
+		LOG(1, 0, s, t, "No RADIUS to send challenge\n");
 		STAT(tunnel_tx_errors);
 		return ;
 	}
-	log(1, 0, s, t, "Send CHAP challenge\n");
+	LOG(1, 0, s, t, "Send CHAP challenge\n");
 	{
 		// new challenge
 		int n;
@@ -831,7 +829,7 @@ void sendchap(tunnelidt t, sessionidt s)
 	}
 	q = makeppp(b, sizeof(b), 0, 0, t, s, PPPCHAP);
 	if (!q) {
-		log(1, 0, s, t, "failed to send CHAP challenge.\n");
+		LOG(1, 0, s, t, "failed to send CHAP challenge.\n");
 		return;
 	}
 	*q = 1;					// challenge
@@ -869,7 +867,7 @@ u8 *makeppp(u8 *b, int size, u8 *p, int l, tunnelidt t, sessionidt s, u16 mtype)
 	}
 
 	if (l + 12 > size) {
-		log(3,0,0,0, "Would have overflowed the buffer in makeppp: size %d, len %d.\n", size, l);
+		LOG(3,0,0,0, "Would have overflowed the buffer in makeppp: size %d, len %d.\n", size, l);
 		return NULL;	// Run out of room to hold the packet!
 	}
 	if (p && l)
@@ -904,10 +902,10 @@ void initlcp(tunnelidt t, sessionidt s)
 
 	q = makeppp(b, sizeof(b), NULL, 0, t, s, PPPLCP);
 	if (!q) {
-		log(1, 0, s, t, "Failed to send LCP ConfigReq.\n");
+		LOG(1, 0, s, t, "Failed to send LCP ConfigReq.\n");
 		return;
 	}
-	log(4, 0, s, t, "Sending LCP ConfigReq for PAP\n");
+	LOG(4, 0, s, t, "Sending LCP ConfigReq for PAP\n");
 	*q = ConfigReq;
 	*(u8 *)(q + 1) = (time_now % 255) + 1; // ID
 	*(u16 *)(q + 2) = htons(14); // Length
@@ -929,7 +927,7 @@ void sendccp(tunnelidt t, sessionidt s)
 	*q = ConfigReq;
 	*(u8 *)(q + 1) = (time_now % 255) + 1; // ID
 	*(u16 *)(q + 2) = htons(4); // Length
-	log_hex(5, "PPPCCP", q, 4);
+	LOG_HEX(5, "PPPCCP", q, 4);
 	tunnelsend(b, (q - b) + 4 , t);
 }
 

@@ -4,7 +4,7 @@
 
 /* strip domain part of username before sending RADIUS requests */
 
-char const *cvs_id = "$Id: stripdomain.c,v 1.3 2004-11-05 02:39:35 bodea Exp $";
+char const *cvs_id = "$Id: stripdomain.c,v 1.4 2004-11-05 04:55:27 bodea Exp $";
 
 int __plugin_api_version = 1;
 static struct pluginfuncs *p = 0;
@@ -18,7 +18,7 @@ int plugin_pre_auth(struct param_pre_auth *data)
 	// Strip off @domain
 	if ((x = strchr(data->username, '@')))
 	{
-		p->_log(3, 0, 0, 0, "Stripping off trailing domain name \"%s\"\n", x);
+		p->log(3, 0, 0, 0, "Stripping off trailing domain name \"%s\"\n", x);
 		*x = 0;
 	}
 

@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.29 2004-11-05 02:47:47 bodea Exp $
+// $Id: l2tpns.h,v 1.30 2004-11-05 04:55:27 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -203,16 +203,16 @@ typedef struct sessions
 }
 sessiont;
 
-#define SF_IPCP_ACKED	(1<<0)		// Has this session seen an IPCP Ack?
+#define SF_IPCP_ACKED	1	// Has this session seen an IPCP Ack?
+#define SF_LCP_ACKED	2	// LCP negotiated
 
 typedef struct {
 	u32	cin;
 	u32	cout;
 } sessioncountt;
 
-#define	SESSIONPFC	1            // PFC negotiated flags
-#define	SESSIONACFC	2           // ACFC negotiated flags
-#define SESSIONLCPACK	4	// LCP negotiated
+#define	SESSIONPFC	1	// PFC negotiated flags
+#define	SESSIONACFC	2	// ACFC negotiated flags
 
 // 168 bytes per tunnel
 typedef struct tunnels
@@ -540,10 +540,10 @@ int cmd_show_ipcache(struct cli_def *cli, char *command, char **argv, int argc);
 int cmd_show_hist_idle(struct cli_def *cli, char *command, char **argv, int argc);
 int cmd_show_hist_open(struct cli_def *cli, char *command, char **argv, int argc);
 
-#undef log
-#undef log_hex
-#define log(D, a, s, t, f, ...)	({ if (D <= config->debug) _log(D, a, s, t, f, ## __VA_ARGS__); })
-#define log_hex(D, t, d, s)	({ if (D <= config->debug) _log_hex(D, t, d, s); })
+#undef LOG
+#undef LOG_HEX
+#define LOG(D, a, s, t, f, ...)	({ if (D <= config->debug) _log(D, a, s, t, f, ## __VA_ARGS__); })
+#define LOG_HEX(D, t, d, s)	({ if (D <= config->debug) _log_hex(D, t, d, s); })
 
 void _log(int level, ipt address, sessionidt s, tunnelidt t, const char *format, ...) __attribute__((format (printf, 5, 6)));
 void _log_hex(int level, const char *title, const char *data, int maxsize);
@@ -584,12 +584,12 @@ if (count++ < max) { \
 	void *array[20]; \
 	char **strings; \
 	int size, i; \
-	log(0, 0, 0, t, "Backtrace follows"); \
+	LOG(0, 0, 0, t, "Backtrace follows"); \
 	size = backtrace(array, 10); \
 	strings = backtrace_symbols(array, size); \
 	if (strings) for (i = 0; i < size; i++) \
 	{ \
-		log(0, 0, 0, t, "%s\n", strings[i]); \
+		LOG(0, 0, 0, t, "%s\n", strings[i]); \
 	} \
 	free(strings); \
 }

@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.43 2004-11-05 02:47:47 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.44 2004-11-05 04:55:27 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -196,7 +196,7 @@ clockt backoff(u8 try)
 
 
 //
-// Log a debug message.
+// Log a debug message.  Typically called vias LOG macro
 //
 void _log(int level, ipt address, sessionidt s, tunnelidt t, const char *format, ...)
 {
@@ -248,7 +248,7 @@ void _log_hex(int level, const char *title, const char *data, int maxsize)
 
 	if (config->debug < level) return;
 
-	// No support for log_hex to syslog
+	// No support for _log_hex to syslog
 	if (log_stream)
 	{
 		_log(level, 0, 0, 0, "%s (%d bytes):\n", title, maxsize);
@@ -324,14 +324,14 @@ void routeset(sessionidt s, ipt ip, ipt mask, ipt gw, u8 add)
 	else if (mask == 0xffffffff)
 		r.rt_flags |= RTF_HOST;
 
-	log(1, ip, 0, 0, "Route %s %u.%u.%u.%u/%u.%u.%u.%u %u.%u.%u.%u\n",
+	LOG(1, ip, 0, 0, "Route %s %u.%u.%u.%u/%u.%u.%u.%u %u.%u.%u.%u\n",
 	    add ? "add" : "del",
 	    ip   >> 24, ip   >> 16 & 0xff, ip   >> 8 & 0xff, ip   & 0xff,
 	    mask >> 24, mask >> 16 & 0xff, mask >> 8 & 0xff, mask & 0xff,
 	    gw   >> 24, gw   >> 16 & 0xff, gw   >> 8 & 0xff, gw   & 0xff);
 
 	if (ioctl(ifrfd, add ? SIOCADDRT : SIOCDELRT, (void *) &r) < 0)
-		log(0, 0, 0, 0, "routeset() error in ioctl: %s\n", strerror(errno));
+		LOG(0, 0, 0, 0, "routeset() error in ioctl: %s\n", strerror(errno));
 
 #ifdef BGP
 	if (add)
@@ -370,7 +370,7 @@ void inittun(void)
 	tunfd = open(TUNDEVICE, O_RDWR);
 	if (tunfd < 0)
 	{                          // fatal
-		log(0, 0, 0, 0, "Can't open %s: %s\n", TUNDEVICE, strerror(errno));
+		LOG(0, 0, 0, 0, "Can't open %s: %s\n", TUNDEVICE, strerror(errno));
 		exit(1);
 	}
 	{
@@ -379,7 +379,7 @@ void inittun(void)
 	}
 	if (ioctl(tunfd, TUNSETIFF, (void *) &ifr) < 0)
 	{
-		log(0, 0, 0, 0, "Can't set tun interface: %s\n", strerror(errno));
+		LOG(0, 0, 0, 0, "Can't set tun interface: %s\n", strerror(errno));
 		exit(1);
 	}
 	assert(strlen(ifr.ifr_name) < sizeof(config->tundevice));
@@ -392,25 +392,25 @@ void inittun(void)
 
 	if (ioctl(ifrfd, SIOCSIFADDR, (void *) &ifr) < 0)
 	{
-		log(0, 0, 0, 0, "Error setting tun address: %s\n", strerror(errno));
+		LOG(0, 0, 0, 0, "Error setting tun address: %s\n", strerror(errno));
 		exit(1);
 	}
 	/* Bump up the qlen to deal with bursts from the network */
 	ifr.ifr_qlen = 1000;
 	if (ioctl(ifrfd, SIOCSIFTXQLEN, (void *) &ifr) < 0)
 	{
-		log(0, 0, 0, 0, "Error setting tun queue length: %s\n", strerror(errno));
+		LOG(0, 0, 0, 0, "Error setting tun queue length: %s\n", strerror(errno));
 		exit(1);
 	}
 	ifr.ifr_flags = IFF_UP;
 	if (ioctl(ifrfd, SIOCSIFFLAGS, (void *) &ifr) < 0)
 	{
-		log(0, 0, 0, 0, "Error setting tun flags: %s\n", strerror(errno));
+		LOG(0, 0, 0, 0, "Error setting tun flags: %s\n", strerror(errno));
 		exit(1);
 	}
 	if (ioctl(ifrfd, SIOCGIFINDEX, (void *) &ifr) < 0)
 	{
-		log(0, 0, 0, 0, "Error setting tun ifindex: %s\n", strerror(errno));
+		LOG(0, 0, 0, 0, "Error setting tun ifindex: %s\n", strerror(errno));
 		exit(1);
 	}
 	tunidx = ifr.ifr_ifindex;
@@ -435,7 +435,7 @@ void initudp(void)
 	}
 	if (bind(udpfd, (void *) &addr, sizeof(addr)) < 0)
 	{
-		log(0, 0, 0, 0, "Error in UDP bind: %s\n", strerror(errno));
+		LOG(0, 0, 0, 0, "Error in UDP bind: %s\n", strerror(errno));
 		exit(1);
 	}
 	snoopfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
@@ -448,7 +448,7 @@ void initudp(void)
 	setsockopt(controlfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
 	if (bind(controlfd, (void *) &addr, sizeof(addr)) < 0)
 	{
-		log(0, 0, 0, 0, "Error in control bind: %s\n", strerror(errno));
+		LOG(0, 0, 0, 0, "Error in control bind: %s\n", strerror(errno));
 		exit(1);
 	}
 }
@@ -519,9 +519,9 @@ static void cache_ipmap(ipt ip, int s)
 	d[(size_t) a[3]] = (char *)((int)s);
 
 	if (s > 0)
-		log(4, ip, s, session[s].tunnel, "Caching ip address %s\n", inet_toa(nip));
+		LOG(4, ip, s, session[s].tunnel, "Caching ip address %s\n", inet_toa(nip));
 	else if (s == 0)
-		log(4, ip, 0, 0, "Un-caching ip address %s\n", inet_toa(nip));
+		LOG(4, ip, 0, 0, "Un-caching ip address %s\n", inet_toa(nip));
 	// else a map to an ip pool index.
 }
 
@@ -606,21 +606,21 @@ void send_garp(ipt ip)
 	s = socket(PF_INET, SOCK_DGRAM, 0);
 	if (s < 0)
 	{
-		log(0, 0, 0, 0, "Error creating socket for GARP: %s\n", strerror(errno));
+		LOG(0, 0, 0, 0, "Error creating socket for GARP: %s\n", strerror(errno));
 		return;
 	}
 	memset(&ifr, 0, sizeof(ifr));
 	strncpy(ifr.ifr_name, "eth0", sizeof(ifr.ifr_name) - 1);
 	if (ioctl(s, SIOCGIFHWADDR, &ifr) < 0)
 	{
-		log(0, 0, 0, 0, "Error getting eth0 hardware address for GARP: %s\n", strerror(errno));
+		LOG(0, 0, 0, 0, "Error getting eth0 hardware address for GARP: %s\n", strerror(errno));
 		close(s);
 		return;
 	}
 	memcpy(mac, &ifr.ifr_hwaddr.sa_data, 6*sizeof(char));
 	if (ioctl(s, SIOCGIFINDEX, &ifr) < 0)
 	{
-		log(0, 0, 0, 0, "Error getting eth0 interface index for GARP: %s\n", strerror(errno));
+		LOG(0, 0, 0, 0, "Error getting eth0 interface index for GARP: %s\n", strerror(errno));
 		close(s);
 		return;
 	}
@@ -652,7 +652,7 @@ void tunnelsend(u8 * buf, u16 l, tunnelidt t)
 	if (!t)
 	{
 		static int backtrace_count = 0;
-		log(0, 0, 0, t, "tunnelsend called with 0 as tunnel id\n");
+		LOG(0, 0, 0, t, "tunnelsend called with 0 as tunnel id\n");
 		STAT(tunnel_tx_errors);
 		log_backtrace(backtrace_count, 5)
 		return;
@@ -661,7 +661,7 @@ void tunnelsend(u8 * buf, u16 l, tunnelidt t)
 	if (!tunnel[t].ip)
 	{
 		static int backtrace_count = 0;
-		log(1, 0, 0, t, "Error sending data out tunnel: no remote endpoint (tunnel not set up)\n");
+		LOG(1, 0, 0, t, "Error sending data out tunnel: no remote endpoint (tunnel not set up)\n");
 		log_backtrace(backtrace_count, 5)
 		STAT(tunnel_tx_errors);
 		return;
@@ -682,19 +682,19 @@ void tunnelsend(u8 * buf, u16 l, tunnelidt t)
 		if (tunnel[t].try > 1)
 		{
 			STAT(tunnel_retries);
-			log(3, tunnel[t].ip, 0, t, "Control message resend try %d\n", tunnel[t].try);
+			LOG(3, tunnel[t].ip, 0, t, "Control message resend try %d\n", tunnel[t].try);
 		}
 	}
 
 	if (sendto(udpfd, buf, l, 0, (void *) &addr, sizeof(addr)) < 0)
 	{
-		log(0, tunnel[t].ip, ntohs((*(u16 *) (buf + 6))), t, "Error sending data out tunnel: %s (udpfd=%d, buf=%p, len=%d, dest=%s)\n",
+		LOG(0, tunnel[t].ip, ntohs((*(u16 *) (buf + 6))), t, "Error sending data out tunnel: %s (udpfd=%d, buf=%p, len=%d, dest=%s)\n",
 				strerror(errno), udpfd, buf, l, inet_ntoa(addr.sin_addr));
 		STAT(tunnel_tx_errors);
 		return;
 	}
 
-	log_hex(5, "Send Tunnel Data", buf, l);
+	LOG_HEX(5, "Send Tunnel Data", buf, l);
 	STAT(tunnel_tx_packets);
 	INC_STAT(tunnel_tx_bytes, l);
 }
@@ -726,13 +726,13 @@ void processipout(u8 * buf, int len)
 
 	if (len < MIN_IP_SIZE)
 	{
-		log(1, 0, 0, 0, "Short IP, %d bytes\n", len);
+		LOG(1, 0, 0, 0, "Short IP, %d bytes\n", len);
 		STAT(tunnel_tx_errors);
 		return;
 	}
 	if (len >= MAXETHER)
 	{
-		log(1, 0, 0, 0, "Oversize IP packet %d bytes\n", len);
+		LOG(1, 0, 0, 0, "Oversize IP packet %d bytes\n", len);
 		STAT(tunnel_tx_errors);
 		return;
 	}
@@ -744,7 +744,7 @@ void processipout(u8 * buf, int len)
 	// Got an IP header now
 	if (*(u8 *)(buf) >> 4 != 4)
 	{
-		log(1, 0, 0, 0, "IP: Don't understand anything except IPv4\n");
+		LOG(1, 0, 0, 0, "IP: Don't understand anything except IPv4\n");
 		return;
 	}
 
@@ -763,7 +763,7 @@ void processipout(u8 * buf, int len)
 
 		if (rate++ < config->icmp_rate) // Only send a max of icmp_rate per second.
 		{
-			log(4, 0, 0, 0, "IP: Sending ICMP host unreachable to %s\n", inet_toa(*(u32 *)(buf + 12)));
+			LOG(4, 0, 0, 0, "IP: Sending ICMP host unreachable to %s\n", inet_toa(*(u32 *)(buf + 12)));
 			host_unreachable(*(u32 *)(buf + 12), *(u16 *)(buf + 4), ip, buf, (len < 64) ? 64 : len);
 		}
 		return;
@@ -791,14 +791,14 @@ void processipout(u8 * buf, int len)
 	if (sp->snoop_ip && sp->snoop_port)
 		snoop_send_packet(buf, len, sp->snoop_ip, sp->snoop_port);
 
-	log(5, session[s].ip, s, t, "Ethernet -> Tunnel (%d bytes)\n", len);
+	LOG(5, session[s].ip, s, t, "Ethernet -> Tunnel (%d bytes)\n", len);
 
 	// Add on L2TP header
 	{
 		u8 *p = makeppp(b, sizeof(b), buf, len, t, s, PPPIP);
 		if (!p)
 		{
-			log(3, session[s].ip, s, t, "failed to send packet in processipout.\n");
+			LOG(3, session[s].ip, s, t, "failed to send packet in processipout.\n");
 			return;
 		}
 		tunnelsend(b, len + (p-b), t); // send it...
@@ -825,7 +825,7 @@ void send_ipout(sessionidt s, u8 *buf, int len)
 
 	if (len < 0 || len > MAXETHER)
 	{
-		log(1,0,0,0, "Odd size IP packet: %d bytes\n", len);
+		LOG(1,0,0,0, "Odd size IP packet: %d bytes\n", len);
 		return;
 	}
 
@@ -840,7 +840,7 @@ void send_ipout(sessionidt s, u8 *buf, int len)
 	t = session[s].tunnel;
 	sp = &session[s];
 
-	log(5, session[s].ip, s, t, "Ethernet -> Tunnel (%d bytes)\n", len);
+	LOG(5, session[s].ip, s, t, "Ethernet -> Tunnel (%d bytes)\n", len);
 
 	// Snooping this session.
 	if (sp->snoop_ip && sp->snoop_port)
@@ -851,7 +851,7 @@ void send_ipout(sessionidt s, u8 *buf, int len)
 		u8 *p = makeppp(b, sizeof(b),  buf, len, t, s, PPPIP);
 		if (!p)
 		{
-			log(3, session[s].ip, s, t, "failed to send packet in send_ipout.\n");
+			LOG(3, session[s].ip, s, t, "failed to send packet in send_ipout.\n");
 			return;
 		}
 		tunnelsend(b, len + (p-b), t); // send it...
@@ -1024,12 +1024,12 @@ void sessionshutdown(sessionidt s, char *reason)
 
 	if (!session[s].tunnel)
 	{
-		log(3, session[s].ip, s, session[s].tunnel, "Called sessionshutdown on a session with no tunnel.\n");
+		LOG(3, session[s].ip, s, session[s].tunnel, "Called sessionshutdown on a session with no tunnel.\n");
 		return;                   // not a live session
 	}
 
 	if (!dead)
-		log(2, 0, s, session[s].tunnel, "Shutting down session %d: %s\n", s, reason);
+		LOG(2, 0, s, session[s].tunnel, "Shutting down session %d: %s\n", s, reason);
 
 	session[s].die = now() + 150; // Clean up in 15 seconds
 
@@ -1046,7 +1046,7 @@ void sessionshutdown(sessionidt s, char *reason)
 		{
 			if (!(r = radiusnew(s)))
 			{
-				log(1, 0, s, session[s].tunnel, "No free RADIUS sessions for Stop message\n");
+				LOG(1, 0, s, session[s].tunnel, "No free RADIUS sessions for Stop message\n");
 				STAT(radius_overflow);
 			}
 			else
@@ -1119,7 +1119,7 @@ void sendipcp(tunnelidt t, sessionidt s)
 	q = makeppp(buf,sizeof(buf), 0, 0, t, s, PPPIPCP);
 	if (!q)
 	{
-		log(3, session[s].ip, s, t, "failed to send packet in sendipcp.\n");
+		LOG(3, session[s].ip, s, t, "failed to send packet in sendipcp.\n");
 		return;
 	}
 
@@ -1147,7 +1147,7 @@ void sessionkill(sessionidt s, char *reason)
 	if (session[s].radius)
 		radiusclear(session[s].radius, s); // cant send clean accounting data, session is killed
 
-	log(2, 0, s, session[s].tunnel, "Kill session %d (%s): %s\n", s, session[s].user, reason);
+	LOG(2, 0, s, session[s].tunnel, "Kill session %d (%s): %s\n", s, session[s].user, reason);
 
 	memset(&session[s], 0, sizeof(session[s]));
 	session[s].tunnel = T_FREE;	// Mark it as free.
@@ -1183,7 +1183,7 @@ void tunnelkill(tunnelidt t, char *reason)
 
 	// free tunnel
 	tunnelclear(t);
-	log(1, 0, 0, t, "Kill tunnel %d: %s\n", t, reason);
+	LOG(1, 0, 0, t, "Kill tunnel %d: %s\n", t, reason);
 	cli_tunnel_actions[s].action = 0;
 	cluster_send_tunnel(t);
 }
@@ -1201,7 +1201,7 @@ void tunnelshutdown(tunnelidt t, char *reason)
 		tunnelkill(t, reason);
 		return;
 	}
-	log(1, 0, 0, t, "Shutting down tunnel %d (%s)\n", t, reason);
+	LOG(1, 0, 0, t, "Shutting down tunnel %d (%s)\n", t, reason);
 
 	// close session
 	for (s = 1; s < MAXSESSION; s++)
@@ -1232,18 +1232,18 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 
 	udp_rx += len;
 	udp_rx_pkt++;
-	log_hex(5, "UDP Data", buf, len);
+	LOG_HEX(5, "UDP Data", buf, len);
 	STAT(tunnel_rx_packets);
 	INC_STAT(tunnel_rx_bytes, len);
 	if (len < 6)
 	{
-		log(1, ntohl(addr->sin_addr.s_addr), 0, 0, "Short UDP, %d bytes\n", len);
+		LOG(1, ntohl(addr->sin_addr.s_addr), 0, 0, "Short UDP, %d bytes\n", len);
 		STAT(tunnel_rx_errors);
 		return;
 	}
 	if ((buf[1] & 0x0F) != 2)
 	{
-		log(1, ntohl(addr->sin_addr.s_addr), 0, 0, "Bad L2TP ver %d\n", (buf[1] & 0x0F) != 2);
+		LOG(1, ntohl(addr->sin_addr.s_addr), 0, 0, "Bad L2TP ver %d\n", (buf[1] & 0x0F) != 2);
 		STAT(tunnel_rx_errors);
 		return;
 	}
@@ -1258,13 +1258,13 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 	p += 2;
 	if (s >= MAXSESSION)
 	{
-		log(1, ntohl(addr->sin_addr.s_addr), s, t, "Received UDP packet with invalid session ID\n");
+		LOG(1, ntohl(addr->sin_addr.s_addr), s, t, "Received UDP packet with invalid session ID\n");
 		STAT(tunnel_rx_errors);
 		return;
 	}
 	if (t >= MAXTUNNEL)
 	{
-		log(1, ntohl(addr->sin_addr.s_addr), s, t, "Received UDP packet with invalid tunnel ID\n");
+		LOG(1, ntohl(addr->sin_addr.s_addr), s, t, "Received UDP packet with invalid tunnel ID\n");
 		STAT(tunnel_rx_errors);
 		return;
 	}
@@ -1282,7 +1282,7 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 	}
 	if ((p - buf) > l)
 	{
-		log(1, ntohl(addr->sin_addr.s_addr), s, t, "Bad length %d>%d\n", (p - buf), l);
+		LOG(1, ntohl(addr->sin_addr.s_addr), s, t, "Bad length %d>%d\n", (p - buf), l);
 		STAT(tunnel_rx_errors);
 		return;
 	}
@@ -1309,11 +1309,11 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 
 		if ((*buf & 0xCA) != 0xC8)
 		{
-			log(1, ntohl(addr->sin_addr.s_addr), s, t, "Bad control header %02X\n", *buf);
+			LOG(1, ntohl(addr->sin_addr.s_addr), s, t, "Bad control header %02X\n", *buf);
 			STAT(tunnel_rx_errors);
 			return;
 		}
-		log(3, ntohl(addr->sin_addr.s_addr), s, t, "Control message (%d bytes): (unacked %d) l-ns %d l-nr %d r-ns %d r-nr %d\n",
+		LOG(3, ntohl(addr->sin_addr.s_addr), s, t, "Control message (%d bytes): (unacked %d) l-ns %d l-nr %d r-ns %d r-nr %d\n",
 				l, tunnel[t].controlc, tunnel[t].ns, tunnel[t].nr, ns, nr);
 		// if no tunnel specified, assign one
 		if (!t)
@@ -1338,7 +1338,7 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 		{
 			if (!(t = new_tunnel()))
 			{
-				log(1, ntohl(addr->sin_addr.s_addr), 0, 0, "No more tunnels\n");
+				LOG(1, ntohl(addr->sin_addr.s_addr), 0, 0, "No more tunnels\n");
 				STAT(tunnel_overflow);
 				return;
 			}
@@ -1346,7 +1346,7 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 			tunnel[t].ip = ntohl(*(ipt *) & addr->sin_addr);
 			tunnel[t].port = ntohs(addr->sin_port);
 			tunnel[t].window = 4; // default window
-			log(1, ntohl(addr->sin_addr.s_addr), 0, t, "   New tunnel from %u.%u.%u.%u/%u ID %d\n", tunnel[t].ip >> 24, tunnel[t].ip >> 16 & 255, tunnel[t].ip >> 8 & 255, tunnel[t].ip & 255, tunnel[t].port, t);
+			LOG(1, ntohl(addr->sin_addr.s_addr), 0, t, "   New tunnel from %u.%u.%u.%u/%u ID %d\n", tunnel[t].ip >> 24, tunnel[t].ip >> 16 & 255, tunnel[t].ip >> 8 & 255, tunnel[t].ip & 255, tunnel[t].port, t);
 			STAT(tunnel_created);
 		}
 
@@ -1377,7 +1377,7 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 			if (ns != tunnel[t].nr)
 			{
 				// is this the sequence we were expecting?
-				log(1, ntohl(addr->sin_addr.s_addr), 0, t, "   Out of sequence tunnel %d, (%d is not the expected %d)\n", t, ns, tunnel[t].nr);
+				LOG(1, ntohl(addr->sin_addr.s_addr), 0, t, "   Out of sequence tunnel %d, (%d is not the expected %d)\n", t, ns, tunnel[t].nr);
 				STAT(tunnel_rx_errors);
 
 				if (l)	// Is this not a ZLB?
@@ -1420,7 +1420,7 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 				p += n;       // next
 				if (l < n)
 				{
-					log(1, ntohl(addr->sin_addr.s_addr), s, t, "Invalid length in AVP\n");
+					LOG(1, ntohl(addr->sin_addr.s_addr), s, t, "Invalid length in AVP\n");
 					STAT(tunnel_rx_errors);
 					fatal = flags;
 					return;
@@ -1431,17 +1431,17 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 					// handle hidden AVPs
 					if (!*config->l2tpsecret)
 					{
-						log(1, ntohl(addr->sin_addr.s_addr), s, t, "Hidden AVP requested, but no L2TP secret.\n");
+						LOG(1, ntohl(addr->sin_addr.s_addr), s, t, "Hidden AVP requested, but no L2TP secret.\n");
 						fatal = flags;
 						continue;
 					}
 					if (!session[s].random_vector_length)
 					{
-						log(1, ntohl(addr->sin_addr.s_addr), s, t, "Hidden AVP requested, but no random vector.\n");
+						LOG(1, ntohl(addr->sin_addr.s_addr), s, t, "Hidden AVP requested, but no random vector.\n");
 						fatal = flags;
 						continue;
 					}
-					log(4, ntohl(addr->sin_addr.s_addr), s, t, "Hidden AVP\n");
+					LOG(4, ntohl(addr->sin_addr.s_addr), s, t, "Hidden AVP\n");
 					// Unhide the AVP
 					n = unhide_avp(b, t, s, n);
 					if (n == 0)
@@ -1452,14 +1452,14 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 				}
 				if (*b & 0x3C)
 				{
-					log(1, ntohl(addr->sin_addr.s_addr), s, t, "Unrecognised AVP flags %02X\n", *b);
+					LOG(1, ntohl(addr->sin_addr.s_addr), s, t, "Unrecognised AVP flags %02X\n", *b);
 					fatal = flags;
 					continue; // next
 				}
 				b += 2;
 				if (*(u16 *) (b))
 				{
-					log(2, ntohl(addr->sin_addr.s_addr), s, t, "Unknown AVP vendor %d\n", ntohs(*(u16 *) (b)));
+					LOG(2, ntohl(addr->sin_addr.s_addr), s, t, "Unknown AVP vendor %d\n", ntohs(*(u16 *) (b)));
 					fatal = flags;
 					continue; // next
 				}
@@ -1468,12 +1468,12 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 				b += 2;
 				n -= 6;
 
-				log(4, ntohl(addr->sin_addr.s_addr), s, t, "   AVP %d (%s) len %d\n", mtype, avpnames[mtype], n);
+				LOG(4, ntohl(addr->sin_addr.s_addr), s, t, "   AVP %d (%s) len %d\n", mtype, avpnames[mtype], n);
 				switch (mtype)
 				{
 				case 0:     // message type
 					message = ntohs(*(u16 *) b);
-					log(4, ntohl(addr->sin_addr.s_addr), s, t, "   Message type = %d (%s)\n", *b,
+					LOG(4, ntohl(addr->sin_addr.s_addr), s, t, "   Message type = %d (%s)\n", *b,
 							l2tp_message_types[message]);
 					mandatorymessage = flags;
 					break;
@@ -1492,7 +1492,7 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 								resdesc = cdn_result_codes[rescode];
 						}
 
-						log(4, ntohl(addr->sin_addr.s_addr), s, t, "   Result Code %d: %s\n",
+						LOG(4, ntohl(addr->sin_addr.s_addr), s, t, "   Result Code %d: %s\n",
 							rescode, resdesc);
 						if (n >= 4)
 						{
@@ -1500,11 +1500,11 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 							const char* errdesc = "(unknown)";
 							if (errcode <= MAX_ERROR_CODE)
 								errdesc = error_codes[errcode];
-							log(4, ntohl(addr->sin_addr.s_addr), s, t, "   Error Code %d: %s\n",
+							LOG(4, ntohl(addr->sin_addr.s_addr), s, t, "   Error Code %d: %s\n",
 								errcode, errdesc);
 						}
 						if (n > 4)
-							log(4, ntohl(addr->sin_addr.s_addr), s, t, "   Error String: %.*s\n",
+							LOG(4, ntohl(addr->sin_addr.s_addr), s, t, "   Error String: %.*s\n",
 								n-4, b+4);
 
 						break;
@@ -1513,10 +1513,10 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 				case 2:     // protocol version
 					{
 						version = ntohs(*(u16 *) (b));
-						log(4, ntohl(addr->sin_addr.s_addr), s, t, "   Protocol version = %d\n", version);
+						LOG(4, ntohl(addr->sin_addr.s_addr), s, t, "   Protocol version = %d\n", version);
 						if (version && version != 0x0100)
 						{   // allow 0.0 and 1.0
-							log(1, ntohl(addr->sin_addr.s_addr), s, t, "   Bad protocol version %04X\n",
+							LOG(1, ntohl(addr->sin_addr.s_addr), s, t, "   Bad protocol version %04X\n",
 									version);
 							fatal = flags;
 							continue; // next
@@ -1524,74 +1524,74 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 					}
 					break;
 				case 3:     // framing capabilities
-//					log(4, ntohl(addr->sin_addr.s_addr), s, t, "Framing capabilities\n");
+//					LOG(4, ntohl(addr->sin_addr.s_addr), s, t, "Framing capabilities\n");
 					break;
 				case 4:     // bearer capabilities
-//					log(4, ntohl(addr->sin_addr.s_addr), s, t, "Bearer capabilities\n");
+//					LOG(4, ntohl(addr->sin_addr.s_addr), s, t, "Bearer capabilities\n");
 					break;
 				case 5:		// tie breaker
 					// We never open tunnels, so we don't care about tie breakers
-//					log(4, ntohl(addr->sin_addr.s_addr), s, t, "Tie breaker\n");
+//					LOG(4, ntohl(addr->sin_addr.s_addr), s, t, "Tie breaker\n");
 					continue;
 				case 6:     // firmware revision
-//					log(4, ntohl(addr->sin_addr.s_addr), s, t, "Firmware revision\n");
+//					LOG(4, ntohl(addr->sin_addr.s_addr), s, t, "Firmware revision\n");
 					break;
 				case 7:     // host name
 					memset(tunnel[t].hostname, 0, 128);
 					memcpy(tunnel[t].hostname, b, (n >= 127) ? 127 : n);
-					log(4, ntohl(addr->sin_addr.s_addr), s, t, "   Tunnel hostname = \"%s\"\n", tunnel[t].hostname);
+					LOG(4, ntohl(addr->sin_addr.s_addr), s, t, "   Tunnel hostname = \"%s\"\n", tunnel[t].hostname);
 					// TBA - to send to RADIUS
 					break;
 				case 8:     // vendor name
 					memset(tunnel[t].vendor, 0, sizeof(tunnel[t].vendor));
 					memcpy(tunnel[t].vendor, b, (n >= sizeof(tunnel[t].vendor) - 1) ? sizeof(tunnel[t].vendor) - 1 : n);
-					log(4, ntohl(addr->sin_addr.s_addr), s, t, "   Vendor name = \"%s\"\n", tunnel[t].vendor);
+					LOG(4, ntohl(addr->sin_addr.s_addr), s, t, "   Vendor name = \"%s\"\n", tunnel[t].vendor);
 					break;
 				case 9:     // assigned tunnel
 					tunnel[t].far = ntohs(*(u16 *) (b));
-					log(4, ntohl(addr->sin_addr.s_addr), s, t, "   Remote tunnel id = %d\n", tunnel[t].far);
+					LOG(4, ntohl(addr->sin_addr.s_addr), s, t, "   Remote tunnel id = %d\n", tunnel[t].far);
 					break;
 				case 10:    // rx window
 					tunnel[t].window = ntohs(*(u16 *) (b));
 					if (!tunnel[t].window)
 						tunnel[t].window = 1; // window of 0 is silly
-					log(4, ntohl(addr->sin_addr.s_addr), s, t, "   rx window = %d\n", tunnel[t].window);
+					LOG(4, ntohl(addr->sin_addr.s_addr), s, t, "   rx window = %d\n", tunnel[t].window);
 					break;
 				case 11:	// Challenge
 					{
-						log(4, ntohl(addr->sin_addr.s_addr), s, t, "   LAC requested CHAP authentication for tunnel\n");
+						LOG(4, ntohl(addr->sin_addr.s_addr), s, t, "   LAC requested CHAP authentication for tunnel\n");
 						build_chap_response(b, 2, n, &chapresponse);
 					}
 					break;
 				case 13:    // Response
 					// Why did they send a response? We never challenge.
-					log(2, ntohl(addr->sin_addr.s_addr), s, t, "   received unexpected challenge response\n");
+					LOG(2, ntohl(addr->sin_addr.s_addr), s, t, "   received unexpected challenge response\n");
 					break;
 
 				case 14:    // assigned session
 					asession = session[s].far = ntohs(*(u16 *) (b));
-					log(4, ntohl(addr->sin_addr.s_addr), s, t, "   assigned session = %d\n", asession);
+					LOG(4, ntohl(addr->sin_addr.s_addr), s, t, "   assigned session = %d\n", asession);
 					break;
 				case 15:    // call serial number
-					log(4, ntohl(addr->sin_addr.s_addr), s, t, "   call serial number = %d\n", ntohl(*(u32 *)b));
+					LOG(4, ntohl(addr->sin_addr.s_addr), s, t, "   call serial number = %d\n", ntohl(*(u32 *)b));
 					break;
 				case 18:    // bearer type
-					log(4, ntohl(addr->sin_addr.s_addr), s, t, "   bearer type = %d\n", ntohl(*(u32 *)b));
+					LOG(4, ntohl(addr->sin_addr.s_addr), s, t, "   bearer type = %d\n", ntohl(*(u32 *)b));
 					// TBA - for RADIUS
 					break;
 				case 19:    // framing type
-					log(4, ntohl(addr->sin_addr.s_addr), s, t, "   framing type = %d\n", ntohl(*(u32 *)b));
+					LOG(4, ntohl(addr->sin_addr.s_addr), s, t, "   framing type = %d\n", ntohl(*(u32 *)b));
 					// TBA
 					break;
 				case 21:    // called number
 					memset(called, 0, MAXTEL);
 					memcpy(called, b, (n >= MAXTEL) ? (MAXTEL-1) : n);
-					log(4, ntohl(addr->sin_addr.s_addr), s, t, "   Called <%s>\n", called);
+					LOG(4, ntohl(addr->sin_addr.s_addr), s, t, "   Called <%s>\n", called);
 					break;
 				case 22:    // calling number
 					memset(calling, 0, MAXTEL);
 					memcpy(calling, b, (n >= MAXTEL) ? (MAXTEL-1) : n);
-					log(4, ntohl(addr->sin_addr.s_addr), s, t, "   Calling <%s>\n", calling);
+					LOG(4, ntohl(addr->sin_addr.s_addr), s, t, "   Calling <%s>\n", calling);
 					break;
 				case 23:    // subtype
 					break;
@@ -1607,7 +1607,7 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 						memcpy(tmp, b, (n >= 30) ? 30 : n);
 						session[s].tx_connect_speed = atol(tmp);
 					}
-					log(4, ntohl(addr->sin_addr.s_addr), s, t, "   TX connect speed <%u>\n",
+					LOG(4, ntohl(addr->sin_addr.s_addr), s, t, "   TX connect speed <%u>\n",
 							session[s].tx_connect_speed);
 					break;
 				case 38:    // rx connect speed
@@ -1622,19 +1622,19 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 						memcpy(tmp, b, (n >= 30) ? 30 : n);
 						session[s].rx_connect_speed = atol(tmp);
 					}
-					log(4, ntohl(addr->sin_addr.s_addr), s, t, "   RX connect speed <%u>\n",
+					LOG(4, ntohl(addr->sin_addr.s_addr), s, t, "   RX connect speed <%u>\n",
 							session[s].rx_connect_speed);
 					break;
 				case 25:    // Physical Channel ID
 					{
 						u32 tmp = ntohl(*(u32 *)b);
-						log(4, ntohl(addr->sin_addr.s_addr), s, t, "   Physical Channel ID <%X>\n", tmp);
+						LOG(4, ntohl(addr->sin_addr.s_addr), s, t, "   Physical Channel ID <%X>\n", tmp);
 						break;
 					}
 				case 29:    // Proxy Authentication Type
 					{
 						u16 authtype = ntohs(*(u16 *)b);
-						log(4, ntohl(addr->sin_addr.s_addr), s, t, "   Proxy Auth Type %d (%s)\n",
+						LOG(4, ntohl(addr->sin_addr.s_addr), s, t, "   Proxy Auth Type %d (%s)\n",
 							authtype, authtypes[authtype]);
 						requestchap = (authtype == 2);
 						break;
@@ -1643,20 +1643,20 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 					{
 						char authname[64] = {0};
 						memcpy(authname, b, (n > 63) ? 63 : n);
-						log(4, ntohl(addr->sin_addr.s_addr), s, t, "   Proxy Auth Name (%s)\n",
+						LOG(4, ntohl(addr->sin_addr.s_addr), s, t, "   Proxy Auth Name (%s)\n",
 							authname);
 						break;
 					}
 				case 31:    // Proxy Authentication Challenge
 					{
 						memcpy(radius[session[s].radius].auth, b, 16);
-						log(4, ntohl(addr->sin_addr.s_addr), s, t, "   Proxy Auth Challenge\n");
+						LOG(4, ntohl(addr->sin_addr.s_addr), s, t, "   Proxy Auth Challenge\n");
 						break;
 					}
 				case 32:    // Proxy Authentication ID
 					{
 						u16 authid = ntohs(*(u16 *)(b));
-						log(4, ntohl(addr->sin_addr.s_addr), s, t, "   Proxy Auth ID (%d)\n",
+						LOG(4, ntohl(addr->sin_addr.s_addr), s, t, "   Proxy Auth ID (%d)\n",
 							authid);
 						if (session[s].radius)
 							radius[session[s].radius].id = authid;
@@ -1666,7 +1666,7 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 					{
 						char authresp[64] = {0};
 						memcpy(authresp, b, (n > 63) ? 63 : n);
-						log(4, ntohl(addr->sin_addr.s_addr), s, t, "   Proxy Auth Response\n");
+						LOG(4, ntohl(addr->sin_addr.s_addr), s, t, "   Proxy Auth Response\n");
 						break;
 					}
 				case 27:    // last send lcp
@@ -1693,13 +1693,13 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 				case 39:    // seq required - we control it as an LNS anyway...
 					break;
 				case 36:    // Random Vector
-					log(4, ntohl(addr->sin_addr.s_addr), s, t, "   Random Vector received. Enabled AVP Hiding.\n");
+					LOG(4, ntohl(addr->sin_addr.s_addr), s, t, "   Random Vector received. Enabled AVP Hiding.\n");
 					memset(session[s].random_vector, 0, sizeof(session[s].random_vector));
 					memcpy(session[s].random_vector, b, n);
 					session[s].random_vector_length = n;
 					break;
 				default:
-					log(2, ntohl(addr->sin_addr.s_addr), s, t, "   Unknown AVP type %d\n", mtype);
+					LOG(2, ntohl(addr->sin_addr.s_addr), s, t, "   Unknown AVP type %d\n", mtype);
 					fatal = flags;
 					continue; // next
 				}
@@ -1767,7 +1767,7 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 						// make a RADIUS session
 						if (!(r = radiusnew(s)))
 						{
-							log(1, ntohl(addr->sin_addr.s_addr), s, t, "No free RADIUS sessions for ICRQ\n");
+							LOG(1, ntohl(addr->sin_addr.s_addr), s, t, "No free RADIUS sessions for ICRQ\n");
 							sessionkill(s, "no free RADIUS sesions");
 							return;
 						}
@@ -1778,7 +1778,7 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 						session[s].tunnel = t;
 						session[s].far = asession;
 						session[s].last_packet = time_now;
-						log(3, ntohl(addr->sin_addr.s_addr), s, t, "New session (%d/%d)\n", tunnel[t].far, session[s].far);
+						LOG(3, ntohl(addr->sin_addr.s_addr), s, t, "New session (%d/%d)\n", tunnel[t].far, session[s].far);
 						control16(c, 14, s, 1); // assigned session
 						controladd(c, t, s); // send the reply
 						{
@@ -1800,7 +1800,7 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 					if (amagic == 0) amagic = time_now;
 					session[s].magic = amagic; // set magic number
 					session[s].l2tp_flags = aflags; // set flags received
-					log(3, ntohl(addr->sin_addr.s_addr), s, t, "Magic %X Flags %X\n", amagic, aflags);
+					LOG(3, ntohl(addr->sin_addr.s_addr), s, t, "Magic %X Flags %X\n", amagic, aflags);
 					controlnull(t); // ack
 					// In CHAP state, request PAP instead
 					if (requestchap)
@@ -1811,14 +1811,14 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 					sessionshutdown(s, "Closed (Received CDN)");
 					break;
 				case 0xFFFF:
-					log(1, ntohl(addr->sin_addr.s_addr), s, t, "Missing message type\n");
+					LOG(1, ntohl(addr->sin_addr.s_addr), s, t, "Missing message type\n");
 					break;
 				default:
 					STAT(tunnel_rx_errors);
 					if (mandatorymessage & 0x80)
 						tunnelshutdown(t, "Unknown message");
 					else
-						log(1, ntohl(addr->sin_addr.s_addr), s, t, "Unknown message type %d\n", message);
+						LOG(1, ntohl(addr->sin_addr.s_addr), s, t, "Unknown message type %d\n", message);
 					break;
 				}
 			if (chapresponse) free(chapresponse);
@@ -1826,14 +1826,14 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 		}
 		else
 		{
-			log(4, 0, s, t, "   Got a ZLB ack\n");
+			LOG(4, 0, s, t, "   Got a ZLB ack\n");
 		}
 	}
 	else
 	{                          // data
 		u16 prot;
 
-		log_hex(5, "Receive Tunnel Data", p, l);
+		LOG_HEX(5, "Receive Tunnel Data", p, l);
 		if (l > 2 && p[0] == 0xFF && p[1] == 0x03)
 		{                     // HDLC address header, discard
 			p += 2;
@@ -1841,7 +1841,7 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 		}
 		if (l < 2)
 		{
-			log(1, ntohl(addr->sin_addr.s_addr), s, t, "Short ppp length %d\n", l);
+			LOG(1, ntohl(addr->sin_addr.s_addr), s, t, "Short ppp length %d\n", l);
 			STAT(tunnel_rx_errors);
 			return;
 		}
@@ -1867,7 +1867,7 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 			}
 
 
-			log(1, ntohl(addr->sin_addr.s_addr), s, t, "UDP packet contains session %d "
+			LOG(1, ntohl(addr->sin_addr.s_addr), s, t, "UDP packet contains session %d "
 					"but no session[%d].tunnel exists (LAC said"
 					" tunnel = %d). Dropping packet.\n", s, s, t);
 			STAT(tunnel_rx_errors);
@@ -1876,7 +1876,7 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 
 		if (session[s].die)
 		{
-			log(3, ntohl(addr->sin_addr.s_addr), s, t, "Session %d is closing. Don't process PPP packets\n", s);
+			LOG(3, ntohl(addr->sin_addr.s_addr), s, t, "Session %d is closing. Don't process PPP packets\n", s);
 // I'm pretty sure this isn't right -- mo.
 //			return;              // closing session, PPP not processed
 		}
@@ -1923,7 +1923,7 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 		else
 		{
 			STAT(tunnel_rx_errors);
-			log(1, ntohl(addr->sin_addr.s_addr), s, t, "Unknown PPP protocol %04X\n", prot);
+			LOG(1, ntohl(addr->sin_addr.s_addr), s, t, "Unknown PPP protocol %04X\n", prot);
 		}
 	}
 }
@@ -1931,7 +1931,7 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 // read and process packet on tun
 void processtun(u8 * buf, int len)
 {
-	log_hex(5, "Receive TUN Data", buf, len);
+	LOG_HEX(5, "Receive TUN Data", buf, len);
 	STAT(tun_rx_packets);
 	INC_STAT(tun_rx_bytes, len);
 
@@ -1941,7 +1941,7 @@ void processtun(u8 * buf, int len)
 	eth_rx += len;
 	if (len < 22)
 	{
-		log(1, 0, 0, 0, "Short tun packet %d bytes\n", len);
+		LOG(1, 0, 0, 0, "Short tun packet %d bytes\n", len);
 		STAT(tun_rx_errors);
 		return;
 	}
@@ -1966,7 +1966,7 @@ int regular_cleanups(void)
 	static clockt next_acct = 0;
 	int a;
 
-	log(3, 0, 0, 0, "Begin regular cleanup\n");
+	LOG(3, 0, 0, 0, "Begin regular cleanup\n");
 
 	for (r = 1; r < MAXRADIUS; r++)
 	{
@@ -2012,7 +2012,7 @@ int regular_cleanups(void)
 		{
 			controlt *c = controlnew(6); // sending HELLO
 			controladd(c, t, 0); // send the message
-			log(3, tunnel[t].ip, 0, t, "Sending HELLO message\n");
+			LOG(3, tunnel[t].ip, 0, t, "Sending HELLO message\n");
 		}
 
 		// Check for tunnel changes requested from the CLI
@@ -2021,7 +2021,7 @@ int regular_cleanups(void)
 			cli_tunnel_actions[t].action = 0;
 			if (a & CLI_TUN_KILL)
 			{
-				log(2, tunnel[t].ip, 0, t, "Dropping tunnel by CLI\n");
+				LOG(2, tunnel[t].ip, 0, t, "Dropping tunnel by CLI\n");
 				tunnelshutdown(t, "Requested by administrator");
 			}
 		}
@@ -2041,7 +2041,7 @@ int regular_cleanups(void)
 		if (!session[s].die && session[s].ip && !(session[s].flags & SF_IPCP_ACKED))
 		{
 			// IPCP has not completed yet. Resend
-			log(3, session[s].ip, s, session[s].tunnel, "No ACK for initial IPCP ConfigReq... resending\n");
+			LOG(3, session[s].ip, s, session[s].tunnel, "No ACK for initial IPCP ConfigReq... resending\n");
 			sendipcp(session[s].tunnel, s);
 		}
 
@@ -2070,7 +2070,7 @@ int regular_cleanups(void)
 			u8 *q = makeppp(b, sizeof(b), 0, 0, session[s].tunnel, s, PPPLCP);
 			if (!q)
 			{
-				log(3, session[s].ip, s, t, "failed to send ECHO packet.\n");
+				LOG(3, session[s].ip, s, t, "failed to send ECHO packet.\n");
 				continue;
 			}
 
@@ -2079,7 +2079,7 @@ int regular_cleanups(void)
 			*(u16 *)(q + 2) = htons(8); // Length
 			*(u32 *)(q + 4) = 0; // Magic Number (not supported)
 
-			log(4, session[s].ip, s, session[s].tunnel, "No data in %d seconds, sending LCP ECHO\n",
+			LOG(4, session[s].ip, s, session[s].tunnel, "No data in %d seconds, sending LCP ECHO\n",
 					(int)(time_now - session[s].last_packet));
 			tunnelsend(b, 24, session[s].tunnel); // send it
 			if (++count >= MAX_ACTIONS) break;
@@ -2093,21 +2093,21 @@ int regular_cleanups(void)
 			cli_session_actions[s].action = 0;
 			if (a & CLI_SESS_KILL)
 			{
-				log(2, 0, s, session[s].tunnel, "Dropping session by CLI\n");
+				LOG(2, 0, s, session[s].tunnel, "Dropping session by CLI\n");
 				sessionshutdown(s, "Requested by administrator");
 				a = 0; // dead, no need to check for other actions
 			}
 
 			if (a & CLI_SESS_NOSNOOP)
 			{
-				log(2, 0, s, session[s].tunnel, "Unsnooping session by CLI\n");
+				LOG(2, 0, s, session[s].tunnel, "Unsnooping session by CLI\n");
 				session[s].snoop_ip = 0;
 				session[s].snoop_port = 0;
 				send++;
 			}
 			else if (a & CLI_SESS_SNOOP)
 			{
-				log(2, 0, s, session[s].tunnel, "Snooping session by CLI (to %s:%d)\n",
+				LOG(2, 0, s, session[s].tunnel, "Snooping session by CLI (to %s:%d)\n",
 				    inet_toa(cli_session_actions[s].snoop_ip), cli_session_actions[s].snoop_port);
 
 				session[s].snoop_ip = cli_session_actions[s].snoop_ip;
@@ -2117,13 +2117,13 @@ int regular_cleanups(void)
 
 			if (a & CLI_SESS_NOTHROTTLE)
 			{
-				log(2, 0, s, session[s].tunnel, "Un-throttling session by CLI\n");
+				LOG(2, 0, s, session[s].tunnel, "Un-throttling session by CLI\n");
 				throttle_session(s, 0, 0);
 				send++;
 			}
 			else if (a & CLI_SESS_THROTTLE)
 			{
-				log(2, 0, s, session[s].tunnel, "Throttling session by CLI (to %dkb/s up and %dkb/s down)\n",
+				LOG(2, 0, s, session[s].tunnel, "Throttling session by CLI (to %dkb/s up and %dkb/s down)\n",
 				    cli_session_actions[s].throttle_in,
 				    cli_session_actions[s].throttle_out);
 
@@ -2148,7 +2148,7 @@ int regular_cleanups(void)
 	if (count >= MAX_ACTIONS)
 		return 1;	// Didn't finish!
 
-	log(3, 0, 0, 0, "End regular cleanup (%d actions), next in %d seconds\n", count, config->cleanup_interval);
+	LOG(3, 0, 0, 0, "End regular cleanup (%d actions), next in %d seconds\n", count, config->cleanup_interval);
 	return 0;
 }
 
@@ -2172,7 +2172,7 @@ int still_busy(void)
 
 		if (last_talked != TIME)
 		{
-			log(2,0,0,0, "Tunnel %d still has un-acked control messages.\n", i);
+			LOG(2,0,0,0, "Tunnel %d still has un-acked control messages.\n", i);
 			last_talked = TIME;
 		}
 		return 1;
@@ -2181,7 +2181,7 @@ int still_busy(void)
 	// We stop waiting for radius after BUSY_WAIT_TIME 1/10th seconds
 	if (abs(TIME - start_busy_wait) > BUSY_WAIT_TIME)
 	{
-		log(1, 0, 0, 0, "Giving up waiting for RADIUS to be empty. Shutting down anyway.\n");
+		LOG(1, 0, 0, 0, "Giving up waiting for RADIUS to be empty. Shutting down anyway.\n");
 		return 0;
 	}
 
@@ -2194,7 +2194,7 @@ int still_busy(void)
 
 		if (last_talked != TIME)
 		{
-			log(2,0,0,0, "Radius session %d is still busy (sid %d)\n", i, radius[i].session);
+			LOG(2,0,0,0, "Radius session %d is still busy (sid %d)\n", i, radius[i].session);
 			last_talked = TIME;
 		}
 		return 1;
@@ -2215,7 +2215,7 @@ void mainloop(void)
 	clockt next_cluster_ping = 0;	// send initial ping immediately
 	time_t next_clean = time_now + config->cleanup_interval;
 
-	log(4, 0, 0, 0, "Beginning of main loop. udpfd=%d, tunfd=%d, cluster_sockfd=%d, controlfd=%d\n",
+	LOG(4, 0, 0, 0, "Beginning of main loop. udpfd=%d, tunfd=%d, cluster_sockfd=%d, controlfd=%d\n",
 			udpfd, tunfd, cluster_sockfd, controlfd);
 
 	FD_ZERO(&readset);
@@ -2281,7 +2281,7 @@ void mainloop(void)
 			    errno == ECHILD) // EINTR was clobbered by sigchild_handler()
 				continue;
 
-			log(0, 0, 0, 0, "Error returned from select(): %s\n", strerror(errno));
+			LOG(0, 0, 0, 0, "Error returned from select(): %s\n", strerror(errno));
 			main_quit++;
 			break;
 		}
@@ -2335,7 +2335,7 @@ void mainloop(void)
 
 				if ((sockfd = accept(clifd, (struct sockaddr *)&addr, &len)) <= 0)
 				{
-					log(0, 0, 0, 0, "accept error: %s\n", strerror(errno));
+					LOG(0, 0, 0, 0, "accept error: %s\n", strerror(errno));
 					continue;
 				}
 				else
@@ -2488,12 +2488,12 @@ void initdata(int optdebug, char *optconfig)
 
 	if (!(_statistics = shared_malloc(sizeof(struct Tstats))))
 	{
-		log(0, 0, 0, 0, "Error doing malloc for _statistics: %s\n", strerror(errno));
+		LOG(0, 0, 0, 0, "Error doing malloc for _statistics: %s\n", strerror(errno));
 		exit(1);
 	}
 	if (!(config = shared_malloc(sizeof(struct configt))))
 	{
-		log(0, 0, 0, 0, "Error doing malloc for configuration: %s\n", strerror(errno));
+		LOG(0, 0, 0, 0, "Error doing malloc for configuration: %s\n", strerror(errno));
 		exit(1);
 	}
 	memset(config, 0, sizeof(struct configt));
@@ -2505,37 +2505,37 @@ void initdata(int optdebug, char *optconfig)
 
 	if (!(tunnel = shared_malloc(sizeof(tunnelt) * MAXTUNNEL)))
 	{
-		log(0, 0, 0, 0, "Error doing malloc for tunnels: %s\n", strerror(errno));
+		LOG(0, 0, 0, 0, "Error doing malloc for tunnels: %s\n", strerror(errno));
 		exit(1);
 	}
 	if (!(session = shared_malloc(sizeof(sessiont) * MAXSESSION)))
 	{
-		log(0, 0, 0, 0, "Error doing malloc for sessions: %s\n", strerror(errno));
+		LOG(0, 0, 0, 0, "Error doing malloc for sessions: %s\n", strerror(errno));
 		exit(1);
 	}
 
 	if (!(sess_count = shared_malloc(sizeof(sessioncountt) * MAXSESSION)))
 	{
-		log(0, 0, 0, 0, "Error doing malloc for sessions_count: %s\n", strerror(errno));
+		LOG(0, 0, 0, 0, "Error doing malloc for sessions_count: %s\n", strerror(errno));
 		exit(1);
 	}
 
 	if (!(radius = shared_malloc(sizeof(radiust) * MAXRADIUS)))
 	{
-		log(0, 0, 0, 0, "Error doing malloc for radius: %s\n", strerror(errno));
+		LOG(0, 0, 0, 0, "Error doing malloc for radius: %s\n", strerror(errno));
 		exit(1);
 	}
 
 	if (!(ip_address_pool = shared_malloc(sizeof(ippoolt) * MAXIPPOOL)))
 	{
-		log(0, 0, 0, 0, "Error doing malloc for ip_address_pool: %s\n", strerror(errno));
+		LOG(0, 0, 0, 0, "Error doing malloc for ip_address_pool: %s\n", strerror(errno));
 		exit(1);
 	}
 
 #ifdef RINGBUFFER
 	if (!(ringbuffer = shared_malloc(sizeof(struct Tringbuffer))))
 	{
-		log(0, 0, 0, 0, "Error doing malloc for ringbuffer: %s\n", strerror(errno));
+		LOG(0, 0, 0, 0, "Error doing malloc for ringbuffer: %s\n", strerror(errno));
 		exit(1);
 	}
 	memset(ringbuffer, 0, sizeof(struct Tringbuffer));
@@ -2543,14 +2543,14 @@ void initdata(int optdebug, char *optconfig)
 
 	if (!(cli_session_actions = shared_malloc(sizeof(struct cli_session_actions) * MAXSESSION)))
 	{
-		log(0, 0, 0, 0, "Error doing malloc for cli session actions: %s\n", strerror(errno));
+		LOG(0, 0, 0, 0, "Error doing malloc for cli session actions: %s\n", strerror(errno));
 		exit(1);
 	}
 	memset(cli_session_actions, 0, sizeof(struct cli_session_actions) * MAXSESSION);
 
 	if (!(cli_tunnel_actions = shared_malloc(sizeof(struct cli_tunnel_actions) * MAXSESSION)))
 	{
-		log(0, 0, 0, 0, "Error doing malloc for cli tunnel actions: %s\n", strerror(errno));
+		LOG(0, 0, 0, 0, "Error doing malloc for cli tunnel actions: %s\n", strerror(errno));
 		exit(1);
 	}
 	memset(cli_tunnel_actions, 0, sizeof(struct cli_tunnel_actions) * MAXSESSION);
@@ -2585,7 +2585,7 @@ void initdata(int optdebug, char *optconfig)
 #ifdef BGP
 	if (!(bgp_peers = shared_malloc(sizeof(struct bgp_peer) * BGP_NUM_PEERS)))
 	{
-		log(0, 0, 0, 0, "Error doing malloc for bgp: %s\n", strerror(errno));
+		LOG(0, 0, 0, 0, "Error doing malloc for bgp: %s\n", strerror(errno));
 		exit(1);
 	}
 #endif /* BGP */
@@ -2632,7 +2632,7 @@ int assign_ip_address(sessionidt s)
 
 	if (best < 0)
 	{
-		log(0, 0, s, session[s].tunnel, "assign_ip_address(): out of addresses\n");
+		LOG(0, 0, s, session[s].tunnel, "assign_ip_address(): out of addresses\n");
 		return 0;
 	}
 
@@ -2650,7 +2650,7 @@ int assign_ip_address(sessionidt s)
 		strncpy(ip_address_pool[best].user, u, sizeof(ip_address_pool[best].user) - 1);
 
 	STAT(ip_allocated);
-	log(4, ip_address_pool[best].address, s, session[s].tunnel,
+	LOG(4, ip_address_pool[best].address, s, session[s].tunnel,
 		"assign_ip_address(): %s ip address %d from pool\n", reuse ? "Reusing" : "Allocating", best);
 
 	return 1;
@@ -2715,7 +2715,7 @@ void rebuild_address_pool(void)
 			if (ipid < 1)			// Not found in the pool either? good.
 				continue;
 
-			log(0, 0, i, 0, "Session %d has an IP address (%s) that was marked static, but is in the pool (%d)!\n",
+			LOG(0, 0, i, 0, "Session %d has an IP address (%s) that was marked static, but is in the pool (%d)!\n",
 				i, inet_toa(session[i].ip), ipid);
 
 			// Fall through and process it as part of the pool.
@@ -2724,7 +2724,7 @@ void rebuild_address_pool(void)
 
 		if (ipid > MAXIPPOOL || ipid < 0)
 		{
-			log(0, 0, i, 0, "Session %d has a pool IP that's not found in the pool! (%d)\n", i, ipid);
+			LOG(0, 0, i, 0, "Session %d has a pool IP that's not found in the pool! (%d)\n", i, ipid);
 			ipid = -1;
 			session[i].ip_pool_index = ipid;
 			continue;
@@ -2784,7 +2784,7 @@ void add_to_ip_pool(u32 addr, u32 mask)
 		++ip_pool_size;
 		if (ip_pool_size >= MAXIPPOOL)
 		{
-			log(0,0,0,0, "Overflowed IP pool adding %s\n", inet_toa(htonl(addr)) );
+			LOG(0,0,0,0, "Overflowed IP pool adding %s\n", inet_toa(htonl(addr)) );
 			return;
 		}
 	}
@@ -2800,7 +2800,7 @@ void initippool()
 
 	if (!(f = fopen(IPPOOLFILE, "r")))
 	{
-		log(0, 0, 0, 0, "Can't load pool file " IPPOOLFILE ": %s\n", strerror(errno));
+		LOG(0, 0, 0, 0, "Can't load pool file " IPPOOLFILE ": %s\n", strerror(errno));
 		exit(1);
 	}
 
@@ -2819,7 +2819,7 @@ void initippool()
 			src = inet_addr(buf);
 			if (src == INADDR_NONE)
 			{
-				log(0, 0, 0, 0, "Invalid address pool IP %s\n", buf);
+				LOG(0, 0, 0, 0, "Invalid address pool IP %s\n", buf);
 				exit(1);
 			}
 			// This entry is for a specific IP only
@@ -2834,18 +2834,18 @@ void initippool()
 			int numbits = 0;
 			u32 start = 0, mask = 0;
 
-			log(2, 0, 0, 0, "Adding IP address range %s\n", buf);
+			LOG(2, 0, 0, 0, "Adding IP address range %s\n", buf);
 			*p++ = 0;
 			if (!*p || !(numbits = atoi(p)))
 			{
-				log(0, 0, 0, 0, "Invalid pool range %s\n", buf);
+				LOG(0, 0, 0, 0, "Invalid pool range %s\n", buf);
 				continue;
 			}
 			start = ntohl(inet_addr(pool));
 			mask = (u32)(pow(2, numbits) - 1) << (32 - numbits);
 
 			// Add a static route for this pool
-			log(5, 0, 0, 0, "Adding route for address pool %s/%u\n", inet_toa(htonl(start)), 32 + mask);
+			LOG(5, 0, 0, 0, "Adding route for address pool %s/%u\n", inet_toa(htonl(start)), 32 + mask);
 			routeset(0, start, mask, 0, 1);
 
 			add_to_ip_pool(start, mask);
@@ -2857,7 +2857,7 @@ void initippool()
 		}
 	}
 	fclose(f);
-	log(1, 0, 0, 0, "IP address pool is %d addresses\n", ip_pool_size - 1);
+	LOG(1, 0, 0, 0, "IP address pool is %d addresses\n", ip_pool_size - 1);
 }
 
 void snoop_send_packet(char *packet, u16 size, ipt destination, u16 port)
@@ -2870,10 +2870,10 @@ void snoop_send_packet(char *packet, u16 size, ipt destination, u16 port)
 	snoop_addr.sin_addr.s_addr = destination;
 	snoop_addr.sin_port = ntohs(port);
 
-	log(5, 0, 0, 0, "Snooping packet at %p (%d bytes) to %s:%d\n",
+	LOG(5, 0, 0, 0, "Snooping packet at %p (%d bytes) to %s:%d\n",
 			packet, size, inet_toa(snoop_addr.sin_addr.s_addr), htons(snoop_addr.sin_port));
 	if (sendto(snoopfd, packet, size, MSG_DONTWAIT | MSG_NOSIGNAL, (void *) &snoop_addr, sizeof(snoop_addr)) < 0)
-		log(0, 0, 0, 0, "Error sending intercept packet: %s\n", strerror(errno));
+		LOG(0, 0, 0, 0, "Error sending intercept packet: %s\n", strerror(errno));
 	STAT(packets_snooped);
 }
 
@@ -2900,10 +2900,10 @@ void dump_acct_info()
 			time_t now = time(NULL);
 			if (!(f = fopen(filename, "w")))
 			{
-				log(0, 0, 0, 0, "Can't write accounting info to %s: %s\n", filename, strerror(errno));
+				LOG(0, 0, 0, 0, "Can't write accounting info to %s: %s\n", filename, strerror(errno));
 				return ;
 			}
-			log(3, 0, 0, 0, "Dumping accounting information to %s\n", filename);
+			LOG(3, 0, 0, 0, "Dumping accounting information to %s\n", filename);
 			fprintf(f, "# dslwatch.pl dump file V1.01\n"
 			        "# host: %s\n"
 			        "# time: %ld\n"
@@ -2914,7 +2914,7 @@ void dump_acct_info()
 			        now - basetime);
 		}
 
-		log(4, 0, 0, 0, "Dumping accounting information for %s\n", session[i].user);
+		LOG(4, 0, 0, 0, "Dumping accounting information for %s\n", session[i].user);
 		fprintf(f, "%s %s %d %u %u\n",
 		        session[i].user,						// username
 		        inet_toa(htonl(session[i].ip)),					// ip
@@ -2987,16 +2987,16 @@ int main(int argc, char *argv[])
 	read_config_file();
 	init_tbf(config->num_tbfs);
 
-	log(0, 0, 0, 0, "L2TPNS version " VERSION "\n");
-	log(0, 0, 0, 0, "Copyright (c) 2003, 2004 Optus Internet Engineering\n");
-	log(0, 0, 0, 0, "Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced\n");
+	LOG(0, 0, 0, 0, "L2TPNS version " VERSION "\n");
+	LOG(0, 0, 0, 0, "Copyright (c) 2003, 2004 Optus Internet Engineering\n");
+	LOG(0, 0, 0, 0, "Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced\n");
 	{
 		struct rlimit rlim;
 		rlim.rlim_cur = RLIM_INFINITY;
 		rlim.rlim_max = RLIM_INFINITY;
 		// Remove the maximum core size
 		if (setrlimit(RLIMIT_CORE, &rlim) < 0)
-			log(0, 0, 0, 0, "Can't set ulimit: %s\n", strerror(errno));
+			LOG(0, 0, 0, 0, "Can't set ulimit: %s\n", strerror(errno));
 		// Make core dumps go to /tmp
 		chdir("/tmp");
 	}
@@ -3009,18 +3009,18 @@ int main(int argc, char *argv[])
 
 		if (get_nprocs() < 2)
 		{
-			log(0, 0, 0, 0, "Not using FIFO scheduler, there is only 1 processor in the system.\n");
+			LOG(0, 0, 0, 0, "Not using FIFO scheduler, there is only 1 processor in the system.\n");
 			config->scheduler_fifo = 0;
 		}
 		else
 		{
 			if ((ret = sched_setscheduler(0, SCHED_FIFO, &params)) == 0)
 			{
-				log(1, 0, 0, 0, "Using FIFO scheduler. Say goodbye to any other processes running\n");
+				LOG(1, 0, 0, 0, "Using FIFO scheduler. Say goodbye to any other processes running\n");
 			}
 			else
 			{
-				log(0, 0, 0, 0, "Error setting scheduler to FIFO: %s\n", strerror(errno));
+				LOG(0, 0, 0, 0, "Error setting scheduler to FIFO: %s\n", strerror(errno));
 				config->scheduler_fifo = 0;
 			}
 		}
@@ -3044,7 +3044,7 @@ int main(int argc, char *argv[])
 #endif /* BGP */
 
 	inittun();
-	log(1, 0, 0, 0, "Set up on interface %s\n", config->tundevice);
+	LOG(1, 0, 0, 0, "Set up on interface %s\n", config->tundevice);
 
 	initudp();
 	initrad();
@@ -3062,9 +3062,9 @@ int main(int argc, char *argv[])
 	if (config->lock_pages)
 	{
 		if (!mlockall(MCL_CURRENT))
-			log(1, 0, 0, 0, "Locking pages into memory\n");
+			LOG(1, 0, 0, 0, "Locking pages into memory\n");
 		else
-			log(0, 0, 0, 0, "Can't lock pages: %s\n", strerror(errno));
+			LOG(0, 0, 0, 0, "Can't lock pages: %s\n", strerror(errno));
 	}
 
 	alarm(1);
@@ -3145,7 +3145,7 @@ void sigalrm_handler(int junk)
 
 void sigterm_handler(int junk)
 {
-	log(1, 0, 0, 0, "Shutting down cleanly\n");
+	LOG(1, 0, 0, 0, "Shutting down cleanly\n");
 	if (config->save_state)
 		dump_state();
 
@@ -3156,7 +3156,7 @@ void sigquit_handler(int junk)
 {
 	int i;
 
-	log(1, 0, 0, 0, "Shutting down without saving sessions\n");
+	LOG(1, 0, 0, 0, "Shutting down without saving sessions\n");
 	for (i = 1; i < MAXSESSION; i++)
 	{
 		if (session[i].opened)
@@ -3200,7 +3200,7 @@ void read_state()
 
 	if (sb.st_mtime < (time(NULL) - 60))
 	{
-		log(0, 0, 0, 0, "State file is too old to read, ignoring\n");
+		LOG(0, 0, 0, 0, "State file is too old to read, ignoring\n");
 		unlink(STATEFILE);
 		return ;
 	}
@@ -3210,41 +3210,41 @@ void read_state()
 
 	if (!f)
 	{
-		log(0, 0, 0, 0, "Can't read state file: %s\n", strerror(errno));
+		LOG(0, 0, 0, 0, "Can't read state file: %s\n", strerror(errno));
 		exit(1);
 	}
 
 	if (fread(magic, sizeof(magic), 1, f) != 1 || strncmp(magic, DUMP_MAGIC, sizeof(magic)))
 	{
-		log(0, 0, 0, 0, "Bad state file magic\n");
+		LOG(0, 0, 0, 0, "Bad state file magic\n");
 		exit(1);
 	}
 
-	log(1, 0, 0, 0, "Reading state information\n");
+	LOG(1, 0, 0, 0, "Reading state information\n");
 	if (fread(buf, sizeof(buf), 1, f) != 1 || buf[0] > MAXIPPOOL || buf[1] != sizeof(ippoolt))
 	{
-		log(0, 0, 0, 0, "Error/mismatch reading ip pool header from state file\n");
+		LOG(0, 0, 0, 0, "Error/mismatch reading ip pool header from state file\n");
 		exit(1);
 	}
 
 	if (buf[0] > ip_pool_size)
 	{
-		log(0, 0, 0, 0, "ip pool has shrunk!  state = %d, current = %d\n", buf[0], ip_pool_size);
+		LOG(0, 0, 0, 0, "ip pool has shrunk!  state = %d, current = %d\n", buf[0], ip_pool_size);
 		exit(1);
 	}
 
-	log(2, 0, 0, 0, "Loading %u ip addresses\n", buf[0]);
+	LOG(2, 0, 0, 0, "Loading %u ip addresses\n", buf[0]);
 	for (i = 0; i < buf[0]; i++)
 	{
 		if (fread(&itmp, sizeof(itmp), 1, f) != 1)
 		{
-			log(0, 0, 0, 0, "Error reading ip %d from state file: %s\n", i, strerror(errno));
+			LOG(0, 0, 0, 0, "Error reading ip %d from state file: %s\n", i, strerror(errno));
 			exit(1);
 		}
 
 		if (itmp.address != ip_address_pool[i].address)
 		{
-			log(0, 0, 0, 0, "Mismatched ip %d from state file: pool may only be extended\n", i);
+			LOG(0, 0, 0, 0, "Mismatched ip %d from state file: pool may only be extended\n", i);
 			exit(1);
 		}
 
@@ -3253,14 +3253,14 @@ void read_state()
 
 	if (fread(buf, sizeof(buf), 1, f) != 1 || buf[0] != MAXTUNNEL || buf[1] != sizeof(tunnelt))
 	{
-		log(0, 0, 0, 0, "Error/mismatch reading tunnel header from state file\n");
+		LOG(0, 0, 0, 0, "Error/mismatch reading tunnel header from state file\n");
 		exit(1);
 	}
 
-	log(2, 0, 0, 0, "Loading %u tunnels\n", MAXTUNNEL);
+	LOG(2, 0, 0, 0, "Loading %u tunnels\n", MAXTUNNEL);
 	if (fread(tunnel, sizeof(tunnelt), MAXTUNNEL, f) != MAXTUNNEL)
 	{
-		log(0, 0, 0, 0, "Error reading tunnel data from state file\n");
+		LOG(0, 0, 0, 0, "Error reading tunnel data from state file\n");
 		exit(1);
 	}
 
@@ -3270,19 +3270,19 @@ void read_state()
 		tunnel[i].controls = NULL;
 		tunnel[i].controle = NULL;
 		if (*tunnel[i].hostname)
-			log(3, 0, 0, 0, "Created tunnel for %s\n", tunnel[i].hostname);
+			LOG(3, 0, 0, 0, "Created tunnel for %s\n", tunnel[i].hostname);
 	}
 
 	if (fread(buf, sizeof(buf), 1, f) != 1 || buf[0] != MAXSESSION || buf[1] != sizeof(sessiont))
 	{
-		log(0, 0, 0, 0, "Error/mismatch reading session header from state file\n");
+		LOG(0, 0, 0, 0, "Error/mismatch reading session header from state file\n");
 		exit(1);
 	}
 
-	log(2, 0, 0, 0, "Loading %u sessions\n", MAXSESSION);
+	LOG(2, 0, 0, 0, "Loading %u sessions\n", MAXSESSION);
 	if (fread(session, sizeof(sessiont), MAXSESSION, f) != MAXSESSION)
 	{
-		log(0, 0, 0, 0, "Error reading session data from state file\n");
+		LOG(0, 0, 0, 0, "Error reading session data from state file\n");
 		exit(1);
 	}
 
@@ -3292,14 +3292,14 @@ void read_state()
 		session[i].tbf_out = 0;
 		if (session[i].opened)
 		{
-			log(2, 0, i, 0, "Loaded active session for user %s\n", session[i].user);
+			LOG(2, 0, i, 0, "Loaded active session for user %s\n", session[i].user);
 			if (session[i].ip)
 				sessionsetup(session[i].tunnel, i);
 		}
 	}
 
 	fclose(f);
-	log(0, 0, 0, 0, "Loaded saved state information\n");
+	LOG(0, 0, 0, 0, "Loaded saved state information\n");
 }
 
 void dump_state()
@@ -3315,12 +3315,12 @@ void dump_state()
 		if (!(f = fopen(STATEFILE, "w")))
 			break;
 
-		log(1, 0, 0, 0, "Dumping state information\n");
+		LOG(1, 0, 0, 0, "Dumping state information\n");
 
 		if (fwrite(DUMP_MAGIC, sizeof(DUMP_MAGIC) - 1, 1, f) != 1)
 			break;
 
-		log(2, 0, 0, 0, "Dumping %u ip addresses\n", ip_pool_size);
+		LOG(2, 0, 0, 0, "Dumping %u ip addresses\n", ip_pool_size);
 		buf[0] = ip_pool_size;
 		buf[1] = sizeof(ippoolt);
 		if (fwrite(buf, sizeof(buf), 1, f) != 1)
@@ -3328,7 +3328,7 @@ void dump_state()
 		if (fwrite(ip_address_pool, sizeof(ippoolt), ip_pool_size, f) != ip_pool_size)
 			break;
 
-		log(2, 0, 0, 0, "Dumping %u tunnels\n", MAXTUNNEL);
+		LOG(2, 0, 0, 0, "Dumping %u tunnels\n", MAXTUNNEL);
 		buf[0] = MAXTUNNEL;
 		buf[1] = sizeof(tunnelt);
 		if (fwrite(buf, sizeof(buf), 1, f) != 1)
@@ -3336,7 +3336,7 @@ void dump_state()
 		if (fwrite(tunnel, sizeof(tunnelt), MAXTUNNEL, f) != MAXTUNNEL)
 			break;
 
-		log(2, 0, 0, 0, "Dumping %u sessions\n", MAXSESSION);
+		LOG(2, 0, 0, 0, "Dumping %u sessions\n", MAXSESSION);
 		buf[0] = MAXSESSION;
 		buf[1] = sizeof(sessiont);
 		if (fwrite(buf, sizeof(buf), 1, f) != 1)
@@ -3349,7 +3349,7 @@ void dump_state()
 	}
 	while (0);
 
-	log(0, 0, 0, 0, "Can't write state information: %s\n", strerror(errno));
+	LOG(0, 0, 0, 0, "Can't write state information: %s\n", strerror(errno));
 	unlink(STATEFILE);
 }
 
@@ -3360,11 +3360,11 @@ void build_chap_response(char *challenge, u8 id, u16 challenge_length, char **ch
 
 	if (!*config->l2tpsecret)
 	{
-		log(0, 0, 0, 0, "LNS requested CHAP authentication, but no l2tp secret is defined\n");
+		LOG(0, 0, 0, 0, "LNS requested CHAP authentication, but no l2tp secret is defined\n");
 		return;
 	}
 
-	log(4, 0, 0, 0, "   Building challenge response for CHAP request\n");
+	LOG(4, 0, 0, 0, "   Building challenge response for CHAP request\n");
 
 	*challenge_response = (char *)calloc(17, 1);
 
@@ -3455,7 +3455,7 @@ void update_config()
 
 	if (!config->numradiusservers)
 	{
-		log(0, 0, 0, 0, "No RADIUS servers defined!\n");
+		LOG(0, 0, 0, 0, "No RADIUS servers defined!\n");
 	}
 
 	config->num_radfds = 2 << RADIUS_SHIFT;
@@ -3497,7 +3497,7 @@ void update_config()
 
 		if (config->cluster_hb_timeout < t)
 		{
-			log(0,0,0,0, "Heartbeat timeout %d too low, adjusting to %d\n", config->cluster_hb_timeout, t);
+			LOG(0,0,0,0, "Heartbeat timeout %d too low, adjusting to %d\n", config->cluster_hb_timeout, t);
 			config->cluster_hb_timeout = t;
 		}
 
@@ -3521,7 +3521,7 @@ void update_config()
 		}
 		else
 		{
-			log(0, 0, 0, 0, "Can't write to PID file %s: %s\n", config->pid_file, strerror(errno));
+			LOG(0, 0, 0, 0, "Can't write to PID file %s: %s\n", config->pid_file, strerror(errno));
 		}
 	}
 
@@ -3539,9 +3539,9 @@ void read_config_file()
 		return;
 	}
 
-	log(3, 0, 0, 0, "Reading config file %s\n", config->config_file);
+	LOG(3, 0, 0, 0, "Reading config file %s\n", config->config_file);
 	cli_do_file(f);
-	log(3, 0, 0, 0, "Done reading config file\n");
+	LOG(3, 0, 0, 0, "Done reading config file\n");
 	fclose(f);
 	update_config();
 }
@@ -3556,18 +3556,18 @@ int sessionsetup(tunnelidt t, sessionidt s)
 
 	CSTAT(call_sessionsetup);
 
-	log(3, session[s].ip, s, t, "Doing session setup for session\n");
+	LOG(3, session[s].ip, s, t, "Doing session setup for session\n");
 
 	if (!session[s].ip || session[s].ip == 0xFFFFFFFE)
 	{
 		assign_ip_address(s);
 		if (!session[s].ip)
 		{
-			log(0, 0, s, t, "   No IP allocated. The IP address pool is FULL!\n");
+			LOG(0, 0, s, t, "   No IP allocated. The IP address pool is FULL!\n");
 			sessionshutdown(s, "No IP addresses available");
 			return 0;
 		}
-		log(3, 0, s, t, "   No IP allocated. Assigned %s from pool\n",
+		LOG(3, 0, s, t, "   No IP allocated. Assigned %s from pool\n",
 			inet_toa(htonl(session[s].ip)));
 	}
 
@@ -3606,7 +3606,7 @@ int sessionsetup(tunnelidt t, sessionidt s)
 	if (!session[s].unique_id)
 	{
 		// did this session just finish radius?
-		log(3, session[s].ip, s, t, "Sending initial IPCP to client\n");
+		LOG(3, session[s].ip, s, t, "Sending initial IPCP to client\n");
 		sendipcp(t, s);
 		session[s].unique_id = ++last_id;
 	}
@@ -3627,7 +3627,7 @@ int sessionsetup(tunnelidt t, sessionidt s)
 		char *sessionip, *tunnelip;
 		sessionip = strdup(inet_toa(htonl(session[s].ip)));
 		tunnelip = strdup(inet_toa(htonl(tunnel[t].ip)));
-		log(2, session[s].ip, s, t, "Login by %s at %s from %s (%s)\n",
+		LOG(2, session[s].ip, s, t, "Login by %s at %s from %s (%s)\n",
 				session[s].user, sessionip, tunnelip, tunnel[t].hostname);
 		if (sessionip) free(sessionip);
 		if (tunnelip) free(tunnelip);
@@ -3650,7 +3650,7 @@ int load_session(sessionidt s, sessiont *new)
 	if (new->ip_pool_index >= MAXIPPOOL ||
 		new->tunnel >= MAXTUNNEL)
 	{
-		log(0,0,s,0, "Strange session update received!\n");
+		LOG(0,0,s,0, "Strange session update received!\n");
 			// FIXME! What to do here?
 		return 0;
 	}
@@ -3753,7 +3753,7 @@ static void *open_plugin(char *plugin_name, int load)
 	char path[256] = "";
 
 	snprintf(path, 256, PLUGINDIR "/%s.so", plugin_name);
-	log(2, 0, 0, 0, "%soading plugin from %s\n", load ? "L" : "Un-l", path);
+	LOG(2, 0, 0, 0, "%soading plugin from %s\n", load ? "L" : "Un-l", path);
 	return dlopen(path, RTLD_NOW);
 }
 
@@ -3777,7 +3777,7 @@ void add_plugin(char *plugin_name)
 
 	if (!p)
 	{
-		log(1, 0, 0, 0, "   Plugin load failed: %s\n", dlerror());
+		LOG(1, 0, 0, 0, "   Plugin load failed: %s\n", dlerror());
 		return;
 	}
 
@@ -3791,7 +3791,7 @@ void add_plugin(char *plugin_name)
 		int *v = dlsym(p, "__plugin_api_version");
 		if (!v || *v != PLUGIN_API_VERSION)
 		{
-			log(1, 0, 0, 0, "   Plugin load failed: API version mismatch: %s\n", dlerror());
+			LOG(1, 0, 0, 0, "   Plugin load failed: API version mismatch: %s\n", dlerror());
 			dlclose(p);
 			return;
 		}
@@ -3801,7 +3801,7 @@ void add_plugin(char *plugin_name)
 	{
 		if (!initfunc(&funcs))
 		{
-			log(1, 0, 0, 0, "   Plugin load failed: plugin_init() returned FALSE: %s\n", dlerror());
+			LOG(1, 0, 0, 0, "   Plugin load failed: plugin_init() returned FALSE: %s\n", dlerror());
 			dlclose(p);
 			return;
 		}
@@ -3814,12 +3814,12 @@ void add_plugin(char *plugin_name)
 		void *x;
 		if (plugin_functions[i] && (x = dlsym(p, plugin_functions[i])))
 		{
-			log(3, 0, 0, 0, "   Supports function \"%s\"\n", plugin_functions[i]);
+			LOG(3, 0, 0, 0, "   Supports function \"%s\"\n", plugin_functions[i]);
 			ll_push(plugins[i], x);
 		}
 	}
 
-	log(2, 0, 0, 0, "   Loaded plugin %s\n", plugin_name);
+	LOG(2, 0, 0, 0, "   Loaded plugin %s\n", plugin_name);
 }
 
 static void run_plugin_done(void *plugin)
@@ -3852,7 +3852,7 @@ void remove_plugin(char *plugin_name)
 	}
 
 	dlclose(p);
-	log(2, 0, 0, 0, "Removed plugin %s\n", plugin_name);
+	LOG(2, 0, 0, 0, "Removed plugin %s\n", plugin_name);
 }
 
 int run_plugins(int plugin_type, void *data)
@@ -3889,7 +3889,7 @@ void processcontrol(u8 * buf, int len, struct sockaddr_in *addr)
 
 	if (log_stream && config->debug >= 4)
 	{
-		log(4, ntohl(addr->sin_addr.s_addr), 0, 0, "Received ");
+		LOG(4, ntohl(addr->sin_addr.s_addr), 0, 0, "Received ");
 		dump_packet(buf, log_stream);
 	}
 
@@ -3909,7 +3909,7 @@ void processcontrol(u8 * buf, int len, struct sockaddr_in *addr)
 	if (param.send_response)
 	{
 		send_packet(controlfd, ntohl(addr->sin_addr.s_addr), ntohs(addr->sin_port), param.response, param.response_length);
-		log(4, ntohl(addr->sin_addr.s_addr), 0, 0, "Sent Control packet response\n");
+		LOG(4, ntohl(addr->sin_addr.s_addr), 0, 0, "Sent Control packet response\n");
 	}
 
 	free(resp);
@@ -3923,7 +3923,7 @@ void tunnel_clean()
 {
 	int i;
 
-	log(1, 0, 0, 0, "Cleaning tunnels array\n");
+	LOG(1, 0, 0, 0, "Cleaning tunnels array\n");
 
 	for (i = 1; i < MAXTUNNEL; i++)
 	{
@@ -3950,13 +3950,13 @@ tunnelidt new_tunnel()
 	{
 		if (tunnel[i].state == TUNNELFREE)
 		{
-			log(4, 0, 0, i, "Assigning tunnel ID %d\n", i);
+			LOG(4, 0, 0, i, "Assigning tunnel ID %d\n", i);
 			if (i > config->cluster_highest_tunnelid)
 				config->cluster_highest_tunnelid = i;
 			return i;
 		}
 	}
-	log(0, 0, 0, 0, "Can't find a free tunnel! There shouldn't be this many in use!\n");
+	LOG(0, 0, 0, 0, "Can't find a free tunnel! There shouldn't be this many in use!\n");
 	return 0;
 }
 
@@ -4119,7 +4119,7 @@ int unhide_avp(u8 *avp, tunnelidt t, sessionidt s, u16 length)
 
 	if (hidden_length > length - 8)
 	{
-		log(1, 0, s, t, "Hidden length %d too long in AVP of length %d\n", (int) hidden_length, (int) length);
+		LOG(1, 0, s, t, "Hidden length %d too long in AVP of length %d\n", (int) hidden_length, (int) length);
 		return 0;
 	}
 

@@ -1,6 +1,6 @@
 // L2TPNS Radius Stuff
 
-char const *cvs_id_radius = "$Id: radius.c,v 1.10 2004-09-02 04:18:07 fred_nerk Exp $";
+char const *cvs_id_radius = "$Id: radius.c,v 1.11 2004-11-05 04:55:27 bodea Exp $";
 
 #include <time.h>
 #include <stdio.h>
@@ -41,7 +41,7 @@ const char *radius_state(int state)
 void initrad(void)
 {
 	int i;
-	log(3, 0, 0, 0, "Creating %d sockets for RADIUS queries\n", config->num_radfds);
+	LOG(3, 0, 0, 0, "Creating %d sockets for RADIUS queries\n", config->num_radfds);
 	radfds = calloc(sizeof(int), config->num_radfds);
 	for (i = 0; i < config->num_radfds; i++)
 	{
@@ -76,7 +76,7 @@ static u16 get_free_radius()
 		}
 	}
 
-	log(0, 0, 0, 0, "Can't find a free radius session! This is very bad!\n");
+	LOG(0, 0, 0, 0, "Can't find a free radius session! This is very bad!\n");
 	return 0;
 }
 
@@ -87,13 +87,13 @@ u16 radiusnew(sessionidt s)
 	/* re-use */
 	if (r)
 	{
-		log(3, 0, s, session[s].tunnel, "Re-used radius %d\n", r);
+		LOG(3, 0, s, session[s].tunnel, "Re-used radius %d\n", r);
 		return r;
 	}
 
 	if (!(r = get_free_radius()))
 	{
-		log(1, 0, s, session[s].tunnel, "No free RADIUS sessions\n");
+		LOG(1, 0, s, session[s].tunnel, "No free RADIUS sessions\n");
 		STAT(radius_overflow);
 		return 0;
 	};
@@ -104,7 +104,7 @@ u16 radiusnew(sessionidt s)
 	radius[r].state = RADIUSWAIT;
 	radius[r].retry = TIME + 1200; // Wait at least 120 seconds to re-claim this.
 
-	log(3,0,s, session[s].tunnel, "Allocated radius %d\n", r);
+	LOG(3,0,s, session[s].tunnel, "Allocated radius %d\n", r);
 	return r;
 }
 
@@ -123,12 +123,12 @@ void radiussend(u16 r, u8 state)
 	s = radius[r].session;
 	if (!config->numradiusservers)
 	{
-		log(0, 0, s, session[s].tunnel, "No RADIUS servers\n");
+		LOG(0, 0, s, session[s].tunnel, "No RADIUS servers\n");
 		return;
 	}
 	if (!*config->radiussecret)
 	{
-		log(0, 0, s, session[s].tunnel, "No RADIUS secret\n");
+		LOG(0, 0, s, session[s].tunnel, "No RADIUS secret\n");
 		return;
 	}
 
@@ -143,7 +143,7 @@ void radiussend(u16 r, u8 state)
 		radius[r].try = 0;
 	radius[r].state = state;
 	radius[r].retry = backoff(radius[r].try++);
-	log(4, 0, s, session[s].tunnel, "Send RADIUS id %d sock %d state %s try %d\n",
+	LOG(4, 0, s, session[s].tunnel, "Send RADIUS id %d sock %d state %s try %d\n",
 			r >> RADIUS_SHIFT, r & RADIUS_MASK,
 			radius_state(radius[r].state), radius[r].try);
 	if (radius[r].try > config->numradiusservers * 2)
@@ -154,7 +154,7 @@ void radiussend(u16 r, u8 state)
 				sessionshutdown(s, "RADIUS timeout");
 			else
 			{
-				log(1, 0, s, session[s].tunnel, "RADIUS timeout, but in state %s so don't timeout session\n",
+				LOG(1, 0, s, session[s].tunnel, "RADIUS timeout, but in state %s so don't timeout session\n",
 					radius_states[state]);
 				radiusclear(r, s);
 			}
@@ -179,7 +179,7 @@ void radiussend(u16 r, u8 state)
 			b[0] = 4;               // accounting request
 			break;
 		default:
-			log(0, 0, 0, 0, "Unknown radius state %d\n", state);
+			LOG(0, 0, 0, 0, "Unknown radius state %d\n", state);
 	}
 	b[1] = r >> RADIUS_SHIFT;       // identifier
 	memcpy(b + 4, radius[r].auth, 16);
@@ -354,7 +354,7 @@ void radiussend(u16 r, u8 state)
 	    addr.sin_port = htons((state == RADIUSAUTH) ? port : port+1);
 	}
 
-	log_hex(5, "RADIUS Send", b, (p - b));
+	LOG_HEX(5, "RADIUS Send", b, (p - b));
 	sendto(radfds[r & RADIUS_MASK], b, p - b, 0, (void *) &addr, sizeof(addr));
 }
 
@@ -377,25 +377,25 @@ void processrad(u8 *buf, int len, char socket_index)
 
 	CSTAT(call_processrad);
 
-	log_hex(5, "RADIUS Response", buf, len);
+	LOG_HEX(5, "RADIUS Response", buf, len);
 	if (len < 20 || len < ntohs(*(u16 *) (buf + 2)))
 	{
-		log(1, 0, 0, 0, "Duff RADIUS response length %d\n", len);
+		LOG(1, 0, 0, 0, "Duff RADIUS response length %d\n", len);
 		return ;
 	}
 	len = ntohs(*(u16 *) (buf + 2));
 	r = socket_index | (r_id << RADIUS_SHIFT);
 	s = radius[r].session;
-	log(3, 0, s, session[s].tunnel, "Received %s, radius %d response for session %u (code %d, id %d)\n",
+	LOG(3, 0, s, session[s].tunnel, "Received %s, radius %d response for session %u (code %d, id %d)\n",
 			radius_states[radius[r].state], r, s, r_code, r_id);
 	if (!s && radius[r].state != RADIUSSTOP)
 	{
-		log(1, 0, s, session[s].tunnel, "   Unexpected RADIUS response\n");
+		LOG(1, 0, s, session[s].tunnel, "   Unexpected RADIUS response\n");
 		return;
 	}
 	if (radius[r].state != RADIUSAUTH && radius[r].state != RADIUSSTART && radius[r].state != RADIUSSTOP)
 	{
-		log(1, 0, s, session[s].tunnel, "   Unexpected RADIUS response\n");
+		LOG(1, 0, s, session[s].tunnel, "   Unexpected RADIUS response\n");
 		return;
 	}
 	t = session[s].tunnel;
@@ -408,19 +408,19 @@ void processrad(u8 *buf, int len, char socket_index)
 	do {
 		if (memcmp(hash, buf + 4, 16))
 		{
-			log(0, 0, s, session[s].tunnel, "   Incorrect auth on RADIUS response!! (wrong secret in radius config?)\n");
+			LOG(0, 0, s, session[s].tunnel, "   Incorrect auth on RADIUS response!! (wrong secret in radius config?)\n");
 			return; // Do nothing. On timeout, it will try the next radius server.
 		}
 		if ((radius[r].state == RADIUSAUTH && *buf != 2 && *buf != 3) ||
 			((radius[r].state == RADIUSSTART || radius[r].state == RADIUSSTOP) && *buf != 5))
 		{
-			log(1, 0, s, session[s].tunnel, "   Unexpected RADIUS response %d\n", *buf);
+			LOG(1, 0, s, session[s].tunnel, "   Unexpected RADIUS response %d\n", *buf);
 			return; // We got something we didn't expect. Let the timeouts take
 				// care off finishing the radius session if that's really correct.
 		}
 		if (radius[r].state == RADIUSAUTH)
 		{
-			log(4, 0, s, session[s].tunnel, "   Original response is \"%s\"\n", (*buf == 2) ? "accept" : "reject");
+			LOG(4, 0, s, session[s].tunnel, "   Original response is \"%s\"\n", (*buf == 2) ? "accept" : "reject");
 			// process auth response
 			if (radius[r].chap)
 			{
@@ -435,7 +435,7 @@ void processrad(u8 *buf, int len, char socket_index)
 					*buf = packet.auth_allowed ? 2 : 3;
 				}
 
-				log(3, 0, s, session[s].tunnel, "   CHAP User %s authentication %s.\n", session[s].user,
+				LOG(3, 0, s, session[s].tunnel, "   CHAP User %s authentication %s.\n", session[s].user,
 						(*buf == 2) ? "allowed" : "denied");
 				*p = (*buf == 2) ? 3 : 4;     // ack/nak
 				p[1] = radius[r].id;
@@ -455,7 +455,7 @@ void processrad(u8 *buf, int len, char socket_index)
 					*buf = packet.auth_allowed ? 2 : 3;
 				}
 
-				log(3, 0, s, session[s].tunnel, "   PAP User %s authentication %s.\n", session[s].user,
+				LOG(3, 0, s, session[s].tunnel, "   PAP User %s authentication %s.\n", session[s].user,
 						(*buf == 2) ? "allowed" : "denied");
 				// ack/nak
 				*p = *buf;
@@ -476,20 +476,20 @@ void processrad(u8 *buf, int len, char socket_index)
 					if (*p == 8)
 					{
 						// Statically assigned address
-						log(3, 0, s, session[s].tunnel, "   Radius reply contains IP address %s\n", inet_toa(*(u32 *) (p + 2)));
+						LOG(3, 0, s, session[s].tunnel, "   Radius reply contains IP address %s\n", inet_toa(*(u32 *) (p + 2)));
 						session[s].ip = ntohl(*(u32 *) (p + 2));
 						session[s].ip_pool_index = -1;
 					}
 					else if (*p == 135)
 					{
 						// DNS address
-						log(3, 0, s, session[s].tunnel, "   Radius reply contains primary DNS address %s\n", inet_toa(*(u32 *) (p + 2)));
+						LOG(3, 0, s, session[s].tunnel, "   Radius reply contains primary DNS address %s\n", inet_toa(*(u32 *) (p + 2)));
 						session[s].dns1 = ntohl(*(u32 *) (p + 2));
 					}
 					else if (*p == 136)
 					{
 						// DNS address
-						log(3, 0, s, session[s].tunnel, "   Radius reply contains secondary DNS address %s\n", inet_toa(*(u32 *) (p + 2)));
+						LOG(3, 0, s, session[s].tunnel, "   Radius reply contains secondary DNS address %s\n", inet_toa(*(u32 *) (p + 2)));
 						session[s].dns2 = ntohl(*(u32 *) (p + 2));
 					}
 					else if (*p == 22)
@@ -527,14 +527,14 @@ void processrad(u8 *buf, int len, char socket_index)
 							mask = 0xFFFFFF00;
 						if (routes == MAXROUTE)
 						{
-							log(1, 0, s, session[s].tunnel, "   Too many routes\n");
+							LOG(1, 0, s, session[s].tunnel, "   Too many routes\n");
 						}
 						else if (ip)
 						{
 							char *ips, *masks;
 							ips = strdup(inet_toa(htonl(ip)));
 							masks = strdup(inet_toa(htonl(mask)));
-							log(3, 0, s, session[s].tunnel, "   Radius reply contains route for %s/%s\n", ips, masks);
+							LOG(3, 0, s, session[s].tunnel, "   Radius reply contains route for %s/%s\n", ips, masks);
 							free(ips);
 							free(masks);
 							session[s].route[routes].ip = ip;
@@ -548,16 +548,16 @@ void processrad(u8 *buf, int len, char socket_index)
 						int vendor = ntohl(*(int *)(p + 2));
 						char attrib = *(p + 6);
 						char attrib_length = *(p + 7) - 2;
-						log(3, 0, s, session[s].tunnel, "   Radius reply contains Vendor-Specific. Vendor=%d Attrib=%d Length=%d\n", vendor, attrib, attrib_length);
+						LOG(3, 0, s, session[s].tunnel, "   Radius reply contains Vendor-Specific. Vendor=%d Attrib=%d Length=%d\n", vendor, attrib, attrib_length);
 						if (attrib_length == 0) continue;
 						if (attrib != 1)
-							log(3, 0, s, session[s].tunnel, "      Unknown vendor-specific\n");
+							LOG(3, 0, s, session[s].tunnel, "      Unknown vendor-specific\n");
 						else
 						{
 							char *avpair, *value, *key, *newp;
 							avpair = key = calloc(attrib_length + 1, 1);
 							memcpy(avpair, p + 8, attrib_length);
-							log(3, 0, s, session[s].tunnel, "      Cisco-Avpair value: %s\n", avpair);
+							LOG(3, 0, s, session[s].tunnel, "      Cisco-Avpair value: %s\n", avpair);
 							do {
 								value = strchr(key, '=');
 								if (!value) break;
@@ -589,7 +589,7 @@ void processrad(u8 *buf, int len, char socket_index)
 			}
 			else if (*buf == 3)
 			{
-				log(2, 0, s, session[s].tunnel, "   Authentication denied for %s\n", session[s].user);
+				LOG(2, 0, s, session[s].tunnel, "   Authentication denied for %s\n", session[s].user);
 //FIXME: We should tear down the session here!
 				break;
 			}
@@ -597,12 +597,12 @@ void processrad(u8 *buf, int len, char socket_index)
 			if (!session[s].dns1 && config->default_dns1)
 			{
 				session[s].dns1 = htonl(config->default_dns1);
-				log(3, 0, s, t, "   Sending dns1 = %s\n", inet_toa(config->default_dns1));
+				LOG(3, 0, s, t, "   Sending dns1 = %s\n", inet_toa(config->default_dns1));
 			}
 			if (!session[s].dns2 && config->default_dns2)
 			{
 				session[s].dns2 = htonl(config->default_dns2);
-				log(3, 0, s, t, "   Sending dns2 = %s\n", inet_toa(config->default_dns2));
+				LOG(3, 0, s, t, "   Sending dns2 = %s\n", inet_toa(config->default_dns2));
 			}
 
 			// Valid Session, set it up
@@ -612,7 +612,7 @@ void processrad(u8 *buf, int len, char socket_index)
 		else
 		{
 				// An ack for a stop or start record.
-			log(3, 0, s, t, "   RADIUS accounting ack recv in state %s\n", radius_states[radius[r].state]);
+			LOG(3, 0, s, t, "   RADIUS accounting ack recv in state %s\n", radius_states[radius[r].state]);
 			break;
 		}
 	} while (0);
@@ -654,7 +654,7 @@ void radiusretry(u16 r)
 		case RADIUSWAIT:           // waiting timeout before available, in case delayed reply from RADIUS server
 			// free up RADIUS task
 			radiusclear(r, s);
-			log(3, 0, s, session[s].tunnel, "Freeing up radius session %d\n", r);
+			LOG(3, 0, s, session[s].tunnel, "Freeing up radius session %d\n", r);
 			break;
 	}
 }
@@ -663,7 +663,7 @@ void radius_clean()
 {
 	int i;
 
-	log(1, 0, 0, 0, "Cleaning radius session array\n");
+	LOG(1, 0, 0, 0, "Cleaning radius session array\n");
 
 	for (i = 1; i < MAXRADIUS; i++)
 	{
