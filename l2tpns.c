@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.33 2004-10-28 03:58:38 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.34 2004-10-29 04:01:11 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -101,13 +101,14 @@ struct config_descriptt config_values[] = {
 	CONFIG("save_state", save_state, BOOL),
 	CONFIG("primary_radius", radiusserver[0], IP),
 	CONFIG("secondary_radius", radiusserver[1], IP),
-	CONFIG("primary_radius_port",radiusport[0], SHORT),
-	CONFIG("secondary_radius_port",radiusport[1], SHORT),
+	CONFIG("primary_radius_port", radiusport[0], SHORT),
+	CONFIG("secondary_radius_port", radiusport[1], SHORT),
 	CONFIG("radius_accounting", radius_accounting, BOOL),
 	CONFIG("radius_secret", radiussecret, STRING),
 	CONFIG("bind_address", bind_address, IP),
 	CONFIG("send_garp", send_garp, BOOL),
 	CONFIG("throttle_speed", rl_rate, UNSIGNED_LONG),
+	CONFIG("throttle_buckets", num_tbfs, INT),
 	CONFIG("accounting_dir", accounting_dir, STRING),
 	CONFIG("setuid", target_uid, INT),
 	CONFIG("dump_speed", dump_speed, BOOL),
@@ -2477,8 +2478,11 @@ void initdata(int optdebug, char *optconfig)
 	}
 	memset(config, 0, sizeof(struct configt));
 	time(&config->start_time);
-	config->debug = optdebug;
 	strncpy(config->config_file, optconfig, strlen(optconfig));
+	config->debug = optdebug;
+	config->num_tbfs = MAXTBFS;
+	config->rl_rate = 28; // 28kbps
+
 	if (!(tunnel = shared_malloc(sizeof(tunnelt) * MAXTUNNEL)))
 	{
 		log(0, 0, 0, 0, "Error doing malloc for tunnels: %s\n", strerror(errno));
@@ -2960,9 +2964,9 @@ int main(int argc, char *argv[])
 	initplugins();
 	initdata(optdebug, optconfig);
 
-	init_tbf();
-	init_cli(hostname);
 	read_config_file();
+	init_tbf(config->num_tbfs);
+	init_cli(hostname);
 
 	log(0, 0, 0, 0, "L2TPNS version " VERSION "\n");
 	log(0, 0, 0, 0, "Copyright (c) 2003, 2004 Optus Internet Engineering\n");

@@ -1,13 +1,8 @@
 // L2TPNS: token bucket filters
 
-char const *cvs_id_tbf = "$Id: tbf.c,v 1.7 2004-10-28 03:26:41 bodea Exp $";
-
-#define _GNU_SOURCE
+char const *cvs_id_tbf = "$Id: tbf.c,v 1.8 2004-10-29 04:01:11 bodea Exp $";
 
 #include <string.h>
-#include <unistd.h>
-#include <sys/mman.h>
-
 #include "l2tpns.h"
 #include "util.h"
 #include "tbf.h"
@@ -19,12 +14,12 @@ static int timer_chain = -1;	// Head of timer chain.
 
 static void tbf_run_queue(int tbf_id);
 
-void init_tbf(void)
+void init_tbf(int num_tbfs)
 {
-	if (!(filter_list = shared_malloc(sizeof(*filter_list) * MAXTBFS)))
+	if (!(filter_list = shared_malloc(sizeof(*filter_list) * num_tbfs)))
 		return;
 
-	filter_list_size = MAXTBFS;
+	filter_list_size = num_tbfs;
 	filter_list[0].sid = -1;	// Reserved.
 }
 //
@@ -101,12 +96,10 @@ int new_tbf(int sid, int max_credit, int rate, void (*f)(sessionidt, u8 *, int))
 	int i;
 	static int p = 0;
 
-	log(3,0,0,0, "Allocating new TBF (sess %d, rate %d, helper %p)\n", sid, rate, f);
+	log(4,0,0,0, "Allocating new TBF (sess %d, rate %d, helper %p)\n", sid, rate, f);
 
 	if (!filter_list)
 		return 0;	// Couldn't alloc memory!
-
-//    again:
 
 	for (i = 0 ; i < filter_list_size ; ++i, p = (p+1)%filter_list_size ) {
 		if (filter_list[p].sid)
@@ -123,33 +116,8 @@ int new_tbf(int sid, int max_credit, int rate, void (*f)(sessionidt, u8 *, int))
 		return p;
 	}
 
-#if 0
-	// All allocated filters are used! Increase the size of the allocated
-	// filters.
-
-	{
-		int new_size = filter_list_size * 2;
-		tbft *new = mremap(filter_list, filter_list_size * sizeof(*new), new_size * sizeof(*new), MREMAP_MAYMOVE);
-
-		if (new == MAP_FAILED)
-		{
-			log(0,0,0,0, "Ran out of token bucket filters and mremap failed!  Sess %d will be un-throttled\n", sid);
-			return 0;
-		}
-
-		i = filter_list_size;
-		filter_list_size = new_size;
-		filter_list = new;
-	}
-
-	for (; i < filter_list_size; ++i)
-		filter_list[i].sid = 0;
-
-	goto again;
-#else
 	log(0,0,0,0, "Ran out of token bucket filters!  Sess %d will be un-throttled\n", sid);
 	return 0;
-#endif
 }
 
 //

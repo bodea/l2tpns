@@ -33,7 +33,7 @@ typedef struct {
         char            packets[TBF_MAX_QUEUE][TBF_MAX_SIZE];
 } tbft;
 
-void init_tbf(void);
+void init_tbf(int num_tbfs);
 int tbf_run_timer(void);
 int tbf_queue_packet(int tbf_id, char * data, int size);
 int new_tbf(int sid, int max_credit, int rate, void (*f)(sessionidt, u8 *, int));

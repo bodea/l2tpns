@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.23 2004-10-28 03:58:51 bodea Exp $
+// $Id: l2tpns.h,v 1.24 2004-10-29 04:01:11 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -43,21 +43,32 @@
 #define BUSY_WAIT_TIMEOUT	3000	// 5 minutes in 1/10th seconds to wait for radius to cleanup on shutdown
 
 // Constants
-#include "config.h"
+#ifndef ETCDIR
+#define ETCDIR		"/etc/l2tpns"
+#endif
+
+#ifndef LIBDIR
+#define LIBDIR		"/usr/lib/l2tpns"
+#endif
+
+#ifndef STATEDIR
+#define STATEDIR	"/var/lib/l2tpns"
+#endif
+
 #ifndef PLUGINDIR
-#define PLUGINDIR	LIBDIR			// Plugins
+#define PLUGINDIR	LIBDIR		// Plugins
 #endif
 
 #ifndef PLUGINCONF
-#define PLUGINCONF	ETCDIR			// Plugin config dir
-#endif
-
-#ifndef DATADIR
-#define DATADIR		"/tmp"
+#define PLUGINCONF	ETCDIR		// Plugin config dir
 #endif
 
 #ifndef FLASHDIR
 #define FLASHDIR	ETCDIR
+#endif
+
+#ifndef DATADIR
+#define DATADIR		STATEDIR
 #endif
 
 #define TUNDEVICE	"/dev/net/tun"
@@ -408,7 +419,9 @@ struct configt
 
 	ipt		default_dns1, default_dns2;
 
-	unsigned long	rl_rate;
+	unsigned long	rl_rate;			// throttle rate
+	int		num_tbfs;			// number of throttle buckets
+
 	int		save_state;
 	char		accounting_dir[128];
 	ipt		bind_address;
@@ -448,7 +461,6 @@ struct configt
 	char		bgp_peer[2][64];
 	u16		bgp_peer_as[2];
 #endif
-	char		hostname[256];			// our hostname - set to gethostname() by default
 };
 
 struct config_descriptt
