@@ -10,6 +10,7 @@
 - Revise nsctl to allow arbitrary strings/args to be passed to plugins.
 - Add snoopctl, throttlectl plugins.
 - Fix deletion from linked list.
+- Allow LCP re-negotiation after connection completes (thanks Yuri).
 
 * Mon Nov 15 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.7
 - Fix socket creation in host_unreachable() (thanks to Bjørn Augestad)

@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.26 2004-11-16 07:54:32 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.27 2004-11-18 13:15:28 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -600,6 +600,10 @@ void processipcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 		session[s].flags |= SF_IPCP_ACKED;
 
 		LOG(3, session[s].ip, s, t, "IPCP Acked, session is now active\n");
+
+		// clear  LCP_ACKED flag  for possible fast renegotiaion for routers
+		session[s].flags &= ~SF_LCP_ACKED;
+
 		return;
 	}
 	if (*p != ConfigReq)
@@ -840,7 +844,7 @@ void processccp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 			*p = TerminateAck;		// close
 		if (!(q = makeppp(b, sizeof(b), p, l, t, s, PPPCCP)))
 		{
-			LOG(1,0,0,0, "Failed to send CCP packet.\n");	
+			LOG(1,0,0,0, "Failed to send CCP packet.\n");
 			return;
 		}
 		tunnelsend(b, l + (q - b), t); // send it
