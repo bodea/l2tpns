@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.53 2004-11-18 06:41:03 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.54 2004-11-18 09:02:29 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -1052,15 +1052,20 @@ void sessionshutdown(sessionidt s, char *reason)
 	if (session[s].ip)
 	{                          // IP allocated, clear and unroute
 		int r;
+		int routed = 0;
 		for (r = 0; r < MAXROUTE && session[s].route[r].ip; r++)
 		{
+			if ((session[s].ip & session[s].route[r].mask) ==
+			    (session[s].route[r].ip & session[s].route[r].mask))
+				routed++;
+
 			routeset(s, session[s].route[r].ip, session[s].route[r].mask, 0, 0);
 			session[s].route[r].ip = 0;
 		}
 
 		if (session[s].ip_pool_index == -1) // static ip
 		{
-			routeset(s, session[s].ip, 0, 0, 0);	// Delete route.
+			if (!routed) routeset(s, session[s].ip, 0, 0, 0);
 			session[s].ip = 0;
 		}
 		else
@@ -3576,18 +3581,30 @@ int sessionsetup(tunnelidt t, sessionidt s)
 		}
 	}
 
-		// Add the route for this session.
-		//
-		// Static IPs need to be routed. Anything else
-		// is part of the IP address pool and is already routed,
-		// it just needs to be added to the IP cache.
-	if (session[s].ip_pool_index == -1) // static ip
-		routeset(s, session[s].ip, 0, 0, 1);
-	else
-		cache_ipmap(session[s].ip, s);
+	{
+	    	int routed = 0;
 
-	for (r = 0; r < MAXROUTE && session[s].route[r].ip; r++)
-		routeset(s, session[s].route[r].ip, session[s].route[r].mask, 0, 1);
+		// Add the route for this session.
+		for (r = 0; r < MAXROUTE && session[s].route[r].ip; r++)
+		{
+			if ((session[s].ip & session[s].route[r].mask) ==
+			    (session[s].route[r].ip & session[s].route[r].mask))
+				routed++;
+
+			routeset(s, session[s].route[r].ip, session[s].route[r].mask, 0, 1);
+		}
+
+		// Static IPs need to be routed if not already
+		// convered by a Framed-Route.  Anything else is part
+		// of the IP address pool and is already routed, it
+		// just needs to be added to the IP cache.
+		if (session[s].ip_pool_index == -1) // static ip
+		{
+			if (!routed) routeset(s, session[s].ip, 0, 0, 1);
+		}
+		else
+			cache_ipmap(session[s].ip, s);
+	}
 
 	if (!session[s].unique_id)
 	{
@@ -3631,6 +3648,7 @@ int sessionsetup(tunnelidt t, sessionidt s)
 int load_session(sessionidt s, sessiont *new)
 {
 	int i;
+	int newip = 0;
 
 		// Sanity checks.
 	if (new->ip_pool_index >= MAXIPPOOL ||
@@ -3648,46 +3666,64 @@ int load_session(sessionidt s, sessiont *new)
 
 	session[s].tunnel = new->tunnel; // For logging in cache_ipmap
 
+	// See if routes/ip cache need updating
+	if (new->ip != session[s].ip)
+		newip++;
 
-	if (new->ip != session[s].ip)	// Changed ip. fix up hash tables.
+	for (i = 0; !newip && i < MAXROUTE && (session[s].route[i].ip || new->route[i].ip); i++)
+		if (new->route[i].ip != session[s].route[i].ip ||
+		    new->route[i].mask != session[s].route[i].mask)
+			newip++;
+
+	// needs update
+	if (newip)
 	{
-		if (session[s].ip)	// If there's an old one, remove it.
-		{
-			// Remove any routes if the IP has changed
-			for (i = 0; i < MAXROUTE && session[s].route[i].ip; i++)
-			{
-				routeset(s, session[s].route[i].ip, session[s].route[i].mask, 0, 0);
-				session[s].route[i].ip = 0;
-			}
+	    	int routed = 0;
 
+		// remove old routes...
+		for (i = 0; i < MAXROUTE && session[s].route[i].ip; i++)
+		{
+			if ((session[s].ip & session[s].route[i].mask) ==
+			    (session[s].route[i].ip & session[s].route[i].mask))
+				routed++;
+
+			routeset(s, session[s].route[i].ip, session[s].route[i].mask, 0, 0);
+		}
+
+		// ...ip
+		if (session[s].ip)
+		{
 			if (session[s].ip_pool_index == -1) // static IP
-				routeset(s, session[s].ip, 0, 0, 0);
+			{
+				if (!routed) routeset(s, session[s].ip, 0, 0, 0);
+			}
 			else		// It's part of the IP pool, remove it manually.
 				uncache_ipmap(session[s].ip);
 		}
 
+		routed = 0;
+
+		// add new routes...
+		for (i = 0; i < MAXROUTE && new->route[i].ip; i++)
+		{
+			if ((new->ip & new->route[i].mask) ==
+			    (new->route[i].ip & new->route[i].mask))
+				routed++;
+
+			routeset(s, new->route[i].ip, new->route[i].mask, 0, 1);
+		}
+
+		// ...ip
 		if (new->ip)
 		{
 			// If there's a new one, add it.
 			if (new->ip_pool_index == -1)
-				routeset(s, new->ip, 0, 0, 1);
+			{
+				if (!routed) routeset(s, new->ip, 0, 0, 1);
+			}
 			else
 				cache_ipmap(new->ip, s);
 		}
-	}
-
-	// Update routed networks
-	for (i = 0; i < MAXROUTE && (session[s].route[i].ip || new->route[i].ip); i++)
-	{
-		if (new->route[i].ip == session[s].route[i].ip &&
-		    new->route[i].mask == session[s].route[i].mask)
-			continue;
-
-		if (session[s].route[i].ip) // Remove the old one if it exists.
-			routeset(s, session[s].route[i].ip, session[s].route[i].mask, 0, 0);
-
-		if (new->route[i].ip)	// Add the new one if it exists.
-			routeset(s, new->route[i].ip, new->route[i].mask, 0, 1);
 	}
 
 	if (new->tunnel && s > config->cluster_highest_sessionid)	// Maintain this in the slave. It's used
