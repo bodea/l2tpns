@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.11 2004-07-07 09:09:53 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.12 2004-07-08 16:54:35 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -22,7 +22,6 @@ char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.11 2004-07-07 09:09:53 bodea Exp 
 #include <stdarg.h>
 #include <stdlib.h>
 #include <stdio.h>
-#define __USE_GNU
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
@@ -51,7 +50,7 @@ char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.11 2004-07-07 09:09:53 bodea Exp 
 
 // Globals
 struct configt *config = NULL;	// all configuration
-int tapfd = -1;			// tap interface file handle
+int tunfd = -1;			// tun interface file handle. (network device)
 int udpfd = -1;			// UDP file handle
 int controlfd = -1;		// Control signal handle
 int snoopfd = -1;		// UDP file handle for sending out intercept data
@@ -59,24 +58,25 @@ int *radfds = NULL;		// RADIUS requests file handles
 int ifrfd = -1;			// File descriptor for routing, etc
 time_t basetime = 0;		// base clock
 char hostname[1000] = "";	// us.
-u16 tapmac[3];			// MAC of tap interface
-int tapidx;			// ifr_ifindex of tap device
+int tunidx;			// ifr_ifindex of tun device
 u32 sessionid = 0;		// session id for radius accounting
 int syslog_log = 0;		// are we logging to syslog
-FILE *log_stream = NULL;
-struct sockaddr_in snoop_addr = {0};
-extern int cluster_sockfd;
-u32 last_sid = 0;
-int clifd = 0;
-sessionidt *cli_session_kill = NULL;
-tunnelidt *cli_tunnel_kill = NULL;
-static void *ip_hash[256];
-u32 udp_tx = 0, udp_rx = 0, udp_rx_pkt = 0;
+FILE *log_stream = NULL;	// file handle for direct logging (i.e. direct into file, not via syslog).
+extern int cluster_sockfd;	// Intra-cluster communications socket.
+u32 last_sid = 0;		// Last used PPP SID. Can I kill this?? -- mo
+int clifd = 0;			// Socket listening for CLI connections.
+
+struct cli_session_actions *cli_session_actions = NULL;	// Pending session changes requested by CLI
+struct cli_tunnel_actions *cli_tunnel_actions = NULL;	// Pending tunnel changes required by CLI
+
+static void *ip_hash[256];	// Mapping from IP address to session structures.
+
+u32 udp_tx = 0, udp_rx = 0, udp_rx_pkt = 0;	// Global traffic counters.
 u32 eth_tx = 0, eth_rx = 0, eth_rx_pkt = 0;
-u32 ip_pool_size = 1;
-time_t time_now = 0;
-char time_now_string[64] = {0};
-char main_quit = 0;
+u32 ip_pool_size = 1;		// Size of the pool of addresses used for dynamic address allocation.
+time_t time_now = 0;		// Current time in seconds since epoch.
+char time_now_string[64] = {0};	// Current time as a string.
+char main_quit = 0;		// True if we're in the process of exiting.
 char *_program_name = NULL;
 linked_list *loaded_plugins;
 linked_list *plugins[MAX_PLUGIN_TYPES];
@@ -143,11 +143,11 @@ char *plugin_functions[] = {
 
 #define max_plugin_functions (sizeof(plugin_functions) / sizeof(char *))
 
-tunnelt *tunnel = NULL;		// 1000 * 45 = 45000 = 45k
-sessiont *session = NULL;	// 5000 * 213 = 1065000 = 1 Mb
-sessioncountt *sess_count = NULL;
-radiust *radius = NULL;
-ippoolt *ip_address_pool = NULL;
+tunnelt *tunnel = NULL;		// Array of tunnel structures.
+sessiont *session = NULL;	// Array of session structures.
+sessioncountt *sess_count = NULL;	// Array of partial per-session traffic counters.
+radiust *radius = NULL;		// Array of radius structures.
+ippoolt *ip_address_pool = NULL;	// Array of dynamic IP addresses.
 controlt *controlfree = 0;
 struct Tstats *_statistics = NULL;
 #ifdef RINGBUFFER
@@ -169,7 +169,7 @@ void update_config();
 static void cache_ipmap(ipt ip, int s);
 static void uncache_ipmap(ipt ip);
 
-// return internal time (10ths since run)
+// return internal time (10ths since process startup)
 clockt now(void)
 {
 	struct timeval t;
@@ -178,12 +178,18 @@ clockt now(void)
 }
 
 // work out a retry time based on try number
+// This is a straight bounded exponential backoff.
+// Maximum re-try time is 32 seconds. (2^5).
 clockt backoff(u8 try)
 {
 	if (try > 5) try = 5;                  // max backoff
 	return now() + 10 * (1 << try);
 }
 
+
+//
+// Log a debug message.
+//
 void _log(int level, ipt address, sessionidt s, tunnelidt t, const char *format, ...)
 {
 	static char message[65536] = {0};
@@ -297,7 +303,7 @@ void routeset(sessionidt s, ipt ip, ipt mask, ipt gw, u8 add)
 	ip &= mask;		// Force the ip to be the first one in the route.
 
 	memset(&r, 0, sizeof(r));
-	r.rt_dev = config->tapdevice;
+	r.rt_dev = config->tundevice;
 	r.rt_dst.sa_family = AF_INET;
 	*(u32 *) & (((struct sockaddr_in *) &r.rt_dst)->sin_addr.s_addr) = htonl(ip);
 	r.rt_gateway.sa_family = AF_INET;
@@ -344,31 +350,32 @@ void routeset(sessionidt s, ipt ip, ipt mask, ipt gw, u8 add)
 	}
 }
 
-// Set up TAP interface
-void inittap(void)
+//
+// Set up TUN interface
+void inittun(void)
 {
 	struct ifreq ifr;
 	struct sockaddr_in sin = {0};
 	memset(&ifr, 0, sizeof(ifr));
 	ifr.ifr_flags = IFF_TUN;
 
-	tapfd = open(TAPDEVICE, O_RDWR);
-	if (tapfd < 0)
+	tunfd = open(TUNDEVICE, O_RDWR);
+	if (tunfd < 0)
 	{                          // fatal
-		log(0, 0, 0, 0, "Can't open %s: %s\n", TAPDEVICE, strerror(errno));
+		log(0, 0, 0, 0, "Can't open %s: %s\n", TUNDEVICE, strerror(errno));
 		exit(1);
 	}
 	{
-		int flags = fcntl(tapfd, F_GETFL, 0);
-		fcntl(tapfd, F_SETFL, flags | O_NONBLOCK);
+		int flags = fcntl(tunfd, F_GETFL, 0);
+		fcntl(tunfd, F_SETFL, flags | O_NONBLOCK);
 	}
-	if (ioctl(tapfd, TUNSETIFF, (void *) &ifr) < 0)
+	if (ioctl(tunfd, TUNSETIFF, (void *) &ifr) < 0)
 	{
-		log(0, 0, 0, 0, "Can't set tap interface: %s\n", strerror(errno));
+		log(0, 0, 0, 0, "Can't set tun interface: %s\n", strerror(errno));
 		exit(1);
 	}
-	assert(strlen(ifr.ifr_name) < sizeof(config->tapdevice));
-	strncpy(config->tapdevice, ifr.ifr_name, sizeof(config->tapdevice) - 1);
+	assert(strlen(ifr.ifr_name) < sizeof(config->tundevice));
+	strncpy(config->tundevice, ifr.ifr_name, sizeof(config->tundevice) - 1);
 	ifrfd = socket(PF_INET, SOCK_DGRAM, IPPROTO_IP);
 
 	sin.sin_family = AF_INET;
@@ -393,18 +400,12 @@ void inittap(void)
 		log(0, 0, 0, 0, "Error setting tun flags: %s\n", strerror(errno));
 		exit(1);
 	}
-	if (ioctl(ifrfd, SIOCGIFHWADDR, (void *) &ifr) < 0)
-	{
-		log(0, 0, 0, 0, "Error setting tun hardware address: %s\n", strerror(errno));
-		exit(1);
-	}
-	memcpy(&tapmac, 2 + (u8 *) & ifr.ifr_hwaddr, 6);
 	if (ioctl(ifrfd, SIOCGIFINDEX, (void *) &ifr) < 0)
 	{
 		log(0, 0, 0, 0, "Error setting tun ifindex: %s\n", strerror(errno));
 		exit(1);
 	}
-	tapidx = ifr.ifr_ifindex;
+	tunidx = ifr.ifr_ifindex;
 }
 
 // set up UDP port
@@ -430,7 +431,6 @@ void initudp(void)
 		exit(1);
 	}
 	snoopfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-	snoop_addr.sin_family = AF_INET;
 
 	// Control
 	memset(&addr, 0, sizeof(addr));
@@ -625,82 +625,6 @@ sessionidt sessionidtbysessiont(sessiont *s)
 	return val;
 }
 
-// Handle ARP requests
-void processarp(u8 * buf, int len)
-{
-	ipt ip;
-	sessionidt s;
-
-	CSTAT(call_processarp);
-	STAT(arp_recv);
-
-	if (len != 46)
-	{
-		log(0, 0, 0, 0, "Unexpected length ARP %d bytes\n", len);
-		STAT(arp_errors);
-		return;
-	}
-	if (*(u16 *) (buf + 16) != htons(PKTARP))
-	{
-		log(0, 0, 0, 0, "Unexpected ARP type %04X\n", ntohs(*(u16 *) (buf + 16)));
-		STAT(arp_errors);
-		return;
-	}
-	if (*(u16 *) (buf + 18) != htons(0x0001))
-	{
-		log(0, 0, 0, 0, "Unexpected ARP hard type %04X\n", ntohs(*(u16 *) (buf + 18)));
-		STAT(arp_errors);
-		return;
-	}
-	if (*(u16 *) (buf + 20) != htons(PKTIP))
-	{
-		log(0, 0, 0, 0, "Unexpected ARP prot type %04X\n", ntohs(*(u16 *) (buf + 20)));
-		STAT(arp_errors);
-		return;
-	}
-	if (buf[22] != 6)
-	{
-		log(0, 0, 0, 0, "Unexpected ARP hard len %d\n", buf[22]);
-		STAT(arp_errors);
-		return;
-	}
-	if (buf[23] != 4)
-	{
-		log(0, 0, 0, 0, "Unexpected ARP prot len %d\n", buf[23]);
-		STAT(arp_errors);
-		return;
-	}
-	if (*(u16 *) (buf + 24) != htons(0x0001))
-	{
-		log(0, 0, 0, 0, "Unexpected ARP op %04X\n", ntohs(*(u16 *) (buf + 24)));
-		STAT(arp_errors);
-		return;
-	}
-	ip = *(u32 *) (buf + 42);
-	// look up session
-	s = sessionbyip(ip);
-	if (s)
-	{
-		log(3, ntohl(ip), s, session[s].tunnel, "ARP reply for %s\n", inet_toa(ip));
-		memcpy(buf + 4, buf + 10, 6); // set destination as source
-		*(u16 *) (buf + 10) = htons(tapmac[0]); // set source address
-		*(u16 *) (buf + 12) = htons(tapmac[1]);
-		*(u16 *) (buf + 14) = htons(tapmac[2]);
-		*(u16 *) (buf + 24) = htons(0x0002); // ARP reply
-		memcpy(buf + 26, buf + 10, 6); // sender ethernet
-		memcpy(buf + 36, buf + 4, 6); // target ethernet
-		*(u32 *) (buf + 42) = *(u32 *) (buf + 32); // target IP
-		*(u32 *) (buf + 32) = ip; // sender IP
-		write(tapfd, buf, len);
-		STAT(arp_replies);
-	}
-	else
-	{
-		log(3, ntohl(ip), 0, 0, "ARP request for unknown IP %s\n", inet_toa(ip));
-		STAT(arp_discarded);
-	}
-}
-
 // actually send a control message for a specific tunnel
 void tunnelsend(u8 * buf, u16 l, tunnelidt t)
 {
@@ -764,7 +688,7 @@ void tunnelsend(u8 * buf, u16 l, tunnelidt t)
 //
 int tun_write(u8 * data, int size)
 {
-	return write(tapfd, data, size);
+	return write(tunfd, data, size);
 }
 
 // process outgoing (to tunnel) IP
@@ -898,7 +822,7 @@ void send_ipout(sessionidt s, u8 *buf, int len)
 
 	log(5, session[s].ip, s, t, "Ethernet -> Tunnel (%d bytes)\n", len);
 
-	// Snooping this session, send it to intercept box
+	// Snooping this session.
 	if (sp->snoop_ip && sp->snoop_port)
 		snoop_send_packet(buf, len, sp->snoop_ip, sp->snoop_port);
 
@@ -1210,6 +1134,7 @@ void sessionkill(sessionidt s, char *reason)
 	session[s].tunnel = T_FREE;	// Mark it as free.
 	session[s].next = sessionfree;
 	sessionfree = s;
+	cli_session_actions[s].action = 0;
 	cluster_send_session(s);
 }
 
@@ -1239,10 +1164,9 @@ void tunnelkill(tunnelidt t, char *reason)
 
 	// free tunnel
 	tunnelclear(t);
-	cluster_send_tunnel(t);
 	log(1, 0, 0, t, "Kill tunnel %d: %s\n", t, reason);
-	tunnel[t].die = 0;
-	tunnel[t].state = TUNNELFREE;
+	cli_tunnel_actions[s].action = 0;
+	cluster_send_tunnel(t);
 }
 
 // shut down a tunnel cleanly
@@ -1546,13 +1470,10 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 							log(4, ntohl(addr->sin_addr.s_addr), s, t, "   Error Code %d: %s\n",
 								errcode, errdesc);
 						}
-						if (n > 4) {
-							/* %*s doesn't work?? */
-							char *buf = (char *)strndup(b+4, n-4);
-							log(4, ntohl(addr->sin_addr.s_addr), s, t, "   Error String: %s\n",
-								buf);
-							free(buf);
-						}
+						if (n > 4)
+							log(4, ntohl(addr->sin_addr.s_addr), s, t, "   Error String: %.*s\n",
+								n-4, b+4);
+
 						break;
 					}
 					break;
@@ -1997,26 +1918,25 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 	}
 }
 
-// read and process packet on tap
-void processtap(u8 * buf, int len)
+// read and process packet on tun
+void processtun(u8 * buf, int len)
 {
-	log_hex(5, "Receive TAP Data", buf, len);
-	STAT(tap_rx_packets);
-	INC_STAT(tap_rx_bytes, len);
+	log_hex(5, "Receive TUN Data", buf, len);
+	STAT(tun_rx_packets);
+	INC_STAT(tun_rx_bytes, len);
 
-	CSTAT(call_processtap);
+	CSTAT(call_processtun);
 
 	eth_rx_pkt++;
 	eth_rx += len;
 	if (len < 22)
 	{
-		log(1, 0, 0, 0, "Short tap packet %d bytes\n", len);
-		STAT(tap_rx_errors);
+		log(1, 0, 0, 0, "Short tun packet %d bytes\n", len);
+		STAT(tun_rx_errors);
 		return;
 	}
-	if (*(u16 *) (buf + 2) == htons(PKTARP)) // ARP
-		processarp(buf, len);
-	else if (*(u16 *) (buf + 2) == htons(PKTIP)) // IP
+
+	if (*(u16 *) (buf + 2) == htons(PKTIP)) // IP
 		processipout(buf, len);
 	// Else discard.
 }
@@ -2034,6 +1954,7 @@ int regular_cleanups(void)
 	int count=0,i;
 	u16 r;
 	static clockt next_acct = 0;
+	int a;
 
 	log(3, 0, 0, 0, "Begin regular cleanup\n");
 
@@ -2083,35 +2004,23 @@ int regular_cleanups(void)
 			controladd(c, t, 0); // send the message
 			log(3, tunnel[t].ip, 0, t, "Sending HELLO message\n");
 		}
-	}
 
-	// Check for sessions that have been killed from the CLI
-	if (cli_session_kill[0])
-	{
-		int i;
-		for (i = 0; i < MAXSESSION && cli_session_kill[i]; i++)
+		// Check for tunnel changes requested from the CLI
+		if ((a = cli_tunnel_actions[t].action))
 		{
-			log(2, 0, cli_session_kill[i], 0, "Dropping session by CLI\n");
-			sessionshutdown(cli_session_kill[i], "Requested by administrator");
-			cli_session_kill[i] = 0;
+			cli_tunnel_actions[t].action = 0;
+			if (a & CLI_TUN_KILL)
+			{
+				log(2, tunnel[t].ip, 0, t, "Dropping tunnel by CLI\n");
+				tunnelshutdown(t, "Requested by administrator");
+			}
 		}
-	}
-	// Check for tunnels that have been killed from the CLI
-	if (cli_tunnel_kill[0])
-	{
-		int i;
-		for (i = 1; i < MAXTUNNEL && cli_tunnel_kill[i]; i++)
-		{
-			log(2, 0, cli_tunnel_kill[i], 0, "Dropping tunnel by CLI\n");
-			tunnelshutdown(cli_tunnel_kill[i], "Requested by administrator");
-			cli_tunnel_kill[i] = 0;
-		}
+
 	}
 
 	count = 0;
 	for (i = 1; i <= config->cluster_highest_sessionid; i++)
 	{
-
 		s++;
 		if (s > config->cluster_highest_sessionid)
 			s = 1;
@@ -2165,7 +2074,60 @@ int regular_cleanups(void)
 			if (++count >= MAX_ACTIONS) break;
 			continue;
 		}
+
+		// Check for actions requested from the CLI
+		if ((a = cli_session_actions[s].action))
+		{
+			int send = 0;
+
+			cli_session_actions[s].action = 0;
+			if (a & CLI_SESS_KILL)
+			{
+				log(2, 0, s, session[s].tunnel, "Dropping session by CLI\n");
+				sessionshutdown(s, "Requested by administrator");
+				a = 0; // dead, no need to check for other actions
+			}
+
+			if (a & CLI_SESS_SNOOP)
+			{
+				log(2, 0, s, session[s].tunnel, "Snooping session by CLI (to %s:%d)\n",
+				    inet_toa(cli_session_actions[s].snoop_ip), cli_session_actions[s].snoop_port);
+
+				session[s].snoop_ip = cli_session_actions[s].snoop_ip;
+				session[s].snoop_port = cli_session_actions[s].snoop_port;
+				send++;
+			}
+
+			if (a & CLI_SESS_NOSNOOP)
+			{
+				log(2, 0, s, session[s].tunnel, "Unsnooping session by CLI\n");
+				session[s].snoop_ip = 0;
+				session[s].snoop_port = 0;
+				send++;
+			}
+
+			if (a & CLI_SESS_THROTTLE)
+			{
+				log(2, 0, s, session[s].tunnel, "Throttling session by CLI (to %d)\n",
+				    cli_session_actions[s].throttle);
+
+				throttle_session(s, cli_session_actions[s].throttle);
+			}
+
+			if (a & CLI_SESS_NOTHROTTLE)
+			{
+				log(2, 0, s, session[s].tunnel, "Un-throttling session by CLI\n");
+				throttle_session(s, 0);
+			}
+
+			if (send)
+				cluster_send_session(s);
+
+			if (++count >= MAX_ACTIONS) break;
+			continue;
+		}
 	}
+
 	if (config->accounting_dir && next_acct <= TIME)
 	{
 		// Dump accounting data
@@ -2217,7 +2179,7 @@ int still_busy(void)
 	return 0;
 }
 
-// main loop - gets packets on tap or udp and processes them
+// main loop - gets packets on tun or udp and processes them
 void mainloop(void)
 {
 	fd_set cr;
@@ -2227,17 +2189,17 @@ void mainloop(void)
 	clockt next_cluster_ping = 0;	// send initial ping immediately
 	time_t next_clean = time_now + config->cleanup_interval;
 
-	log(4, 0, 0, 0, "Beginning of main loop. udpfd=%d, tapfd=%d, cluster_sockfd=%d, controlfd=%d\n",
-			udpfd, tapfd, cluster_sockfd, controlfd);
+	log(4, 0, 0, 0, "Beginning of main loop. udpfd=%d, tunfd=%d, cluster_sockfd=%d, controlfd=%d\n",
+			udpfd, tunfd, cluster_sockfd, controlfd);
 
 	FD_ZERO(&cr);
 	FD_SET(udpfd, &cr);
-	FD_SET(tapfd, &cr);
+	FD_SET(tunfd, &cr);
 	FD_SET(controlfd, &cr);
 	FD_SET(clifd, &cr);
 	if (cluster_sockfd) FD_SET(cluster_sockfd, &cr);
 	cn = udpfd;
-	if (cn < tapfd) cn = tapfd;
+	if (cn < tunfd) cn = tunfd;
 	if (cn < controlfd) cn = controlfd;
 	if (cn < clifd) cn = clifd;
 	if (cn < cluster_sockfd) cn = cluster_sockfd;
@@ -2318,13 +2280,13 @@ void mainloop(void)
 						break;
 				}
 			}
-			if (FD_ISSET(tapfd, &r))
+			if (FD_ISSET(tunfd, &r))
 			{
 				int c, n;
 				for (c = 0; c < config->multi_read_count; c++)
 				{
-					if ((n = read(tapfd, buf, sizeof(buf))) > 0)
-						processtap(buf, n);
+					if ((n = read(tunfd, buf, sizeof(buf))) > 0)
+						processtun(buf, n);
 					else
 						break;
 				}
@@ -2362,10 +2324,15 @@ void mainloop(void)
 		if (cluster_sockfd && next_cluster_ping <= TIME)
 		{
 			// Check to see which of the cluster is still alive..
-			cluster_send_ping(basetime);
-			cluster_check_master();
+
+			cluster_send_ping(basetime);	// Only does anything if we're a slave
+			cluster_check_master();		// ditto.
+
 			cluster_heartbeat();		// Only does anything if we're a master.
+			cluster_check_slaves();		// ditto.
+
 			master_update_counts();		// If we're a slave, send our byte counters to our master.
+
 			if (config->cluster_iam_master && !config->cluster_iam_uptodate)
 				next_cluster_ping = TIME + 1; // out-of-date slaves, do fast updates
 			else
@@ -2479,20 +2446,20 @@ void initdata(void)
 	memset(ringbuffer, 0, sizeof(struct Tringbuffer));
 #endif
 
-	cli_session_kill = mmap(NULL, sizeof(sessionidt) * MAXSESSION, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, 0, 0);
-	if (cli_session_kill == MAP_FAILED)
+	cli_session_actions = mmap(NULL, sizeof(struct cli_session_actions) * MAXSESSION, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, 0, 0);
+	if (cli_session_actions == MAP_FAILED)
 	{
-		log(0, 0, 0, 0, "Error doing mmap for cli session kill: %s\n", strerror(errno));
+		log(0, 0, 0, 0, "Error doing mmap for cli session actions: %s\n", strerror(errno));
 		exit(1);
 	}
-	memset(cli_session_kill, 0, sizeof(sessionidt) * MAXSESSION);
-	cli_tunnel_kill = mmap(NULL, sizeof(tunnelidt) * MAXSESSION, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, 0, 0);
-	if (cli_tunnel_kill == MAP_FAILED)
+	memset(cli_session_actions, 0, sizeof(struct cli_session_actions) * MAXSESSION);
+	cli_tunnel_actions = mmap(NULL, sizeof(struct cli_tunnel_actions) * MAXSESSION, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, 0, 0);
+	if (cli_tunnel_actions == MAP_FAILED)
 	{
-		log(0, 0, 0, 0, "Error doing mmap for cli tunnel kill: %s\n", strerror(errno));
+		log(0, 0, 0, 0, "Error doing mmap for cli tunnel actions: %s\n", strerror(errno));
 		exit(1);
 	}
-	memset(cli_tunnel_kill, 0, sizeof(tunnelidt) * MAXSESSION);
+	memset(cli_tunnel_actions, 0, sizeof(struct cli_tunnel_actions) * MAXSESSION);
 
 	memset(tunnel, 0, sizeof(tunnelt) * MAXTUNNEL);
 	memset(session, 0, sizeof(sessiont) * MAXSESSION);
@@ -2797,9 +2764,11 @@ void initippool()
 
 void snoop_send_packet(char *packet, u16 size, ipt destination, u16 port)
 {
+	struct sockaddr_in snoop_addr = {0};
 	if (!destination || !port || snoopfd <= 0 || size <= 0 || !packet)
 		return;
 
+	snoop_addr.sin_family = AF_INET;
 	snoop_addr.sin_addr.s_addr = destination;
 	snoop_addr.sin_port = ntohs(port);
 
@@ -2903,7 +2872,7 @@ int main(int argc, char *argv[])
 
 	// Start the timer routine off
 	time(&time_now);
-	strftime(time_now_string, 64, "%Y-%m-%d %H:%M:%S", localtime(&time_now));
+	strftime(time_now_string, sizeof(time_now_string), "%Y-%m-%d %H:%M:%S", localtime(&time_now));
 	signal(SIGALRM, sigalrm_handler);
 	siginterrupt(SIGALRM, 0);
 
@@ -2970,8 +2939,8 @@ int main(int argc, char *argv[])
 		    config->bgp_peer_as[1], 0);
 #endif /* BGP */
 
-	inittap();
-	log(1, 0, 0, 0, "Set up on interface %s\n", config->tapdevice);
+	inittun();
+	log(1, 0, 0, 0, "Set up on interface %s\n", config->tundevice);
 
 	initudp();
 	initrad();
@@ -3046,7 +3015,7 @@ void sigalrm_handler(int junk)
 
 	// Update the internal time counter
 	time(&time_now);
-	strftime(time_now_string, 64, "%Y-%m-%d %H:%M:%S", localtime(&time_now));
+	strftime(time_now_string, sizeof(time_now_string), "%Y-%m-%d %H:%M:%S", localtime(&time_now));
 	alarm(1);
 
 	{

@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.7 2004-07-07 09:09:53 bodea Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.8 2004-07-08 16:54:35 bodea Exp $";
 
 #include <stdio.h>
 #include <sys/file.h>
@@ -66,7 +66,6 @@ static struct {
 	int	uptodate;
 } peers[CLUSTER_MAX_SIZE];	// List of all the peers we've heard from.
 static int num_peers;		// Number of peers in list.
-static int have_peers;		// At least one up to date peer
 
 int rle_decompress(u8 ** src_p, int ssize, u8 *dst, int dsize);
 int rle_compress(u8 ** src_p, int ssize, u8 *dst, int dsize);
@@ -330,13 +329,6 @@ int master_garden_packet(sessionidt s, char *data, int size)
 static void send_heartbeat(int seq, char * data, int size)
 {
     int i;
-    static int last_seq = -1;
-
-    if (last_seq != -1 && (seq != (last_seq+1)%HB_MAX_SEQ) ) {
-	log(0,0,0,0, "FATAL: Sequence number skipped! (%d != %d)\n",
-		seq, last_seq);
-    } 
-    last_seq = seq;
 
     if (size > sizeof(past_hearts[0].data)) {
 	log(0,0,0,0, "Tried to heartbeat something larger than the maximum packet!\n");
@@ -427,53 +419,22 @@ void master_update_counts(void)
 }
 
 //
-// Check that we have a master. If it's been too
-// long since we heard from a master then hold an election.
+// On the master, check how our slaves are going. If
+// one of them's not up-to-date we'll heartbeat faster.
+// If we don't have any of them, then we need to turn
+// on our own packet handling!
 //
-void cluster_check_master(void)
+void cluster_check_slaves(void)
 {
-	int i, count, tcount, high_sid = 0;
-	int last_free = 0;
+	int i;
+	static int have_peers = 0;
 	int had_peers = have_peers;
 	clockt t = TIME;
-	static int probed = 0;
 
-	if (TIME < (config->cluster_last_hb + config->cluster_hb_timeout))
-	{
-		// If the master is late (missed 2 hearbeats by a second and a
-		// hair) it may be that the switch has dropped us from the
-		// multicast group, try unicasting one probe to the master
-		// which will hopefully respond with a unicast heartbeat that
-		// will allow us to limp along until the querier next runs.
-		if (config->cluster_master_address
-		    && TIME > (config->cluster_last_hb + 2 * config->cluster_hb_interval + 11))
-		{
-			if (!probed)
-			{
-				probed = 1;
-				log(1, 0, 0, 0, "Heartbeat from master %.1fs late, probing...\n",
-				    TIME - (config->cluster_last_hb + config->cluster_hb_interval));
+	if (!config->cluster_iam_master)
+		return;		// Only runs on the master...
 
-				peer_send_message(config->cluster_master_address,
-				    C_LASTSEEN, config->cluster_seq_number, NULL, 0);
-			}
-		} else {	// We got a recent heartbeat; reset the probe flag.
-			probed = 0;
-		}
-
-		if (!config->cluster_iam_master)
-			return;		// Everything's ok. return.
-
-		// Master needs to check peer state
-	}
-
-	config->cluster_last_hb = TIME + 1;
-
-	if (config->cluster_iam_master)
-		config->cluster_iam_uptodate = 1;	// cleared in loop below
-	else
-		log(0,0,0,0, "Master timed out! Holding election...\n");
-
+	config->cluster_iam_uptodate = 1;	// cleared in loop below
 
 	for (i = have_peers = 0; i < num_peers; i++)
 	{
@@ -486,13 +447,67 @@ void cluster_check_master(void)
 		if (peers[i].uptodate)
 			have_peers = 1;
 
-		if (config->cluster_iam_master)
-		{
-			if (!peers[i].uptodate)
-				config->cluster_iam_uptodate = 0; // Start fast heartbeats
+		if (!peers[i].uptodate)
+			config->cluster_iam_uptodate = 0; // Start fast heartbeats
+	}
 
-			continue;
+#ifdef BGP
+	// master lost all slaves, need to handle traffic ourself
+	if (bgp_configured && had_peers && !have_peers)
+		bgp_enable_routing(1);
+	else if (bgp_configured && !had_peers && have_peers)
+		bgp_enable_routing(0);
+#endif /* BGP */
+}
+
+//
+// Check that we have a master. If it's been too
+// long since we heard from a master then hold an election.
+//
+void cluster_check_master(void)
+{
+	int i, count, tcount, high_sid = 0;
+	int last_free = 0;
+	clockt t = TIME;
+	static int probed = 0;
+
+	if (config->cluster_iam_master)
+		return;		// Only runs on the slaves...
+
+		// If the master is late (missed 2 hearbeats by a second and a
+		// hair) it may be that the switch has dropped us from the
+		// multicast group, try unicasting one probe to the master
+		// which will hopefully respond with a unicast heartbeat that
+		// will allow us to limp along until the querier next runs.
+	if (TIME > (config->cluster_last_hb + 2 * config->cluster_hb_interval + 11))
+	{
+		if (!probed && config->cluster_master_address)
+		{
+			probed = 1;
+			log(1, 0, 0, 0, "Heartbeat from master %.1fs late, probing...\n",
+			    0.1 * (TIME - (config->cluster_last_hb + config->cluster_hb_interval)));
+
+			peer_send_message(config->cluster_master_address,
+			    C_LASTSEEN, config->cluster_seq_number, NULL, 0);
 		}
+	} else {	// We got a recent heartbeat; reset the probe flag.
+		probed = 0;
+	}
+
+	if (TIME < (config->cluster_last_hb + config->cluster_hb_timeout))
+		return;	// Everything's ok!
+
+	config->cluster_last_hb = TIME + 1;	// Just the one election thanks.
+
+	log(0,0,0,0, "Master timed out! Holding election...\n");
+
+	for (i = 0; i < num_peers; i++)
+	{
+		if ((peers[i].timestamp + config->cluster_hb_timeout) < t)
+			continue;	// Stale peer! Skip them.
+
+		if (!peers[i].basetime)
+			continue;	// Shutdown peer! Skip them.
 
 		if (peers[i].basetime < basetime) {
 			log(1,0,0,0, "Expecting %s to become master\n", inet_toa(peers[i].peer) );
@@ -506,16 +521,6 @@ void cluster_check_master(void)
 		}
 	}
 
-	if (config->cluster_iam_master)		// If we're the master, we've already won
-	{
-#ifdef BGP
-		// master lost all slaves, need to handle traffic ourself
-		if (bgp_configured && had_peers && !have_peers)
-			bgp_enable_routing(1);
-#endif /* BGP */
-		return;
-	}
-
 		// Wow. it's been ages since I last heard a heartbeat
 		// and I'm better than an of my peers so it's time
 		// to become a master!!!
@@ -524,11 +529,6 @@ void cluster_check_master(void)
 	config->cluster_master_address = 0;
 
 	log(0,0,0,0, "I am declaring myself the master!\n");
-
-#ifdef BGP
-	if (bgp_configured && have_peers)
-		bgp_enable_routing(0); /* stop handling traffic */
-#endif /* BGP */
 
 	if (config->cluster_seq_number == -1)
 		config->cluster_seq_number = 0;
@@ -897,13 +897,8 @@ int cluster_catchup_slave(int seq, u32 slave)
 	while (seq != config->cluster_seq_number) {
 		s = seq%HB_HISTORY_SIZE;
 		if (seq != past_hearts[s].seq) {
-			int i;
 			log(0,0,0,0, "Tried to re-send heartbeat for %s but %d doesn't match %d! (%d,%d)\n",
 				inet_toa(slave), seq, past_hearts[s].seq, s, config->cluster_seq_number);
-
-			for (i = 0; i < HB_HISTORY_SIZE; ++i) {
-				log(0,0,0,0, "\tentry %3d: seq %d (size %d)\n", i, past_hearts[s].seq, past_hearts[s].size);
-			}
 			return -1;	// What to do here!?
 		}
 		peer_send_data(slave, past_hearts[s].data, past_hearts[s].size);
@@ -943,6 +938,7 @@ int cluster_add_peer(u32 peer, time_t basetime, pingt *p)
 
 		// Is this the master shutting down??
 	if (peer == config->cluster_master_address && !basetime) {
+	    	log(3,0,0,0, "Master %s shutting down...\n", inet_toa(config->cluster_master_address));
 		config->cluster_master_address = 0;
 		config->cluster_last_hb = 0; // Force an election.
 		cluster_check_master();
@@ -979,21 +975,6 @@ int cluster_add_peer(u32 peer, time_t basetime, pingt *p)
 
 		log(1,0,0,0, "Added %s as a new peer. Now %d peers\n", inet_toa(peer), num_peers);
 	}
-
-	if (peers[i].uptodate)
-	{
-#ifdef BGP
-		/* drop routes if we've now got a peer */
-		if (config->cluster_iam_master && bgp_configured && !have_peers)
-			bgp_enable_routing(0);
-#endif /* BGP */
-		have_peers = 1;
-	}
-	else if (config->cluster_iam_master)
-	{
-		config->cluster_iam_uptodate = 0; // increase heart-rate...
-	}
-
 
 	return 1;
 }

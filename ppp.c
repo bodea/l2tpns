@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.6 2004-06-28 02:43:13 fred_nerk Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.7 2004-07-08 16:54:35 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -17,7 +17,7 @@ char const *cvs_id_ppp = "$Id: ppp.c,v 1.6 2004-06-28 02:43:13 fred_nerk Exp $";
 extern tunnelt *tunnel;
 extern sessiont *session;
 extern radiust *radius;
-extern int tapfd;
+extern int tunfd;
 extern char hostname[];
 extern u32 eth_tx;
 extern time_t time_now;
@@ -623,8 +623,8 @@ void processipin(tunnelidt t, sessionidt s, u8 * p, u16 l)
 		// Snooping this session, send it to ASIO
 		snoop_send_packet(p, l, session[s].snoop_ip, session[s].snoop_port);
 	}
-	STAT(tap_tx_packets);
-	INC_STAT(tap_tx_bytes, l);
+	STAT(tun_tx_packets);
+	INC_STAT(tun_tx_bytes, l);
 
 	if (session[s].tbf_in && config->cluster_iam_master) { // Are we throttled and a master?? actually handle the throttled packets.
 		tbf_queue_packet(session[s].tbf_in, p, l);
@@ -634,9 +634,9 @@ void processipin(tunnelidt t, sessionidt s, u8 * p, u16 l)
 	// send to ethernet
 	if (tun_write(p, l) < 0)
 	{
-		STAT(tap_tx_errors);
-		log(0, 0, s, t, "Error writing %d bytes to TAP device: %s (tapfd=%d, p=%p)\n",
-			l, strerror(errno), tapfd, p);
+		STAT(tun_tx_errors);
+		log(0, 0, s, t, "Error writing %d bytes to TUN device: %s (tunfd=%d, p=%p)\n",
+			l, strerror(errno), tunfd, p);
 	}
 
 }
@@ -648,11 +648,11 @@ void processipin(tunnelidt t, sessionidt s, u8 * p, u16 l)
 void send_ipin(sessionidt s, u8 *buf, int len)
 {
 	log_hex(5, "IP in throttled", buf, len);
-	if (write(tapfd, buf, len) < 0)
+	if (write(tunfd, buf, len) < 0)
 	{
-		STAT(tap_tx_errors);
-		log(0, 0, 0, 0, "Error writing %d bytes to TAP device: %s (tapfd=%d, p=%p)\n",
-			len, strerror(errno), tapfd, buf);
+		STAT(tun_tx_errors);
+		log(0, 0, 0, 0, "Error writing %d bytes to TUN device: %s (tunfd=%d, p=%p)\n",
+			len, strerror(errno), tunfd, buf);
 	}
 
 	// Increment packet counters

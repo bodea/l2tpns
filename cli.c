@@ -2,7 +2,7 @@
 // vim: sw=4 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.8 2004-07-07 09:09:53 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.9 2004-07-08 16:54:35 bodea Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -39,15 +39,15 @@ extern ippoolt *ip_address_pool;
 extern struct Tstats *_statistics;
 struct cli_def *cli = NULL;
 int cli_quit = 0;
-extern int clifd, udpfd, tapfd, snoopfd, ifrfd, cluster_sockfd;
+extern int clifd, udpfd, tunfd, snoopfd, ifrfd, cluster_sockfd;
 extern int *radfds;
-extern sessionidt *cli_session_kill;
-extern tunnelidt *cli_tunnel_kill;
 extern struct configt *config;
 extern struct config_descriptt config_values[];
 #ifdef RINGBUFFER
 extern struct Tringbuffer *ringbuffer;
 #endif
+extern struct cli_session_actions *cli_session_actions;
+extern struct cli_tunnel_actions *cli_tunnel_actions;
 
 char *debug_levels[] = {
     "CRIT",
@@ -265,7 +265,7 @@ void cli_do(int sockfd)
 
     // Close sockets
     if (udpfd) close(udpfd); udpfd = 0;
-    if (tapfd) close(tapfd); tapfd = 0;
+    if (tunfd) close(tunfd); tunfd = 0;
     if (snoopfd) close(snoopfd); snoopfd = 0;
     for (i = 0; i < config->num_radfds; i++)
 	if (radfds[i]) close(radfds[i]);
@@ -599,13 +599,13 @@ int cmd_show_counters(struct cli_def *cli, char *command, char **argv, int argc)
 
     cli_print(cli, "%-10s %-8s %-10s %-8s", "Ethernet", "Bytes", "Packets", "Errors");
     cli_print(cli, "%-10s %8lu %8lu %8lu", "RX",
-	    GET_STAT(tap_rx_bytes),
-	    GET_STAT(tap_rx_packets),
-	    GET_STAT(tap_rx_errors));
+	    GET_STAT(tun_rx_bytes),
+	    GET_STAT(tun_rx_packets),
+	    GET_STAT(tun_rx_errors));
     cli_print(cli, "%-10s %8lu %8lu %8lu", "TX",
-	    GET_STAT(tap_tx_bytes),
-	    GET_STAT(tap_tx_packets),
-	    GET_STAT(tap_tx_errors));
+	    GET_STAT(tun_tx_bytes),
+	    GET_STAT(tun_tx_packets),
+	    GET_STAT(tun_tx_errors));
     cli_print(cli, "");
 
     cli_print(cli, "%-10s %-8s %-10s %-8s %-8s", "Tunnel", "Bytes", "Packets", "Errors", "Retries");
@@ -624,11 +624,7 @@ int cmd_show_counters(struct cli_def *cli, char *command, char **argv, int argc)
     cli_print(cli, "%-30s%-10s", "Counter", "Value");
     cli_print(cli, "-----------------------------------------");
     cli_print(cli, "%-30s%lu", "radius_retries",	GET_STAT(radius_retries));
-    cli_print(cli, "%-30s%lu", "arp_errors",		GET_STAT(arp_errors));
-    cli_print(cli, "%-30s%lu", "arp_replies",		GET_STAT(arp_replies));
-    cli_print(cli, "%-30s%lu", "arp_discarded",		GET_STAT(arp_discarded));
     cli_print(cli, "%-30s%lu", "arp_sent",		GET_STAT(arp_sent));
-    cli_print(cli, "%-30s%lu", "arp_recv",		GET_STAT(arp_recv));
     cli_print(cli, "%-30s%lu", "packets_snooped",	GET_STAT(packets_snooped));
     cli_print(cli, "%-30s%lu", "tunnel_created",	GET_STAT(tunnel_created));
     cli_print(cli, "%-30s%lu", "session_created",	GET_STAT(session_created));
@@ -647,8 +643,7 @@ int cmd_show_counters(struct cli_def *cli, char *command, char **argv, int argc)
 #ifdef STATISTICS
     cli_print(cli, "\n%-30s%-10s", "Counter", "Value");
     cli_print(cli, "-----------------------------------------");
-    cli_print(cli, "%-30s%lu", "call_processtap",	GET_STAT(call_processtap));
-    cli_print(cli, "%-30s%lu", "call_processarp",	GET_STAT(call_processarp));
+    cli_print(cli, "%-30s%lu", "call_processtun",	GET_STAT(call_processtun));
     cli_print(cli, "%-30s%lu", "call_processipout",	GET_STAT(call_processipout));
     cli_print(cli, "%-30s%lu", "call_processudp",	GET_STAT(call_processudp));
     cli_print(cli, "%-30s%lu", "call_processpap",	GET_STAT(call_processpap));
@@ -1028,17 +1023,8 @@ int cmd_drop_user(struct cli_def *cli, char *command, char **argv, int argc)
 
 	if (session[s].ip && session[s].opened && !session[s].die)
 	{
-	    int x;
-
 	    cli_print(cli, "Dropping user %s", session[s].user);
-	    for (x = 0; x < MAXSESSION; x++)
-	    {
-		if (!cli_session_kill[x])
-		{
-		    cli_session_kill[x] = s;
-		    break;
-		}
-	    }
+	    cli_session_actions[s].action |= CLI_SESS_KILL;
 	}
     }
 
@@ -1048,7 +1034,7 @@ int cmd_drop_user(struct cli_def *cli, char *command, char **argv, int argc)
 int cmd_drop_tunnel(struct cli_def *cli, char *command, char **argv, int argc)
 {
     int i;
-    tunnelidt tid;
+    tunnelidt t;
 
     if (CLI_HELP_REQUESTED)
 	return cli_arg_help(cli, argc > 1,
@@ -1068,35 +1054,26 @@ int cmd_drop_tunnel(struct cli_def *cli, char *command, char **argv, int argc)
 
     for (i = 0; i < argc; i++)
     {
-	int x;
-
-	if ((tid = atol(argv[i])) <= 0 || (tid >= MAXTUNNEL))
+	if ((t = atol(argv[i])) <= 0 || (t >= MAXTUNNEL))
 	{
 	    cli_print(cli, "Invalid tunnel ID (1-%d)", MAXTUNNEL-1);
 	    continue;
 	}
 
-	if (!tunnel[tid].ip)
+	if (!tunnel[t].ip)
 	{
-	    cli_print(cli, "Tunnel %d is not connected", tid);
+	    cli_print(cli, "Tunnel %d is not connected", t);
 	    continue;
 	}
 
-	if (tunnel[tid].die)
+	if (tunnel[t].die)
 	{
-	    cli_print(cli, "Tunnel %d is already being shut down", tid);
+	    cli_print(cli, "Tunnel %d is already being shut down", t);
 	    continue;
 	}
 
-	for (x = 0; x < MAXTUNNEL; x++)
-	{
-	    if (!cli_tunnel_kill[x])
-	    {
-		cli_tunnel_kill[x] = tid;
-		cli_print(cli, "Tunnel %d shut down (%s)", tid, tunnel[tid].hostname);
-		break;
-	    }
-	}
+	cli_print(cli, "Tunnel %d shut down (%s)", t, tunnel[t].hostname);
+	cli_tunnel_actions[t].action |= CLI_TUN_KILL;
     }
 
     return CLI_OK;
@@ -1131,18 +1108,10 @@ int cmd_drop_session(struct cli_def *cli, char *command, char **argv, int argc)
 	    continue;
 	}
 
-	if (session[s].opened && !session[s].die)
+	if (session[s].ip && session[s].opened && !session[s].die)
 	{
-	    int x;
-	    for (x = 0; x < MAXSESSION; x++)
-	    {
-		if (!cli_session_kill[x])
-		{
-		    cli_session_kill[x] = s;
-		    break;
-		}
-	    }
 	    cli_print(cli, "Dropping session %d", s);
+	    cli_session_actions[s].action |= CLI_SESS_KILL;
 	}
 	else
 	{
@@ -1216,10 +1185,11 @@ int cmd_snoop(struct cli_def *cli, char *command, char **argv, int argc)
 	return CLI_OK;
     }
 
-    session[s].snoop_ip = ip;
-    session[s].snoop_port = port;
-
     cli_print(cli, "Snooping user %s to %s:%d", argv[0], inet_toa(session[s].snoop_ip), session[s].snoop_port);
+    cli_session_actions[s].snoop_ip = ip;
+    cli_session_actions[s].snoop_port = port;
+    cli_session_actions[s].action |= CLI_SESS_SNOOP;
+
     return CLI_OK;
 }
 
@@ -1251,10 +1221,9 @@ int cmd_no_snoop(struct cli_def *cli, char *command, char **argv, int argc)
 	    cli_print(cli, "User %s is not connected", argv[i]);
 	    continue;
 	}
-	session[s].snoop_ip = 0;
-	session[s].snoop_port = 0;
 
 	cli_print(cli, "Not snooping user %s", argv[i]);
+	cli_session_actions[s].action |= CLI_SESS_NOSNOOP;
     }
     return CLI_OK;
 }
@@ -1287,10 +1256,16 @@ int cmd_throttle(struct cli_def *cli, char *command, char **argv, int argc)
 	    cli_print(cli, "User %s is not connected", argv[i]);
 	    continue;
 	}
-	if (!throttle_session(s, config->rl_rate))
-	    cli_print(cli, "Error throttling %s", argv[i]);
-	else
-	    cli_print(cli, "Throttling user %s", argv[i]);
+
+	if (session[s].throttle)
+	{
+	    cli_print(cli, "User %s already throttled", argv[i]);
+	    continue;
+	}
+
+	cli_print(cli, "Throttling user %s", argv[i]);
+	cli_session_actions[s].throttle = config->rl_rate; // could be configurable at some stage
+	cli_session_actions[s].action |= CLI_SESS_THROTTLE;
     }
 
     return CLI_OK;
@@ -1324,9 +1299,15 @@ int cmd_no_throttle(struct cli_def *cli, char *command, char **argv, int argc)
 	    cli_print(cli, "User %s is not connected", argv[i]);
 	    continue;
 	}
-	throttle_session(s, 0);
+
+	if (!session[s].throttle)
+	{
+	    cli_print(cli, "User %s not throttled", argv[i]);
+	    continue;
+	}
 
 	cli_print(cli, "Unthrottling user %s", argv[i]);
+	cli_session_actions[s].action |= CLI_SESS_NOTHROTTLE;
     }
 
     return CLI_OK;

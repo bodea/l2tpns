@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.10 2004-07-07 09:09:53 bodea Exp $
+// $Id: l2tpns.h,v 1.11 2004-07-08 16:54:35 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -15,7 +15,7 @@
 #include <sys/types.h>
 #include <libcli.h>
 
-#define VERSION	"2.0.0"
+#define VERSION	"2.0.1"
 
 // Limits
 #define MAXTUNNEL	500		// could be up to 65535
@@ -30,7 +30,7 @@
 #define T_FREE		(0)		// A tunnel ID that won't ever be used. Mark session as free.
 
 #define	MAXCONTROL	1000		// max length control message we ever send...
-#define	MAXETHER	(1500+18)	// max packet we try sending to tap
+#define	MAXETHER	(1500+18)	// max packet we try sending to tun
 #define	MAXTEL		96		// telephone number
 #define MAXPLUGINS	20		// maximum number of plugins to load
 #define MAXRADSERVER	10		// max radius servers
@@ -59,7 +59,7 @@
 #define FLASHDIR	ETCDIR
 #endif
 
-#define TAPDEVICE	"/dev/net/tun"
+#define TUNDEVICE	"/dev/net/tun"
 #define STATEFILE	DATADIR "/state.dump"		// State dump file
 #define CONFIGFILE	FLASHDIR "/startup-config"	// Configuration file
 #define CLIUSERS	FLASHDIR "/users"		// CLI Users file
@@ -104,6 +104,26 @@ typedef u16 sessionidt;
 typedef u16 tunnelidt;
 typedef u32 clockt;
 typedef u8 hasht[16];
+
+// CLI actions
+struct cli_session_actions {
+	char action;
+	ipt snoop_ip;
+	u16 snoop_port;
+	int throttle;
+};
+
+#define CLI_SESS_KILL		0x01
+#define CLI_SESS_SNOOP		0x02
+#define CLI_SESS_NOSNOOP	0x04
+#define CLI_SESS_THROTTLE	0x08
+#define CLI_SESS_NOTHROTTLE	0x10
+
+struct cli_tunnel_actions {
+    	char action;
+};
+
+#define CLI_TUN_KILL		0x01
 
 // dump header: update number if internal format changes
 #define DUMP_MAGIC "L2TPNS#" VERSION "#"
@@ -270,12 +290,12 @@ struct Tstats
     time_t		start_time;
     time_t		last_reset;
 
-    unsigned long	tap_rx_packets;
-    unsigned long	tap_tx_packets;
-    unsigned long	tap_rx_bytes;
-    unsigned long	tap_tx_bytes;
-    unsigned long	tap_rx_errors;
-    unsigned long	tap_tx_errors;
+    unsigned long	tun_rx_packets;
+    unsigned long	tun_tx_packets;
+    unsigned long	tun_rx_bytes;
+    unsigned long	tun_tx_bytes;
+    unsigned long	tun_rx_errors;
+    unsigned long	tun_tx_errors;
 
     unsigned long	tunnel_rx_packets;
     unsigned long	tunnel_tx_packets;
@@ -287,11 +307,7 @@ struct Tstats
     unsigned long	tunnel_retries;
     unsigned long	radius_retries;
 
-    unsigned long	arp_errors;
-    unsigned long	arp_replies;
-    unsigned long	arp_discarded;
     unsigned long	arp_sent;
-    unsigned long	arp_recv;
 
     unsigned long	packets_snooped;
 
@@ -310,8 +326,7 @@ struct Tstats
     unsigned long	c_forwarded;
     unsigned long	recv_forward;
 #ifdef STATISTICS
-    unsigned long	call_processtap;
-    unsigned long	call_processarp;
+    unsigned long	call_processtun;
     unsigned long	call_processipout;
     unsigned long	call_processudp;
     unsigned long	call_sessionbyip;
@@ -374,7 +389,7 @@ struct configt
 	int		cleanup_interval;		// interval between regular cleanups (in seconds)
 	int		multi_read_count;		// amount of packets to read per fd in processing loop
 
-	char		tapdevice[10];			// tap device name
+	char		tundevice[10];			// tun device name
 	char		log_filename[128];
 	char		l2tpsecret[64];
 
@@ -478,7 +493,7 @@ void rl_destroy_tbf(u16 t);
 clockt now(void);
 clockt backoff(u8 try);
 void routeset(sessionidt, ipt ip, ipt mask, ipt gw, u8 add);
-void inittap(void);
+void inittun(void);
 void initudp(void);
 void initdata(void);
 void initippool();
@@ -502,7 +517,7 @@ void sendipcp(tunnelidt t, sessionidt s);
 void processipout(u8 * buf, int len);
 void processarp(u8 * buf, int len);
 void processudp(u8 * buf, int len, struct sockaddr_in *addr);
-void processtap(u8 * buf, int len);
+void processtun(u8 * buf, int len);
 void processcontrol(u8 * buf, int len, struct sockaddr_in *addr);
 int assign_ip_address(sessionidt s);
 void free_ip_address(sessionidt s);

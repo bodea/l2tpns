@@ -1,8 +1,9 @@
 // L2TPNS: token bucket filters
 
-char const *cvs_id_tbf = "$Id: tbf.c,v 1.3 2004-07-02 07:31:23 bodea Exp $";
+char const *cvs_id_tbf = "$Id: tbf.c,v 1.4 2004-07-08 16:54:35 bodea Exp $";
 
-#include <malloc.h>
+#define _GNU_SOURCE
+
 #include <string.h>
 #include <unistd.h>
 #include <sys/mman.h>
@@ -44,8 +45,8 @@ typedef struct {
 } tbft;
 
 
-tbft * filter_list = NULL;
-int filter_list_size = 0;
+static tbft *filter_list = NULL;
+static int filter_list_size = 0;
 
 static int timer_chain = -1;	// Head of timer chain.
 
@@ -156,23 +157,32 @@ int new_tbf(int sid, int max_credit, int rate, void (*f)(sessionidt, u8 *, int))
 		return p;
 	}
 
-	log(0,0,0,0, "Ran out of token bucket filters! Sess %d will be un-throttled\n", sid);
-	return 0;
-
 #if 0
-	// Not using. Disasterous if called via the CLI! :)
-		// All allocated filters are used! Increase the size of the allocated
-		// filters.
+	// All allocated filters are used! Increase the size of the allocated
+	// filters.
 
-	i = filter_list_size;
-	filter_list_size = filter_list_size * 2 + 1;
+	{
+		int new_size = filter_list_size * 2;
+		tbft *new = mremap(filter_list, filter_list_size * sizeof(*new), new_size * sizeof(*new), MREMAP_MAYMOVE);
 
-	filter_list = realloc(filter_list, filter_list_size * sizeof(*filter_list) );
+		if (new == MAP_FAILED)
+		{
+			log(0,0,0,0, "Ran out of token bucket filters and mremap failed!  Sess %d will be un-throttled\n", sid);
+			return 0;
+		}
+
+		i = filter_list_size;
+		filter_list_size = new_size;
+		filter_list = new;
+	}
 
 	for (; i < filter_list_size; ++i)
 		filter_list[i].sid = 0;
 
 	goto again;
+#else
+	log(0,0,0,0, "Ran out of token bucket filters!  Sess %d will be un-throttled\n", sid);
+	return 0;
 #endif
 }
 
