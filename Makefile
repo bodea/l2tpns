@@ -60,3 +60,5 @@ install: all
 %.so: %.c
 	$(CC) -fPIC -shared -o $@ $^ $(LDFLAGS) $(LIBS) $(LIBPATH)
 
+%.o: %.c l2tpns.h
+	$(CC) -c -o $@ $<  $(CFLAGS)

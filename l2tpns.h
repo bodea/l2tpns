@@ -1,9 +1,10 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.5 2004-05-24 04:24:06 fred_nerk Exp $
+// $Id: l2tpns.h,v 1.6 2004-05-24 04:33:35 fred_nerk Exp $
 
 #include <netinet/in.h>
 #include <stdio.h>
-#include <config.h>
+#include <execinfo.h>
+#include "config.h"
 
 #define VERSION	"1.2.0"
 
