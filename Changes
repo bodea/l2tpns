@@ -1,6 +1,6 @@
 * Wed Dec 1 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.12
 - The "This time, for sure!" release.
-- Fix throttlectl plugin "unthrottle" command.
+- Fix throttlectl plugin argument parsing.
 
 * Wed Dec 1 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.11
 - Don't send a RADIUS start record when ungardening on shutdown.
