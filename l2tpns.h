@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.48 2004-12-16 23:40:31 bodea Exp $
+// $Id: l2tpns.h,v 1.49 2004-12-17 00:28:00 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -346,9 +346,9 @@ struct Tstats
     uint32_t	c_forwarded;
     uint32_t	recv_forward;
 
-    uint32_t	select_called;		// number of times select called
-    uint32_t	select_ready;		// number of fds returned by select
-    uint32_t	select_processed;	// number of read/writes handled per select
+    uint32_t	select_called;
+    uint32_t	multi_read_used;
+    uint32_t	multi_read_exceeded;
 
 #ifdef STATISTICS
     uint32_t	call_processtun;

@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.42 2004-12-16 23:40:30 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.43 2004-12-17 00:28:00 bodea Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -686,8 +686,8 @@ static int cmd_show_counters(struct cli_def *cli, char *command, char **argv, in
 	cli_print(cli, "%-30s%u", "cluster_forwarded",		GET_STAT(c_forwarded));
 	cli_print(cli, "%-30s%u", "recv_forward",		GET_STAT(recv_forward));
 	cli_print(cli, "%-30s%u", "select_called",		GET_STAT(select_called));
-	cli_print(cli, "%-30s%u", "select_ready",		GET_STAT(select_ready));
-	cli_print(cli, "%-30s%u", "select_processed",		GET_STAT(select_processed));
+	cli_print(cli, "%-30s%u", "multi_read_used",		GET_STAT(multi_read_used));
+	cli_print(cli, "%-30s%u", "multi_read_exceeded",	GET_STAT(multi_read_exceeded));
 
 
 #ifdef STATISTICS
