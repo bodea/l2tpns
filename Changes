@@ -1,3 +1,20 @@
+* Mon Feb 14 2005 Brendan O'Dea <bod@optusnet.com.au> 2.0.16
+- Ensure that sessionkill is not called on an unopened session (borks
+  the freelist).
+- Bump MAXSESSION to 60K.
+- Fix off-by-one errors in session/tunnel initialisation and
+  sessiont <-> sessionidt functions.
+- Use session[s].opened consistently when checking for in-use sessions
+  (rather than session[s].tunnel).
+- Use <= cluster_highest_sessionid rather than < MAXSESSION in a
+  couple of loops.
+- Don't kill a whole tunnel if we're out of sessions.
+- Change session[s].ip to 0 if set from RADIUS to 255.255.255.254;
+  avoids the possibility that it will be interpreted as a valid IP
+  address.
+- Avoid a possible buffer overflow in processpap.
+- Kill session if authentication was rejected.
+
 * Thu Jan 13 2005 Brendan O'Dea <bod@optusnet.com.au> 2.0.15
 - More DoS prevention:  add packet_limit option to apply a hard limit
   to downstream packets per session.
