@@ -57,7 +57,6 @@ fi
 %config(noreplace) /etc/l2tpns/startup-config
 %config(noreplace) /etc/l2tpns/ip_pool
 /usr/sbin/l2tpns
-/etc/l2tpns/users
 
 %changelog
 * Thu Sep 02 2004 David Parrish <david@dparrish.com> 2.0.2

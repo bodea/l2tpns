@@ -1,5 +1,5 @@
 set debug 3
-set log_file "syslog:local5"
+set log_file "/var/log/l2tpns"
 set l2tp_secret "secret"
 set primary_dns 1.2.3.4
 set secondary_dns 1.2.3.5
