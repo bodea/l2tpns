@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.44 2005-02-14 06:58:39 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.45 2005-03-10 03:31:25 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -28,8 +28,8 @@ static void initccp(tunnelidt t, sessionidt s);
 // Process PAP messages
 void processpap(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 {
-	char user[129];
-	char pass[129];
+	char user[MAXUSER];
+	char pass[MAXPASS];
 	uint16_t hl;
 
 	CSTAT(processpap);

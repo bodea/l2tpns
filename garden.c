@@ -9,7 +9,7 @@
 
 /* walled garden */
 
-char const *cvs_id = "$Id: garden.c,v 1.20 2004-12-16 08:49:53 bodea Exp $";
+char const *cvs_id = "$Id: garden.c,v 1.21 2005-03-10 03:31:25 bodea Exp $";
 
 int plugin_api_version = PLUGIN_API_VERSION;
 static struct pluginfuncs *p = 0;
@@ -44,7 +44,7 @@ char *down_commands[] = {
 #define F_GARDEN	1
 #define F_CLEANUP	2
 
-int garden_session(sessiont *s, int flag);
+int garden_session(sessiont *s, int flag, char *newuser);
 
 int plugin_post_auth(struct param_post_auth *data)
 {
@@ -63,7 +63,7 @@ int plugin_new_session(struct param_new_session *data)
 		return PLUGIN_RET_OK;	// Slaves don't do walled garden processing.
 
 	if (data->s->walled_garden)
-		garden_session(data->s, F_GARDEN);
+		garden_session(data->s, F_GARDEN, 0);
 
 	return PLUGIN_RET_OK;
 }
@@ -74,14 +74,14 @@ int plugin_kill_session(struct param_new_session *data)
 		return PLUGIN_RET_OK;	// Slaves don't do walled garden processing.
 
 	if (data->s->walled_garden)
-		garden_session(data->s, F_CLEANUP);
+		garden_session(data->s, F_CLEANUP, 0);
 
 	return PLUGIN_RET_OK;
 }
 
 char *plugin_control_help[] = {
 	"  garden USER|SID                             Put user into the walled garden",
-	"  ungarden SID                                Release session from garden",
+	"  ungarden SID [USER]                         Release session from garden",
 	0
 };
 
@@ -103,10 +103,13 @@ int plugin_control(struct param_control *data)
 
 	flag = data->argv[0][0] == 'g' ? F_GARDEN : F_UNGARDEN;
 
-	if (data->argc != 2)
+	if (data->argc < 2 || data->argc > 3 || (data->argc > 2 && flag == F_GARDEN))
 	{
 	    	data->response = NSCTL_RES_ERR;
-		data->additional = "one argument required: username or session id";
+		data->additional = flag == F_GARDEN
+		    ? "requires username or session id"
+		    : "requires session id and optional username";
+
 		return PLUGIN_RET_STOP;
 	}
 
@@ -135,7 +138,7 @@ int plugin_control(struct param_control *data)
 		return PLUGIN_RET_STOP;
 	}
 
-	garden_session(s, flag);
+	garden_session(s, flag, data->argc > 2 ? data->argv[2] : 0);
 	p->session_changed(session);
 
 	data->response = NSCTL_RES_OK;
@@ -162,12 +165,12 @@ int plugin_become_master(void)
 int plugin_new_session_master(sessiont *s)
 {	
 	if (s->walled_garden)
-		garden_session(s, F_GARDEN);
+		garden_session(s, F_GARDEN, 0);
 
 	return PLUGIN_RET_OK;
 }
 
-int garden_session(sessiont *s, int flag)
+int garden_session(sessiont *s, int flag, char *newuser)
 {
 	char cmd[2048];
 	sessionidt sess;
@@ -191,6 +194,12 @@ int garden_session(sessiont *s, int flag)
 
 		// Normal User
 		p->log(2, sess, s->tunnel, "Un-Garden user %s (%s)\n", s->user, p->fmtaddr(htonl(s->ip), 0));
+		if (newuser)
+		{
+			snprintf(s->user, MAXUSER, "%s", newuser);
+			p->log(2, sess, s->tunnel, "  Setting username to %s\n", s->user);
+		}
+
 		// Kick off any duplicate usernames
 		// but make sure not to kick off ourself
 		if (s->ip && !s->die && (other = p->get_session_by_username(s->user)) && s != p->get_session_by_id(other)) {

@@ -33,6 +33,8 @@
 - Avoid a possible buffer overflow in processpap.
 - Kill session if authentication was rejected.
 - Simplify AVP unhiding code.
+- Add optional "username" parameter to ungarden control, allowing the
+  username to be reset before going online.
 
 * Fri Dec 17 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.13
 - Better cluster master collision resolution: keep a counter of state

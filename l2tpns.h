@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.57 2005-02-14 06:58:39 bodea Exp $
+// $Id: l2tpns.h,v 1.58 2005-03-10 03:31:25 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -32,6 +32,8 @@
 #define	MAXCONTROL	1000		// max length control message we ever send...
 #define	MAXETHER	(1500+18)	// max packet we try sending to tun
 #define	MAXTEL		96		// telephone number
+#define MAXUSER		128		// username
+#define MAXPASS		128		// password
 #define MAXPLUGINS	20		// maximum number of plugins to load
 #define MAXRADSERVER	10		// max radius servers
 #define	MAXROUTE	10		// max static routes per session
@@ -202,7 +204,7 @@ typedef struct
 	uint8_t flags1;			// additional flags (currently unused);
 	char random_vector[MAXTEL];
 	int random_vector_length;
-	char user[129];			// user (needed in seesion for radius stop messages) (can we reduce this? --mo)
+	char user[MAXUSER];		// user (needed in seesion for radius stop messages)
 	char called[MAXTEL];		// called number
 	char calling[MAXTEL];		// calling number
 	uint32_t tx_connect_speed;
