@@ -1,5 +1,5 @@
 // L2TPNS Clustering Stuff
-// $Id: cluster.h,v 1.1 2003-12-16 07:07:39 fred_nerk Exp $
+// $Id: cluster.h,v 1.1.1.1 2003-12-16 07:07:39 fred_nerk Exp $
 
 #define C_HELLO			1
 #define C_HELLO_RESPONSE	2

@@ -1,5 +1,5 @@
 // L2TPNS Command Line Interface
-// $Id: cli.c,v 1.1 2003-12-16 07:07:39 fred_nerk Exp $
+// $Id: cli.c,v 1.1.1.1 2003-12-16 07:07:39 fred_nerk Exp $
 // vim: sw=4 ts=8
 
 #include <stdio.h>
@@ -38,7 +38,7 @@ extern tbft *filter_buckets;
 extern struct Tringbuffer *ringbuffer;
 #endif
 
-char *rcs_id = "$Id: cli.c,v 1.1 2003-12-16 07:07:39 fred_nerk Exp $";
+char *rcs_id = "$Id: cli.c,v 1.1.1.1 2003-12-16 07:07:39 fred_nerk Exp $";
 
 char *debug_levels[] = {
     "CRIT",

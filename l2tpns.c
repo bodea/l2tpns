@@ -2213,7 +2213,7 @@ int main(int argc, char *argv[])
 	initplugins();
 	read_config_file();
 	initdata();
-	log(0, 0, 0, 0, "$Id: l2tpns.c,v 1.1 2003-12-16 07:07:39 fred_nerk Exp $\n(c) Copyright 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced\n");
+	log(0, 0, 0, 0, "$Id: l2tpns.c,v 1.1.1.1 2003-12-16 07:07:39 fred_nerk Exp $\n(c) Copyright 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced\n");
 
 	/* Start up the cluster first, so that we don't have two machines with
 	 * the same IP at once.

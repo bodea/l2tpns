@@ -1,5 +1,5 @@
 // L2TPNS PPP Stuff
-// $Id: ppp.c,v 1.1 2003-12-16 07:07:39 fred_nerk Exp $
+// $Id: ppp.c,v 1.1.1.1 2003-12-16 07:07:39 fred_nerk Exp $
 
 #include <stdio.h>
 #include <string.h>

@@ -1,5 +1,5 @@
 // L2TPNS Cluster Master
-// $Id: cluster_master.c,v 1.1 2003-12-16 07:07:39 fred_nerk Exp $
+// $Id: cluster_master.c,v 1.1.1.1 2003-12-16 07:07:39 fred_nerk Exp $
 
 #include <stdio.h>
 #include <netinet/in.h>
@@ -91,7 +91,7 @@ int main(int argc, char *argv[])
 
     signal(SIGCHLD, sigchild_handler);
 
-    log(0, "Cluster Manager $Id: cluster_master.c,v 1.1 2003-12-16 07:07:39 fred_nerk Exp $ starting\n");
+    log(0, "Cluster Manager $Id: cluster_master.c,v 1.1.1.1 2003-12-16 07:07:39 fred_nerk Exp $ starting\n");
 
     to.tv_sec = 1;
     to.tv_usec = 0;
