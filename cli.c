@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.16.2.1 2004-09-21 05:08:46 fred_nerk Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.16.2.2 2004-09-23 06:15:38 fred_nerk Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -13,6 +13,7 @@ char const *cvs_id_cli = "$Id: cli.c,v 1.16.2.1 2004-09-21 05:08:46 fred_nerk Ex
 #include <sched.h>
 #include <string.h>
 #include <ctype.h>
+#include <netinet/ether.h>
 #include <stdlib.h>
 #include <time.h>
 #include <arpa/inet.h>
@@ -102,7 +103,6 @@ int cmd_load_plugin(struct cli_def *cli, char *command, char **argv, int argc);
 int cmd_remove_plugin(struct cli_def *cli, char *command, char **argv, int argc);
 int cmd_uptime(struct cli_def *cli, char *command, char **argv, int argc);
 int regular_stuff(struct cli_def *cli);
-void parsemac(char *string, char mac[6]);
 
 void init_cli()
 {
@@ -884,13 +884,7 @@ int cmd_show_run(struct cli_def *cli, char *command, char **argv, int argc)
 		else if (config_values[i].type == UNSIGNED_LONG)
 			cli_print(cli, "set %s %lu", config_values[i].key, *(unsigned long *)value);
 		else if (config_values[i].type == MAC)
-			cli_print(cli, "set %s %02x%02x.%02x%02x.%02x%02x", config_values[i].key,
-					*(unsigned short *)(value + 0),
-					*(unsigned short *)(value + 1),
-					*(unsigned short *)(value + 2),
-					*(unsigned short *)(value + 3),
-					*(unsigned short *)(value + 4),
-					*(unsigned short *)(value + 5));
+			cli_print(cli, "set %s %s", config_values[i].key, ether_ntoa((struct ether_addr *)value));
 	}
 
 	cli_print(cli, "# Plugins");
@@ -1674,7 +1668,7 @@ int cmd_set(struct cli_def *cli, char *command, char **argv, int argc)
 					*(unsigned *)value = inet_addr(argv[1]);
 					break;
 				case MAC:
-					parsemac(argv[1], (char *)value);
+					memcpy((char *)value, (char *)ether_aton(argv[1]), sizeof(struct ether_addr));
 					break;
 				case BOOL:
 					if (strcasecmp(argv[1], "yes") == 0 || strcasecmp(argv[1], "true") == 0 || strcasecmp(argv[1], "1") == 0)
@@ -1744,15 +1738,5 @@ int regular_stuff(struct cli_def *cli)
 		cli_reprompt(cli);
 #endif
 	return CLI_OK;
-}
-
-// Convert a string in the form of abcd.ef12.3456 into char[6]
-void parsemac(char *string, char mac[6])
-{
-	if (sscanf(string, "%02x%02x.%02x%02x.%02x%02x", (unsigned int *)&mac[0], (unsigned int *)&mac[1], (unsigned int *)&mac[2], (unsigned int *)&mac[3], (unsigned int *)&mac[4], (unsigned int *)&mac[5]) == 6)
-		return;
-	if (sscanf(string, "%02x%02x:%02x%02x:%02x%02x", (unsigned int *)&mac[0], (unsigned int *)&mac[1], (unsigned int *)&mac[2], (unsigned int *)&mac[3], (unsigned int *)&mac[4], (unsigned int *)&mac[5]) == 6)
-		return;
-	memset(mac, 0, 6);
 }
 

@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.18.2.1 2004-09-21 07:39:46 fred_nerk Exp $
+// $Id: l2tpns.h,v 1.18.2.2 2004-09-23 06:15:38 fred_nerk Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -186,7 +186,7 @@ typedef struct sessions
 	ipt snoop_ip;			// Interception destination IP
 	u16 snoop_port;			// Interception destination port
 	u16 sid;			// near end session id.
-	u8 client_mac[6];		// Client MAC address for PPPoE
+	struct ether_addr client_mac;	// Client MAC address for PPPoE
 	u16 vlan;			// VLAN for PPPoE
 	char reserved[32];		// Space to expand structure without changing HB_VERSION
 }
@@ -409,6 +409,7 @@ struct configt
 	int		multi_read_count;		// amount of packets to read per fd in processing loop
 
 	char		tundevice[10];			// tun device name
+	char		tapdevice[10];			// tap device name
 	char		log_filename[128];
 	char		l2tpsecret[64];
 
@@ -462,7 +463,7 @@ struct configt
 	u16		bgp_peer_as[2];
 #endif
 	char		hostname[256];			// our hostname - set to gethostname() by default
-	u8		mac_address[6];			// MAC address for PPPoE
+	struct ether_addr mac_address;			// MAC address for PPPoE
 };
 
 struct config_descriptt
@@ -585,6 +586,7 @@ extern tunnelt *tunnel;
 extern sessiont *session;
 extern sessioncountt *sess_count;
 extern ippoolt *ip_address_pool;
+void processtap(u8 *buf, int len);
 #define sessionfree (session[0].next)
 
 #define log_backtrace(count, max) \

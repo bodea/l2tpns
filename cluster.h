@@ -1,5 +1,5 @@
 // L2TPNS Clustering Stuff
-// $Id: cluster.h,v 1.5 2004-07-08 16:54:35 bodea Exp $
+// $Id: cluster.h,v 1.5.2.1 2004-09-23 06:15:38 fred_nerk Exp $
 
 #ifndef __CLUSTER_H__
 #define __CLUSTER_H__
@@ -19,6 +19,7 @@
 #define C_CSESSION		12	// Compressed session structure.
 #define C_CTUNNEL		13	// Compressed tunnel structure.
 #define C_GARDEN		14	// Gardened packet
+#define C_PPPOE_FORWARD		15	// Forwarded PPPoE packet
 
 #define HB_VERSION		3	// Protocol version number..
 #define HB_MAX_SEQ		(1<<30)	// Maximum sequence number. (MUST BE A POWER OF 2!)
@@ -71,6 +72,7 @@ int cluster_forward_packet(char *buf, int size, u32 addr);
 int cluster_send_session(int sid);
 int cluster_send_tunnel(int tid);
 int master_forward_packet(char * data, int size, u32 addr, int port);
+int master_forward_pppoe_packet(char *data, int size);
 int master_throttle_packet(int tid, char * data, int size);
 int master_garden_packet(sessionidt s, char * data, int size);
 void master_update_counts(void);

@@ -1,6 +1,6 @@
 /* Misc util functions */
 
-char const *cvs_id_util = "$Id: util.c,v 1.3 2004-09-02 04:18:07 fred_nerk Exp $";
+char const *cvs_id_util = "$Id: util.c,v 1.3.2.1 2004-09-23 06:15:38 fred_nerk Exp $";
 
 #include "l2tpns.h"
 
@@ -9,6 +9,7 @@ char const *cvs_id_util = "$Id: util.c,v 1.3 2004-09-02 04:18:07 fred_nerk Exp $
 #include <arpa/inet.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <errno.h>
 
 char *inet_toa(unsigned long addr)
 {

@@ -4,7 +4,11 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.28.2.1 2004-09-21 07:39:46 fred_nerk Exp $";
+// FIXME don't clean up tunnels with vlan set
+// FIXME immediately clear tunnels with vlan set when last session closes
+// FIXME make outgoing packets work from PPPoE
+
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.28.2.2 2004-09-23 06:15:38 fred_nerk Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -13,6 +17,7 @@ char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.28.2.1 2004-09-21 07:39:46 fred_n
 #include <linux/if_tun.h>
 #define SYSLOG_NAMES
 #include <syslog.h>
+#include <netinet/ether.h>
 #include <malloc.h>
 #include <math.h>
 #include <net/route.h>
@@ -67,6 +72,8 @@ extern int cluster_sockfd;	// Intra-cluster communications socket.
 u32 last_id = 0;		// Last used PPP SID. Can I kill this?? -- mo
 int clifd = 0;			// Socket listening for CLI connections.
 tunnelidt vlan_tunnel_map[4096] = {0}; // Array of vlan -> tunnel id mappings
+char *config_filename = CONFIGFILE;
+char *ip_pool_file = IPPOOLFILE;
 
 struct cli_session_actions *cli_session_actions = NULL;	// Pending session changes requested by CLI
 struct cli_tunnel_actions *cli_tunnel_actions = NULL;	// Pending tunnel changes required by CLI
@@ -417,6 +424,73 @@ void inittun(void)
 		exit(1);
 	}
 	tunidx = ifr.ifr_ifindex;
+}
+
+// Set up TAP interface
+void inittap(void)
+{
+	int fd;
+	struct ifreq ifr;
+	struct sockaddr_in sin = {0};
+	memset(&ifr, 0, sizeof(ifr));
+
+	ifr.ifr_flags = IFF_TAP;
+
+	tapfd = open(TUNDEVICE, O_RDWR);
+	if (tapfd < 0)
+	{                          // fatal
+		log(0, 0, 0, 0, "Can't open %s: %s\n", TUNDEVICE, strerror(errno));
+		exit( -1);
+	}
+	{
+		int flags = fcntl(tapfd, F_GETFL, 0);
+		fcntl(tapfd, F_SETFL, flags | O_NONBLOCK);
+	}
+	if (ioctl(tapfd, TUNSETIFF, (void *) &ifr) < 0)
+	{
+		log(0, 0, 0, 0, "Can't set tap interface: %s\n", strerror(errno));
+		exit( -1);
+	}
+	assert(strlen(ifr.ifr_name) < sizeof(config->tapdevice));
+	strcpy(config->tapdevice, ifr.ifr_name);
+
+	fd = socket(PF_INET, SOCK_DGRAM, 0);
+
+	// Get current hardware address
+	memset(&ifr, 0, sizeof(ifr));
+	strncpy(ifr.ifr_name, config->tapdevice, sizeof(ifr.ifr_name) - 1);
+	if (ioctl(fd, SIOCGIFHWADDR, &ifr) < 0)
+	{
+		perror("get tap hwaddr");
+		exit(-1);
+	}
+
+	/*
+	log(2, 0, 0, 0, "Setting hardware address of %s to %s\n", ifr.ifr_name, ether_ntoa(&config->mac_address));
+
+	memcpy(&ifr.ifr_hwaddr.sa_data, &config->mac_address, 6);
+	if (ioctl(fd, SIOCSIFHWADDR, &ifr) < 0)
+	{
+		perror("set tap hwaddr");
+		exit(-1);
+	}
+	*/
+
+	sin.sin_family = AF_INET;
+	sin.sin_addr.s_addr = 0x02020202; // 2.2.2.2
+	memcpy(&ifr.ifr_addr, &sin, sizeof(struct sockaddr));
+
+	if (ioctl(fd, SIOCSIFADDR, (void *) &ifr) < 0)
+	{
+		log(0, 0, 0, 0, "Error setting tap address: %s\n", strerror(errno));
+		exit(1);
+	}
+	ifr.ifr_flags = IFF_UP;
+	if (ioctl(fd, SIOCSIFFLAGS, &ifr) < 0)
+	{
+		perror("set tap flags");
+		exit( -1);
+	}
 }
 
 // set up UDP port
@@ -816,8 +890,8 @@ void processipout(u8 * buf, int len)
 		else
 		{
 			// Don't tag the packet, it's just plain ethernet
-			memcpy(p, session[s].client_mac, 6);			// Destination MAC
-			memcpy(p + 6, config->mac_address, 6);			// Source MAC
+			memcpy(p, &session[s].client_mac, 6);			// Destination MAC
+			memcpy(p + 6, &config->mac_address, 6);			// Source MAC
 			*(u16 *)(p + 12) = htons(ETH_P_PPP_SES);		// PPP session stage
 			*(u8 *)(p + 14) = 0x11;					// PPPoE ver 1 type 1
 			*(u8 *)(p + 15) = 0;					// code
@@ -2007,7 +2081,7 @@ void processtun(u8 *buf, int len)
 void processtap(u8 *buf, int len)
 {
 	u16 vlan = 0;
-	u32 type = 0;
+	u16 type = 0;
 	char *p;
 
 	log_hex(5, "Receive TAP Data", buf, len);
@@ -2020,13 +2094,16 @@ void processtap(u8 *buf, int len)
 	eth_rx += len;
 	if (len < 22)
 	{
-		log(1, 0, 0, 0, "Short tun packet %d bytes\n", len);
+		log(1, 0, 0, 0, "Short tap packet %d bytes\n", len);
 		STAT(tap_rx_errors);
 		return;
 	}
 
+	buf += 4;
+	len -= 4;
+
 	p = buf + 14;
-	type = ntohl(*(u16 *)(buf + 12));
+	type = ntohs(*(u16 *)(buf + 12));
 	if (type == ETH_P_8021Q)
 	{
 		vlan = ntohs(*(u16 *)(p + 14) & 0xFFF);
@@ -2036,6 +2113,12 @@ void processtap(u8 *buf, int len)
 
 	if (type == ETH_P_PPP_DISC)
 	{
+		if (!config->cluster_iam_master)
+		{
+			master_forward_pppoe_packet(buf, len);
+			return;
+		}
+
 		u8 code;
 		u16 l;
 		sessionidt s = 0;
@@ -2057,13 +2140,13 @@ void processtap(u8 *buf, int len)
 		l = *(u16 *)(p + 4);
 		data = p + 6;
 
-		if (s && !memcmp(session[s].client_mac, buf, 6))
+		if (s && !memcmp(&session[s].client_mac, buf, 6))
 		{
 			log(2, 0, 0, 0, "Ignoring PAD packet claiming to be session %d, but wrong mac address\n", s);
 			return;
 		}
 
-		memcpy(response, config->mac_address, 6); // Source
+		memcpy(response, &config->mac_address, 6); // Source
 		memcpy((response + 6), buf, 6);
 		if (vlan)
 		{
@@ -2464,8 +2547,7 @@ int regular_cleanups(void)
 			if (++count >= MAX_ACTIONS) break;
 		}
 	}
-
-	if (config->accounting_dir && next_acct <= TIME)
+	if (*config->accounting_dir && next_acct <= TIME)
 	{
 		// Dump accounting data
 		next_acct = TIME + ACCT_TIME;
@@ -2761,69 +2843,67 @@ void initdata(void)
 	int i;
 	char *p;
 
-	if ((_statistics = shared_malloc(sizeof(struct Tstats))) == MAP_FAILED)
+	if (!(_statistics = shared_malloc(sizeof(struct Tstats))))
 	{
-		log(0, 0, 0, 0, "Error doing malloc for _statistics: %s\n", strerror(errno));
+		fprintf(stderr, "Error doing malloc for _statistics: %s\n", strerror(errno));
 		exit(1);
 	}
-	if ((config = shared_malloc(sizeof(struct configt))) == MAP_FAILED)
+	if (!(config = shared_malloc(sizeof(struct configt))))
 	{
-		log(0, 0, 0, 0, "Error doing malloc for configuration: %s\n", strerror(errno));
+		fprintf(stderr, "Error doing malloc for configuration: %s\n", strerror(errno));
 		exit(1);
 	}
 	memset(config, 0, sizeof(struct configt));
 	time(&config->start_time);
-	strncpy(config->config_file, CONFIGFILE, sizeof(config->config_file) - 1);
-	if ((tunnel = shared_malloc(sizeof(tunnelt) * MAXTUNNEL)) == MAP_FAILED);
+	strncpy(config->config_file, config_filename, sizeof(config->config_file) - 1);
+	if (!(tunnel = shared_malloc(sizeof(tunnelt) * MAXTUNNEL)))
 	{
-		log(0, 0, 0, 0, "Error doing malloc for tunnels: %s\n", strerror(errno));
+		fprintf(stderr, "Error doing malloc for tunnels: %s\n", strerror(errno));
 		exit(1);
 	}
-	if ((session = shared_malloc(sizeof(sessiont) * MAXSESSION)) == MAP_FAILED)
+	if (!(session = shared_malloc(sizeof(sessiont) * MAXSESSION)))
 	{
-		log(0, 0, 0, 0, "Error doing malloc for sessions: %s\n", strerror(errno));
-		exit(1);
-	}
-
-	if ((sess_count = shared_malloc(sizeof(sessioncountt) * MAXSESSION)) == MAP_FAILED)
-	{
-		log(0, 0, 0, 0, "Error doing malloc for sessions_count: %s\n", strerror(errno));
+		fprintf(stderr, "Error doing malloc for sessions: %s\n", strerror(errno));
 		exit(1);
 	}
 
-	if ((radius = shared_malloc(sizeof(radiust) * MAXRADIUS)) == MAP_FAILED)
+	if (!(sess_count = shared_malloc(sizeof(sessioncountt) * MAXSESSION)))
 	{
-		log(0, 0, 0, 0, "Error doing malloc for radius: %s\n", strerror(errno));
+		fprintf(stderr, "Error doing malloc for sessions_count: %s\n", strerror(errno));
 		exit(1);
 	}
 
-	if ((ip_address_pool = shared_malloc(sizeof(ippoolt) * MAXIPPOOL)) == MAP_FAILED)
+	if (!(radius = shared_malloc(sizeof(radiust) * MAXRADIUS)))
 	{
-		log(0, 0, 0, 0, "Error doing malloc for ip_address_pool: %s\n", strerror(errno));
+		fprintf(stderr, "Error doing malloc for radius: %s\n", strerror(errno));
+		exit(1);
+	}
+
+	if (!(ip_address_pool = shared_malloc(sizeof(ippoolt) * MAXIPPOOL)))
+	{
+		fprintf(stderr, "Error doing malloc for ip_address_pool: %s\n", strerror(errno));
 		exit(1);
 	}
 
 #ifdef RINGBUFFER
-	if ((ringbuffer = shared_malloc(sizeof(struct Tringbuffer))) == MAP_FAILED)
+	if (!(ringbuffer = shared_malloc(sizeof(struct Tringbuffer))))
 	{
-		log(0, 0, 0, 0, "Error doing malloc for ringbuffer: %s\n", strerror(errno));
+		fprintf(stderr, "Error doing malloc for ringbuffer: %s\n", strerror(errno));
 		exit(1);
 	}
 	memset(ringbuffer, 0, sizeof(struct Tringbuffer));
 #endif
 
-	if ((cli_session_actions = shared_malloc(sizeof(struct cli_session_actions) * MAXSESSION))
-			== MAP_FAILED)
+	if (!(cli_session_actions = shared_malloc(sizeof(struct cli_session_actions) * MAXSESSION)))
 	{
-		log(0, 0, 0, 0, "Error doing malloc for cli session actions: %s\n", strerror(errno));
+		fprintf(stderr, "Error doing malloc for cli session actions: %s\n", strerror(errno));
 		exit(1);
 	}
 	memset(cli_session_actions, 0, sizeof(struct cli_session_actions) * MAXSESSION);
 
-	if ((cli_tunnel_actions = shared_malloc(sizeof(struct cli_tunnel_actions) * MAXSESSION))
-			== MAP_FAILED)
+	if (!(cli_tunnel_actions = shared_malloc(sizeof(struct cli_tunnel_actions) * MAXSESSION)))
 	{
-		log(0, 0, 0, 0, "Error doing malloc for cli tunnel actions: %s\n", strerror(errno));
+		fprintf(stderr, "Error doing malloc for cli tunnel actions: %s\n", strerror(errno));
 		exit(1);
 	}
 	memset(cli_tunnel_actions, 0, sizeof(struct cli_tunnel_actions) * MAXSESSION);
@@ -2854,9 +2934,9 @@ void initdata(void)
 	_statistics->start_time = _statistics->last_reset = time(NULL);
 
 #ifdef BGP
-	if ((bgp_peers = shared_malloc(sizeof(struct bgp_peer) * BGP_NUM_PEERS)) == MAP_FAILED)
+	if (!(bgp_peers = shared_malloc(sizeof(struct bgp_peer) * BGP_NUM_PEERS)))
 	{
-		log(0, 0, 0, 0, "Error doing malloc for bgp: %s\n", strerror(errno));
+		fprintf(stderr, "Error doing malloc for bgp: %s\n", strerror(errno));
 		exit(1);
 	}
 #endif /* BGP */
@@ -3069,9 +3149,9 @@ void initippool()
 	char buf[4096];
 	memset(ip_address_pool, 0, sizeof(ip_address_pool));
 
-	if (!(f = fopen(IPPOOLFILE, "r")))
+	if (!(f = fopen(ip_pool_file, "r")))
 	{
-		log(0, 0, 0, 0, "Can't load pool file " IPPOOLFILE ": %s\n", strerror(errno));
+		log(0, 0, 0, 0, "Can't load pool file %s: %s\n", ip_pool_file, strerror(errno));
 		exit(1);
 	}
 
@@ -3212,7 +3292,7 @@ int main(int argc, char *argv[])
 	time(&basetime);             // start clock
 
 	// scan args
-	while ((o = getopt(argc, argv, "vc:h:a:")) >= 0)
+	while ((o = getopt(argc, argv, "vc:h:a:i:?")) >= 0)
 	{
 		switch (o)
 		{
@@ -3227,13 +3307,20 @@ int main(int argc, char *argv[])
 			case 'h':
 				snprintf(hostname, sizeof(hostname), "%s", optarg);
 				break;
+			case 'c':
+				config_filename = strdup(optarg);
+				break;
+			case 'i':
+				ip_pool_file = strdup(optarg);
+				break;
 			case '?':
 			default:
 				printf("Args are:\n"
-				       "\t-d\tDetach from terminal\n"
+				       "\t-d\t\tDetach from terminal\n"
 				       "\t-c <file>\tConfig file\n"
 				       "\t-h <hostname>\tForce hostname\n"
 				       "\t-a <address>\tUse specific address\n"
+				       "\t-i <file>\tIP pool file\n"
 				       "\t-v\t\tDebug\n");
 
 				return (0);
@@ -3314,7 +3401,12 @@ int main(int argc, char *argv[])
 #endif /* BGP */
 
 	inittun();
-	log(1, 0, 0, 0, "Set up on interface %s\n", config->tundevice);
+	log(1, 0, 0, 0, "Set up tun on interface %s\n", config->tundevice);
+	if (config->mac_address.ether_addr_octet[0] + config->mac_address.ether_addr_octet[1]
+		+ config->mac_address.ether_addr_octet[2] + config->mac_address.ether_addr_octet[3]
+		+ config->mac_address.ether_addr_octet[4] + config->mac_address.ether_addr_octet[5])
+		inittap();
+	log(1, 0, 0, 0, "Set up tap on interface %s\n", config->tapdevice);
 
 	initudp();
 	initrad();

@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.11.2.1 2004-09-21 07:39:46 fred_nerk Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.11.2.2 2004-09-23 06:15:38 fred_nerk Exp $";
 
 #include <stdio.h>
 #include <sys/file.h>
@@ -272,6 +272,23 @@ int master_forward_packet(char *data, int size, u32 addr, int port)
 	add_type(&p, C_FORWARD, addr, (char*) &port, sizeof(port) );
 	memcpy(p, data, size);
 	p += size;
+
+	return peer_send_data(config->cluster_master_address, buf, (p-buf) );
+
+}
+
+int master_forward_pppoe_packet(char *data, int size)
+{
+	char buf[65536];	// Vast overkill.
+	char *p = buf;
+
+	if (!config->cluster_master_address) // No election has been held yet. Just skip it.
+		return -1;
+
+	log(4,0,0,0,	"Forwarding packet to master (size %d)\n", size);
+
+	STAT(c_forwarded);
+	add_type(&p, C_PPPOE_FORWARD, 0, data, size);
 
 	return peer_send_data(config->cluster_master_address, buf, (p-buf) );
 
@@ -1335,6 +1352,17 @@ int processcluster(char * data, int size, u32 addr)
 		processudp(p, s, &a);
 		return 0;
 	}
+
+	case C_PPPOE_FORWARD:
+		if (!config->cluster_iam_master)
+		{
+			log(0,0,0,0, "I'm not the master, but I got a C_PPPOE_FORWARD\n");
+			return -1;
+		}
+		log(4,0,0,0, "Got a forwarded PPPoE packet\n");
+		processtap(p, s);
+		return 0;
+
 	case C_THROTTLE: {	// Receive a forwarded packet from a slave.
 		if (!config->cluster_iam_master) {
 			log(0,0,0,0, "I'm not the master, but I got a C_THROTTLE from %s?\n", inet_toa(addr));
