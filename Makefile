@@ -57,8 +57,8 @@ install: all
 	else    \
 		echo '***' Installing default config files in $(etcdir) - remember to adjust them; \
 		$(INSTALL) -D -o root -g root -m 0600 etc/startup-config.default $(etcdir)/startup-config;      \
-		$(INSTALL) -D -o root -g root -m 0644 etc/ip_pool.default $(etcdir)/l2tpns.ip_pool;     \
-		$(INSTALL) -D -o root -g root -m 0600 etc/users.default $(etcdir)/l2tpns.users; \
+		$(INSTALL) -D -o root -g root -m 0644 etc/ip_pool.default $(etcdir)/ip_pool;     \
+		$(INSTALL) -D -o root -g root -m 0600 etc/users.default $(etcdir)/users; \
 	fi
 
 	for plugin in $(PLUGINS); do \
