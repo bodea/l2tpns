@@ -4,9 +4,9 @@
 
 /* set up throttling based on RADIUS reply */
 
-char const *cvs_id = "$Id: autothrottle.c,v 1.8 2004-11-09 08:05:02 bodea Exp $";
+char const *cvs_id = "$Id: autothrottle.c,v 1.9 2004-11-17 08:23:34 bodea Exp $";
 
-int __plugin_api_version = PLUGIN_API_VERSION;
+int plugin_api_version = PLUGIN_API_VERSION;
 struct pluginfuncs *p;
 
 #define THROTTLE_KEY "lcp:interface-config"

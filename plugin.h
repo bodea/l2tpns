@@ -1,7 +1,7 @@
 #ifndef __PLUGIN_H__
 #define __PLUGIN_H__
 
-#define PLUGIN_API_VERSION	2
+#define PLUGIN_API_VERSION	3
 #define MAX_PLUGIN_TYPES	30
 
 enum
@@ -79,17 +79,10 @@ struct param_timer
 
 struct param_control
 {
-	char *buf;
-	int l;
-	unsigned int source_ip;
-	unsigned short source_port;
-	char *response;
-	int response_length;
-	int send_response;
-	short type;
-	int id;
-	char *data;
-	int data_length;
+    	int argc;
+	char **argv;
+	int response;
+	char *additional;
 };
 
 struct param_new_session

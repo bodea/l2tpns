@@ -9,9 +9,9 @@
 
 /* walled garden */
 
-char const *cvs_id = "$Id: garden.c,v 1.12 2004-11-09 08:05:02 bodea Exp $";
+char const *cvs_id = "$Id: garden.c,v 1.13 2004-11-17 08:23:34 bodea Exp $";
 
-int __plugin_api_version = PLUGIN_API_VERSION;
+int plugin_api_version = PLUGIN_API_VERSION;
 static struct pluginfuncs *p = 0;
 
 static int iam_master = 0;	// We're all slaves! Slaves I tell you!
@@ -75,45 +75,61 @@ int plugin_kill_session(struct param_new_session *data)
 	return PLUGIN_RET_OK;
 }
 
+char *plugin_control_help[] = {
+	"  garden USER|SID       Put user into the walled garden",
+	"  ungarden USER|SID     Release user",
+	0
+};
+
 int plugin_control(struct param_control *data)
 {
-	sessiont *s;
 	sessionidt session;
+	sessiont *s = 0;
+	int flag;
+	char *end;
+
+	if (data->argc < 1 || (strcmp(data->argv[0], "garden") && strcmp(data->argv[0], "ungarden")))
+		return PLUGIN_RET_OK; // not for us
+
+	flag = data->argv[0][0] == 'g';
 
 	if (!iam_master)	// All garden processing happens on the master.
-		return PLUGIN_RET_OK;
-
-	if (data->type != PKT_GARDEN && data->type != PKT_UNGARDEN)
-		return PLUGIN_RET_OK;
-
-	if (!data->data && data->data_length)
-		return PLUGIN_RET_OK;
-
-	session = atoi((char*)(data->data));
-	if (!session)
-		return PLUGIN_RET_OK;
-
-	data->send_response = 1;
-	s = p->get_session_by_id(session);
-	if (!s || !s->ip)
 	{
-		char *errormsg = "Session not connected";
-		*(short *)(data->response + 2) = ntohs(PKT_RESP_ERROR);
-		sprintf((data->response + data->response_length), "%s", errormsg);
-		data->response_length += strlen(errormsg) + 1;
-
-		p->log(3, 0, 0, 0, "Unknown session %d\n", session);
+	    	data->response = NSCTL_RES_ERR;
+		data->additional = "must be run on the cluster master";
 		return PLUGIN_RET_STOP;
 	}
-	*(short *)(data->response + 2) = ntohs(PKT_RESP_OK);
 
-	if (!(garden_session(s, (data->type == PKT_GARDEN))))
+	if (data->argc != 2)
 	{
-		char *errormsg = "User not connected";
-		*(short *)(data->response + 2) = ntohs(PKT_RESP_ERROR);
-		sprintf((data->response + data->response_length), "%s", errormsg);
-		data->response_length += strlen(errormsg) + 1;
+	    	data->response = NSCTL_RES_ERR;
+		data->additional = "one argument required: username or session id";
+		return PLUGIN_RET_STOP;
 	}
+
+	if (!(session = strtol(data->argv[0], &end, 10)) || *end)
+		session = p->get_session_by_username(data->argv[0]);
+
+	if (session)
+		s = p->get_session_by_id(session);
+
+	if (!s || !s->ip)
+	{
+		data->response = NSCTL_RES_ERR;
+		data->additional = "session not found";
+		return PLUGIN_RET_STOP;
+	}
+
+	if (s->walled_garden == flag)
+	{
+		data->response = NSCTL_RES_ERR;
+		data->additional = flag ? "already in walled garden" : "not in walled garden";
+		return PLUGIN_RET_STOP;
+	}
+
+	garden_session(s, flag);
+	data->response = NSCTL_RES_OK;
+	data->additional = 0;
 
 	return PLUGIN_RET_STOP;
 }
@@ -136,7 +152,10 @@ int plugin_become_master(void)
 int plugin_new_session_master(sessiont * s)
 {	
 	if (s->walled_garden)
+	{
+		s->walled_garden = 0;
 		garden_session(s, 1);
+	}
 
 	return PLUGIN_RET_OK;
 }

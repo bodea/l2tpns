@@ -2,7 +2,8 @@ DESTDIR =
 bindir = /usr/sbin
 etcdir = /etc/l2tpns
 libdir = /usr/lib/l2tpns
-mandir = /usr/share/man/man8
+man5dir = /usr/share/man/man5
+man8dir = /usr/share/man/man8
 statedir = /var/lib/l2tpns
 
 DEFINES =
@@ -84,9 +85,14 @@ bounce:	test/bounce.o
 
 install: all
 	$(INSTALL) -m 0755 l2tpns $(DESTDIR)$(bindir)/l2tpns
-	$(INSTALL) -m 0644 l2tpns.8 $(DESTDIR)$(mandir)/l2tpns.8
 	$(INSTALL) -m 0755 nsctl $(DESTDIR)$(bindir)/nsctl
-	$(INSTALL) -m 0644 nsctl.8 $(DESTDIR)$(mandir)/nsctl.8
+
+	$(INSTALL) -m 0644 Docs/startup-config.5 $(DESTDIR)$(man5dir)/startup-config.5
+	$(INSTALL) -m 0644 Docs/l2tpns.8 $(DESTDIR)$(man8dir)/l2tpns.8
+	$(INSTALL) -m 0644 Docs/nsctl.8 $(DESTDIR)$(man8dir)/nsctl.8
+
+	gzip $(DESTDIR)$(man5dir)/*.5 $(DESTDIR)$(man8dir)/*.8
+
 	@if [ -f $(DESTDIR)$(etcdir)/startup-config ]; then \
 		echo '***' Installing default config files in $(DESTDIR)$(etcdir) as .defaults; \
 		suffix=.default; \
@@ -115,7 +121,7 @@ bgp.o: bgp.c l2tpns.h bgp.h util.h
 cli.o: cli.c l2tpns.h util.h cluster.h tbf.h ll.h bgp.h
 cluster.o: cluster.c l2tpns.h cluster.h util.h tbf.h bgp.h
 constants.o: constants.c constants.h
-control.o: control.c control.h
+control.o: control.c l2tpns.h control.h
 icmp.o: icmp.c l2tpns.h
 l2tpns.o: l2tpns.c md5.h l2tpns.h cluster.h plugin.h ll.h constants.h \
   control.h util.h tbf.h bgp.h

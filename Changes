@@ -1,12 +1,12 @@
-* ?
-- Add manpages from Jonathan McDowell
-- Remove reference to old -a command line argument
-
-* Tue Nov 16 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.8
+* Wed Nov 17 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.8
 - Ignore gateway address in Framed-Route (from Jonathan McDowell).
 - Call sessionshutdown() when a tunnel is dropped rather than
   sessionkill() to ensure that RADIUS stop records are sent.
 - Cleanup: make a bunch of global functions/variables static.
+- Remove reference to old -a command line argument.
+- Add l2tpns(8) and nsctl(8) manpages from Jonathan McDowell.
+- Add startup-config(5) manpage [FIXME].
+- Revise nsctl to allow arbitrary strings/args to be passed to plugins.
 
 * Mon Nov 15 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.7
 - Fix socket creation in host_unreachable() (thanks to Bjørn Augestad)

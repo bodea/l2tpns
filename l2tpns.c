@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.50 2004-11-16 21:54:46 fred_nerk Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.51 2004-11-17 08:23:34 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -167,10 +167,10 @@ static void build_chap_response(char *challenge, u8 id, u16 challenge_length, ch
 static void update_config(void);
 static void read_config_file(void);
 static void initplugins(void);
-static void add_plugin(char *plugin_name);
-static void remove_plugin(char *plugin_name);
+static int add_plugin(char *plugin_name);
+static int remove_plugin(char *plugin_name);
 static void plugins_done(void);
-static void processcontrol(u8 * buf, int len, struct sockaddr_in *addr);
+static void processcontrol(u8 * buf, int len, struct sockaddr_in *addr, int alen);
 static tunnelidt new_tunnel(void);
 static int unhide_avp(u8 *avp, tunnelidt t, sessionidt s, u16 length);
 
@@ -434,8 +434,8 @@ static void initudp(void)
 	// Control
 	memset(&addr, 0, sizeof(addr));
 	addr.sin_family = AF_INET;
-	addr.sin_port = htons(1702);
-	controlfd = socket(AF_INET, SOCK_DGRAM, 17);
+	addr.sin_port = htons(NSCTL_PORT);
+	controlfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 	setsockopt(controlfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
 	if (bind(controlfd, (void *) &addr, sizeof(addr)) < 0)
 	{
@@ -2324,7 +2324,7 @@ static void mainloop(void)
 			}
 
 			if (FD_ISSET(controlfd, &r))
-				processcontrol(buf, recvfrom(controlfd, buf, sizeof(buf), MSG_WAITALL, (void *) &addr, &alen), &addr);
+				processcontrol(buf, recvfrom(controlfd, buf, sizeof(buf), MSG_WAITALL, (void *) &addr, &alen), &addr, alen);
 
 			if (FD_ISSET(clifd, &r))
 			{
@@ -2934,31 +2934,31 @@ int main(int argc, char *argv[])
 	{
 		switch (i)
 		{
-			case 'd':
-				if (fork()) exit(0);
-				setsid();
-				freopen("/dev/null", "r", stdin);
-				freopen("/dev/null", "w", stdout);
-				freopen("/dev/null", "w", stderr);
-				break;
-			case 'v':
-				optdebug++;
-				break;
-			case 'c':
-			    	optconfig = optarg;
-				break;
-			case 'h':
-				snprintf(hostname, sizeof(hostname), "%s", optarg);
-				break;
-			default:
-				printf("Args are:\n"
-				       "\t-d\t\tDetach from terminal\n"
-				       "\t-c <file>\tConfig file\n"
-				       "\t-h <hostname>\tForce hostname\n"
-				       "\t-v\t\tDebug\n");
+		case 'd':
+			if (fork()) exit(0);
+			setsid();
+			freopen("/dev/null", "r", stdin);
+			freopen("/dev/null", "w", stdout);
+			freopen("/dev/null", "w", stderr);
+			break;
+		case 'v':
+			optdebug++;
+			break;
+		case 'c':
+			optconfig = optarg;
+			break;
+		case 'h':
+			snprintf(hostname, sizeof(hostname), "%s", optarg);
+			break;
+		default:
+			printf("Args are:\n"
+			       "\t-d\t\tDetach from terminal\n"
+			       "\t-c <file>\tConfig file\n"
+			       "\t-h <hostname>\tForce hostname\n"
+			       "\t-v\t\tDebug\n");
 
-				return (0);
-				break;
+			return (0);
+			break;
 		}
 	}
 
@@ -3751,7 +3751,7 @@ static void *getconfig(char *key, enum config_typet type)
 	return 0;
 }
 
-static void add_plugin(char *plugin_name)
+static int add_plugin(char *plugin_name)
 {
 	static struct pluginfuncs funcs = {
 		_log,
@@ -3773,22 +3773,22 @@ static void add_plugin(char *plugin_name)
 	if (!p)
 	{
 		LOG(1, 0, 0, 0, "   Plugin load failed: %s\n", dlerror());
-		return;
+		return -1;
 	}
 
 	if (ll_contains(loaded_plugins, p))
 	{
 		dlclose(p);
-		return;
+		return 0; // already loaded
 	}
 
 	{
-		int *v = dlsym(p, "__plugin_api_version");
+		int *v = dlsym(p, "plugin_api_version");
 		if (!v || *v != PLUGIN_API_VERSION)
 		{
 			LOG(1, 0, 0, 0, "   Plugin load failed: API version mismatch: %s\n", dlerror());
 			dlclose(p);
-			return;
+			return -1;
 		}
 	}
 
@@ -3798,7 +3798,7 @@ static void add_plugin(char *plugin_name)
 		{
 			LOG(1, 0, 0, 0, "   Plugin load failed: plugin_init() returned FALSE: %s\n", dlerror());
 			dlclose(p);
-			return;
+			return -1;
 		}
 	}
 
@@ -3815,6 +3815,7 @@ static void add_plugin(char *plugin_name)
 	}
 
 	LOG(2, 0, 0, 0, "   Loaded plugin %s\n", plugin_name);
+	return 1;
 }
 
 static void run_plugin_done(void *plugin)
@@ -3825,29 +3826,32 @@ static void run_plugin_done(void *plugin)
 		donefunc();
 }
 
-static void remove_plugin(char *plugin_name)
+static int remove_plugin(char *plugin_name)
 {
 	void *p = open_plugin(plugin_name, 0);
-	int i;
+	int loaded = 0;
 
 	if (!p)
-		return;
-
-	for (i = 0; i < max_plugin_functions; i++)
-	{
-		void *x;
-		if (plugin_functions[i] && (x = dlsym(p, plugin_functions[i])))
-			ll_delete(plugins[i], x);
-	}
+		return -1;
 
 	if (ll_contains(loaded_plugins, p))
 	{
+		int i;
+		for (i = 0; i < max_plugin_functions; i++)
+		{
+			void *x;
+			if (plugin_functions[i] && (x = dlsym(p, plugin_functions[i])))
+				ll_delete(plugins[i], x);
+		}
+
 		ll_delete(loaded_plugins, p);
 		run_plugin_done(p);
+		loaded = 1;
 	}
 
 	dlclose(p);
 	LOG(2, 0, 0, 0, "Removed plugin %s\n", plugin_name);
+	return loaded;
 }
 
 int run_plugins(int plugin_type, void *data)
@@ -3875,39 +3879,149 @@ static void plugins_done()
 		run_plugin_done(p);
 }
 
-static void processcontrol(u8 * buf, int len, struct sockaddr_in *addr)
+static void processcontrol(u8 * buf, int len, struct sockaddr_in *addr, int alen)
 {
-	char *resp;
-	int l;
-	struct param_control param = { buf, len, ntohl(addr->sin_addr.s_addr), ntohs(addr->sin_port), NULL, 0, 0 };
-
+	struct nsctl request;
+	struct nsctl response;
+	int type = unpack_control(&request, buf, len);
+	int r;
+	void *p;
 
 	if (log_stream && config->debug >= 4)
 	{
-		LOG(4, ntohl(addr->sin_addr.s_addr), 0, 0, "Received ");
-		dump_packet(buf, log_stream);
+		if (type < 0)
+		{
+			LOG(4, ntohl(addr->sin_addr.s_addr), 0, 0, "Bogus control message (%d)\n", type);
+		}
+		else
+		{
+			LOG(4, ntohl(addr->sin_addr.s_addr), 0, 0, "Received ");
+			dump_control(&request, log_stream);
+		}
 	}
 
-	resp = calloc(1400, 1);
-	l = new_packet(PKT_RESP_ERROR, resp);
-	*(int *)(resp + 6) = *(int *)(buf + 6);
-
-	param.type = ntohs(*(short *)(buf + 2));
-	param.id = ntohl(*(int *)(buf + 6));
-	param.data_length = ntohs(*(short *)(buf + 4)) - 10;
-	param.data = (param.data_length > 0) ? (char *)(buf + 10) : NULL;
-	param.response = resp;
-	param.response_length = l;
-
-	run_plugins(PLUGIN_CONTROL, &param);
-
-	if (param.send_response)
+	switch (type)
 	{
-		send_packet(controlfd, ntohl(addr->sin_addr.s_addr), ntohs(addr->sin_port), param.response, param.response_length);
-		LOG(4, ntohl(addr->sin_addr.s_addr), 0, 0, "Sent Control packet response\n");
+	case NSCTL_REQ_LOAD:
+		if (request.argc != 1)
+		{
+			response.type = NSCTL_RES_ERR;
+			response.argc = 1;
+			response.argv[0] = "name of plugin required";
+		}
+		else if ((r = add_plugin(request.argv[0])) < 1)
+		{
+			response.type = NSCTL_RES_ERR;
+			response.argc = 1;
+			response.argv[0] = !r
+				? "plugin already loaded"
+				: "error loading plugin";
+		}
+		else
+		{
+			response.type = NSCTL_RES_OK;
+			response.argc = 0;
+		}
+
+		break;
+
+	case NSCTL_REQ_UNLOAD:
+		if (request.argc != 1)
+		{
+			response.type = NSCTL_RES_ERR;
+			response.argc = 1;
+			response.argv[0] = "name of plugin required";
+		}
+		else if ((r = remove_plugin(request.argv[0])) < 1)
+		{
+			response.type = NSCTL_RES_ERR;
+			response.argc = 1;
+			response.argv[0] = !r
+				? "plugin not loaded"
+				: "plugin not found";
+		}
+		else
+		{
+			response.type = NSCTL_RES_OK;
+			response.argc = 0;
+		}
+
+		break;
+
+	case NSCTL_REQ_HELP:
+		response.type = NSCTL_RES_OK;
+		response.argc = 0;
+
+		ll_reset(loaded_plugins);
+		while ((p = ll_next(loaded_plugins)))
+		{
+			char **help = dlsym(p, "plugin_control_help");
+			while (response.argc < 0xff && help && *help)
+				response.argv[response.argc++] = *help++;
+		}
+
+		break;
+
+	case NSCTL_REQ_CONTROL:
+		{
+			struct param_control param = { request.argc, request.argv, 0, NULL };
+			if (!run_plugins(PLUGIN_CONTROL, &param))
+			{
+				response.type = NSCTL_RES_ERR;
+				response.argc = 1;
+				response.argv[0] = param.additional
+					? param.additional
+					: "error returned by plugin";
+			}
+			else if (!(param.response & NSCTL_RESPONSE))
+			{
+				response.type = NSCTL_RES_ERR;
+				response.argc = 1;
+				response.argv[0] = param.response
+					? "unrecognised response value from plugin"
+					: "unhandled action";
+			}
+			else
+			{
+				response.type = param.response;
+				response.argc = 0;
+				if (param.additional)
+				{
+					response.argc = 1;
+					response.argv[0] = param.additional;
+				}
+			}
+		}
+
+		break;
+
+	default:
+		response.type = NSCTL_RES_ERR;
+		response.argc = 1;
+		response.argv[0] = "error unpacking control packet";
 	}
 
-	free(resp);
+	buf = calloc(NSCTL_MAX_PKT_SZ, 1);
+	if (!buf)
+	{
+		LOG(2, ntohl(addr->sin_addr.s_addr), 0, 0, "Failed to allocate nsctl response\n");
+		return;
+	}
+
+	r = pack_control(buf, NSCTL_MAX_PKT_SZ, response.type, response.argc, response.argv);
+	if (r > 0)
+	{
+		sendto(controlfd, buf, r, 0, (const struct sockaddr *) addr, alen);
+		if (log_stream && config->debug >= 4)
+		{
+			LOG(4, ntohl(addr->sin_addr.s_addr), 0, 0, "Sent ");
+			dump_control(&response, log_stream);
+		}
+	}
+	else
+		LOG(2, ntohl(addr->sin_addr.s_addr), 0, 0, "Failed to pack nsctl response (%d)\n", r);
+
+	free(buf);
 }
 
 static tunnelidt new_tunnel()

@@ -39,7 +39,8 @@ rm -rf %{buildroot}
 %config(noreplace) /etc/l2tpns/ip_pool
 %attr(700,root,root) /usr/sbin/l2tpns
 %attr(755,root,root) /usr/lib/l2tpns
+%attr(644,root,root) /usr/share/man/man[58]/*
 
 %changelog
-* Mon Nov 15 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.8-1
+* Wed Nov 17 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.8-1
 - 2.0.8 release, see /usr/share/doc/l2tpns-2.0.8/Changes

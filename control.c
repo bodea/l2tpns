@@ -1,74 +1,163 @@
 // L2TPNS: control
 
-char const *cvs_id_control = "$Id: control.c,v 1.2 2004-06-28 02:43:13 fred_nerk Exp $";
+char const *cvs_id_control = "$Id: control.c,v 1.3 2004-11-17 08:23:34 bodea Exp $";
 
-#include <stdio.h>
-#include <arpa/inet.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <malloc.h>
-#include <netdb.h>
 #include <string.h>
-#include <sys/time.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <signal.h>
-#include <stdarg.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <time.h>
+#include "l2tpns.h"
 #include "control.h"
 
-int new_packet(short type, char *packet)
+int pack_control(char *data, int len, u8 type, int argc, char *argv[])
 {
-	int id = (time(NULL) ^ (rand() * 1024*1024));
+    struct nsctl_packet pkt;
+    struct nsctl_args arg;
+    char *p = pkt.argv;
+    int sz = (p - (char *) &pkt);
 
-	*(short *)(packet + 0) = ntohs(0x9012);
-	*(short *)(packet + 2) = ntohs(type);
-	*(int *)(packet + 6) = ntohl(id);
+    if (len > sizeof(pkt))
+    	len = sizeof(pkt);
 
-	return 10;
+    if (argc > 0xff)
+    	argc = 0xff; // paranoia
+
+    pkt.magic = ntohs(NSCTL_MAGIC);
+    pkt.type = type;
+    pkt.argc = argc;
+
+    while (argc-- > 0)
+    {
+	char *a = *argv++;
+	int s = strlen(a);
+
+	if (s > sizeof(arg.value))
+		s = sizeof(arg.value); // silently truncate
+
+	arg.len = s;
+	s += sizeof(arg.len);
+
+	if (sz + s > len)
+	    return -1; // overflow
+
+	if (arg.len)
+	    memcpy(arg.value, a, arg.len);
+
+	memcpy(p, &arg, s);
+	sz += s;
+	p += s;
+    }
+
+    /*
+     * terminate:  this is both a sanity check and additionally
+     * ensures that there's a spare byte in the packet to null
+     * terminate the last argument when unpacking (see unpack_control)
+     */
+    if (sz + sizeof(arg.len) > len)
+    	return -1; // overflow
+
+    arg.len = 0xff;
+    memcpy(p, &arg.len, sizeof(arg.len));
+
+    sz += sizeof(arg.len);
+    memcpy(data, &pkt, sz);
+
+    return sz;
 }
 
-int send_packet(int sockfd, int dest_ip, int dest_port, char *packet, int len)
+int unpack_control(struct nsctl *control, char *data, int len)
 {
-	struct sockaddr_in addr;
+    struct nsctl_packet pkt;
+    char *p = pkt.argv;
+    int sz = (p - (char *) &pkt);
+    int i;
 
-	*(short *)(packet + 4) = ntohs(len);
+    if (len < sz)
+    	return NSCTL_ERR_SHORT;
 
-	memset(&addr, 0, sizeof(addr));
-	addr.sin_family = AF_INET;
-	*(int*)&addr.sin_addr = htonl(dest_ip);
-	addr.sin_port = htons(dest_port);
-	if (sendto(sockfd, packet, len, 0, (void *) &addr, sizeof(addr)) < 0)
+    if (len > sizeof(pkt))
+    	return NSCTL_ERR_LONG;
+
+    memcpy(&pkt, data, len);
+    if (ntohs(pkt.magic) != NSCTL_MAGIC)
+    	return NSCTL_ERR_MAGIC;
+
+    switch (pkt.type)
+    {
+    case NSCTL_REQ_LOAD:
+    case NSCTL_REQ_UNLOAD:
+    case NSCTL_REQ_HELP:
+    case NSCTL_REQ_CONTROL:
+    case NSCTL_RES_OK:
+    case NSCTL_RES_ERR:
+	control->type = pkt.type;
+	break;
+
+    default:
+	return NSCTL_ERR_TYPE;
+    }
+
+    control->argc = pkt.argc;
+    for (i = 0; i <= control->argc; i++)
+    {
+	unsigned s;
+
+	if (len < sz + 1)
+	    return NSCTL_ERR_SHORT;
+
+	s = (u8) *p;
+	*p++ = 0; // null terminate previous arg
+	sz++;
+
+	if (i < control->argc)
 	{
-		perror("sendto");
-		return 0;
+	    if (len < sz + s)
+		return NSCTL_ERR_SHORT;
+
+	    control->argv[i] = p;
+	    p += s;
+	    sz += s;
 	}
-	return 1;
-}
-
-int read_packet(int sockfd, char *packet)
-{
-	struct sockaddr_in addr;
-	int alen = sizeof(addr);
-	memset(&addr, 0, sizeof(addr));
-	return recvfrom(sockfd, packet, 1400, 0, (void *) &addr, &alen);
-}
-
-void dump_packet(char *packet, FILE *stream)
-{
-	if (htons(*(short *)(packet + 0)) != 0x9012)
+	else
 	{
-		fprintf(stream, "Invalid packet identifier %x\n", htons(*(short *)(packet + 0)));
-		return;
+	    /* check for terminator */
+	    if (s != 0xff)
+	    	return NSCTL_ERR_SHORT;
 	}
-	fprintf(stream, "Control packet:\n");
-	fprintf(stream, "	Type: %d\n", htons(*(short *)(packet + 2)));
-	fprintf(stream, "	Length: %d\n", htons(*(short *)(packet + 4)));
-	fprintf(stream, "	Identifier: %x\n", htonl(*(int *)(packet + 6)));
-	fprintf(stream, "\n");
+    }
+
+    if (sz != len)
+    	return NSCTL_ERR_LONG; // trailing cr*p
+
+    return control->type;
 }
 
+void dump_control(struct nsctl *control, FILE *stream)
+{
+    char *type = "*unknown*";
 
+    if (!stream)
+    	stream = stdout;
+
+    switch (control->type)
+    {
+    case NSCTL_REQ_LOAD:	type = "NSCTL_REQ_LOAD";	break;
+    case NSCTL_REQ_UNLOAD:	type = "NSCTL_REQ_UNLOAD";	break;
+    case NSCTL_REQ_HELP:	type = "NSCTL_REQ_HELP";	break;
+    case NSCTL_REQ_CONTROL:	type = "NSCTL_REQ_CONTROL";	break;
+    case NSCTL_RES_OK:		type = "NSCTL_RES_OK";		break;
+    case NSCTL_RES_ERR:		type = "NSCTL_RES_ERR";		break;
+    }
+
+    fprintf(stream, "Control packet:\n");
+    fprintf(stream, "	Type: %d (%s)\n", (int) control->type, type);
+    fprintf(stream, "	Args: %d", (int) control->argc);
+    if (control->argc)
+    {
+	int i;
+	fprintf(stream, " (\"");
+	for (i = 0; i < control->argc; i++)
+	    fprintf(stream, "%s%s", i ? "\", \"" : "", control->argv[i]);
+
+	fprintf(stream, "\")");
+    }
+
+    fprintf(stream, "\n\n");
+}

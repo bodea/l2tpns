@@ -1,0 +1,64 @@
+.\" -*- nroff -*-
+.de Id
+.ds Dt \\$4 \\$5
+..
+.Id $Id: l2tpns.8,v 1.1 2004-11-17 08:23:35 bodea Exp $
+.TH L2TPNS 8 "\*(Dt" L2TPNS "System Management Commands"
+.SH NAME
+l2tpns \- L2TP LNS daemon
+.SH SYNOPSIS
+.B l2tpns
+.RB [ \-d ]
+.RB [ \-v ]
+.RB [ \-c
+.IR file ]
+.RB [ \-h
+.IR hostname ]
+.SH DESCRIPTION
+This manual page documents briefly the
+.B l2tpns
+command.
+.PP
+.B l2tpns
+is an L2TP LNS daemon that doesn't require kernel support for PPP or
+L2TP, nor any kernel patches.  For more information on L2TP see RFC
+2661.
+.PP
+Once running,
+.B l2tpns
+may be controlled by telnetting to port 23 on the machine running the
+daemon and with the
+.B nsctl
+utility.
+.SH OPTIONS
+.TP
+.B \-d
+Detach from terminal and fork into the background. By default l2tpns
+will stay in the foreground.
+.TP
+.B \-v
+Increase verbosity for debugging. Can be used multiple times.
+.TP
+.BI "\-c " file
+Specify configuration file.
+.TP
+.BI "\-h " hostname
+Force hostname to
+.IR hostname .
+.SH FILES
+.TP
+.I /etc/l2tpns/startup-config
+The default configuration file.
+.TP
+.I /etc/l2tpns/ip_pool
+IP address pool configuration.
+.TP
+.I /etc/l2tpns/users
+Username/password configuration for access to admin interface.
+.SH SEE ALSO
+.BR startup-config (5),
+and
+.BR nsctl (8)
+.SH AUTHOR
+This manual page was written by Jonathan McDowell <noodles@earth.li>,
+for the Debian GNU/Linux system (but may be used by others).
