@@ -1,5 +1,5 @@
 // L2TPNS Throttle Stuff
-// $Id: throttle.c,v 1.1 2003-12-16 07:07:39 fred_nerk Exp $
+// $Id: throttle.c,v 1.2 2004-03-05 00:09:03 fred_nerk Exp $
 
 #include <stdio.h>
 #include <sys/file.h>
@@ -16,22 +16,17 @@
 #include "l2tpns.h"
 #include "util.h"
 
-extern char *radiussecret;
 extern radiust *radius;
 extern sessiont *session;
-extern ipt radiusserver[MAXRADSERVER]; // radius servers
 extern u32 sessionid;
-extern u8 radiusfree;
 extern int radfd;
-extern u8 numradiusservers;
-extern char debug;
-extern unsigned long rl_rate;
 extern tbft *filter_buckets;
+extern struct configt *config;
 
 // Throttle or Unthrottle a session
 int throttle_session(sessionidt s, int throttle)
 {
-	if (!rl_rate) return 0;
+	if (!config->rl_rate) return 0;
 
 	if (!*session[s].user)
 		return 0; // User not logged in
@@ -40,9 +35,15 @@ int throttle_session(sessionidt s, int throttle)
 	{
 		// Throttle them
 		char cmd[2048] = {0};
-		log(2, 0, s, session[s].tunnel, "Throttling session %d for user %s\n", s, session[s].user);
 		if (!session[s].tbf) session[s].tbf = rl_get_tbf();
-		snprintf(cmd, 2048, "iptables -t mangle -A throttle -d %s -j MARK --set-mark %d", inet_toa(ntohl(session[s].ip)),
+		if (!session[s].tbf)
+		{
+			log(1, 0, s, session[s].tunnel, "Error creating a filtering bucket for user %s\n", session[s].user);
+			return 0;
+		}
+		log(2, 0, s, session[s].tunnel, "Throttling session %d for user %s\n", s, session[s].user);
+		snprintf(cmd, 2048, "iptables -t mangle -A throttle -d %s -j MARK --set-mark %d",
+				inet_toa(ntohl(session[s].ip)),
 				session[s].tbf);
 		log(4, 0, s, session[s].tunnel, "Running %s\n", cmd);
 		system(cmd);

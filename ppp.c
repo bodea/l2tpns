@@ -1,5 +1,5 @@
 // L2TPNS PPP Stuff
-// $Id: ppp.c,v 1.1 2003-12-16 07:07:39 fred_nerk Exp $
+// $Id: ppp.c,v 1.2 2004-03-05 00:09:03 fred_nerk Exp $
 
 #include <stdio.h>
 #include <string.h>
@@ -11,16 +11,15 @@
 #include "plugin.h"
 #include "util.h"
 
-extern char debug;
 extern tunnelt *tunnel;
 extern sessiont *session;
 extern radiust *radius;
-extern u16 tapmac[3];
 extern int tapfd;
 extern char hostname[1000];
 extern struct Tstats *_statistics;
 extern unsigned long eth_tx;
 extern time_t time_now;
+extern struct configt *config;
 
 // Process PAP messages
 void processpap(tunnelidt t, sessionidt s, u8 * p, u16 l)
@@ -77,7 +76,7 @@ void processpap(tunnelidt t, sessionidt s, u8 * p, u16 l)
 		p[4] = 0;               // no message
 		if (session[s].ip)
 		{
-		    log(3, session[s].ip, s, t, "%d Already an IP allocated: %s (%d)\n", getpid(), inet_toa(htonl(session[s].ip)), session[s].ip);
+		    log(3, session[s].ip, s, t, "%d Already an IP allocated: %s (%d)\n", getpid(), inet_toa(htonl(session[s].ip)), session[s].ip_pool_index);
 		}
 		else
 		{
@@ -101,8 +100,8 @@ void processpap(tunnelidt t, sessionidt s, u8 * p, u16 l)
 			return;
 		}
 
-		strncpy(session[s].user, packet.username, sizeof(session[s].user));
-		strncpy(radius[r].pass, packet.password, sizeof(radius[r].pass));
+		strncpy(session[s].user, packet.username, sizeof(session[s].user) - 1);
+		strncpy(radius[r].pass, packet.password, sizeof(radius[r].pass) - 1);
 
 		free(packet.username);
 		free(packet.password);
@@ -180,7 +179,7 @@ void processchap(tunnelidt t, sessionidt s, u8 * p, u16 l)
 			return;
 		}
 
-		strncpy(session[s].user, packet.username, sizeof(session[s].user));
+		strncpy(session[s].user, packet.username, sizeof(session[s].user) - 1);
 		memcpy(radius[r].pass, packet.password, 16);
 
 		free(packet.username);
@@ -408,7 +407,7 @@ void processlcp(tunnelidt t, sessionidt s, u8 * p, u16 l)
 		*p = EchoReply;      // reply
 		*(u32 *) (p + 4) = htonl(session[s].magic); // our magic number
 		q = makeppp(b, p, l, t, s, PPPLCP);
-		log(3, session[s].ip, s, t, "LCP: Received EchoReq. Sending EchoReply\n");
+		log(4, session[s].ip, s, t, "LCP: Received EchoReq. Sending EchoReply\n");
 		tunnelsend(b, l + (q - b), t); // send it
 	}
 	else if (*p == EchoReply)
@@ -439,7 +438,7 @@ void processipcp(tunnelidt t, sessionidt s, u8 * p, u16 l)
 	if (*p == ConfigAck)
 	{                          // happy with our IPCP
 		u8 r = session[s].radius;
-		if ((!r || radius[r].state == RADIUSIPCP) && !session[s].walled_garden)
+		if ((!r || radius[r].state == RADIUSIPCP) && !session[s].servicenet)
 			if (!r)
 				r = radiusnew(s);
 			if (r)
@@ -552,6 +551,7 @@ void processipin(tunnelidt t, sessionidt s, u8 * p, u16 l)
 	}
 
 	session[s].cin += l;
+	session[s].total_cin += l;
 	session[s].pin++;
 	eth_tx += l;
 

@@ -42,15 +42,16 @@ void sendarp(int ifr_idx, const unsigned char* mac, ipt ip)
 	memcpy(&buf.ar_sip, &ip, sizeof(ip));
 	memcpy(buf.ar_tha, mac, ETH_ALEN);
 	memcpy(&buf.ar_tip, &ip, sizeof(ip));
-	
+
 	/* Now actually send the thing */
 	fd = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_RARP));
 
 	memset(&sll, 0, sizeof(sll));
 	sll.sll_family = AF_PACKET;
-	strncpy(sll.sll_addr, mac, sizeof(sll.sll_addr)); /* Null-pad */
+	strncpy(sll.sll_addr, mac, sizeof(sll.sll_addr) - 1);
 	sll.sll_halen = ETH_ALEN;
 	sll.sll_ifindex = ifr_idx;
 
 	sendto(fd, &buf, sizeof(buf), 0, (struct sockaddr*)&sll, sizeof(sll));
+	close(fd);
 }

@@ -96,7 +96,7 @@ int main(int argc, char *argv[])
 			}
 			for (p = 0; p < commands[i].params; p++)
 			{
-				strncpy((packet + len), argv[p + 3], 1400 - len);
+				strncpy((packet + len), argv[p + 3], 1400 - len - 1);
 				len += strlen(argv[p + 3]) + 1;
 			}
 			break;

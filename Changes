@@ -1,0 +1,22 @@
+* Fri Mar 5 2004 David Parrish <david@dparrish.com> 1.1.0
+- Change all strcpy() calls to strncpy() to avoid buffer overflow potential
+- Add ICMP host unreachable support
+- Logging to syslog if log_file = "syslog:facility"
+- Now requires libcli 1.5
+- All configuration moves to a config structure
+- Ability to modify and write config on the fly through command-line interface
+- Config file support is removed, and now handled by the cli
+- Show hostname in cli prompt
+- Keep current state type for tunnels
+- Add uptime command do CLI, which also shows real-time bandwidth utilisation
+- Add goodbye command to cluster master, which forces droppping a slave
+- Cache IP address allocation, so that reconnecting users get the same address
+- Fix tunnel resend timeouts, so that dead tunnels will be cleaned up
+- Allocate tunnels and radius without using a linked list which had issues
+- Fix some off-by-one errors in tunnel and session and radius arrays
+- Save and reload ip address pool when dieing
+- Check version and size of reloaded data when restarting
+- Remove plugin_config support
+- Remove old support for TBF which didn't work anyway. HTB is required to do throttling now.
+- Add COPYING and Changes files
+

@@ -1,5 +1,5 @@
 // L2TPNS Clustering Stuff
-// $Id: cluster.c,v 1.1 2003-12-16 07:07:39 fred_nerk Exp $ #include <stdio.h> #include <sys/file.h>
+// $Id: cluster.c,v 1.2 2004-03-05 00:09:03 fred_nerk Exp $ #include <stdio.h> #include <sys/file.h>
 
 #include <sys/stat.h>
 #include <sys/types.h>

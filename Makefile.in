@@ -16,6 +16,7 @@ INSTALL = @INSTALL@
 DEFS = @DEFS@
 
 OBJS=	md5.o \
+	icmp.o \
 	cli.o \
 	l2tpns.o \
 	ppp.o \

@@ -1,12 +1,11 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.1 2003-12-16 07:07:39 fred_nerk Exp $
+// $Id: l2tpns.h,v 1.2 2004-03-05 00:09:03 fred_nerk Exp $
 
 #include <netinet/in.h>
 #include <stdio.h>
-
 #include "config.h"
 
-#define VERSION	"1.0"
+#define VERSION	"1.1.0"
 
 // Limits
 #define MAXTUNNEL	500		// could be up to 65535
@@ -15,6 +14,7 @@
 #define	MAXCONTROL	1000		// max length control message we ever send...
 #define	MAXETHER	(1500+18)	// max packet we try sending to tap
 #define	MAXTEL		96		// telephone number
+#define MAXPLUGINS	20		// maximum number of plugins to load
 #define MAXRADSERVER	10		// max radius servers
 #define	MAXROUTE	10		// max static routes per session
 #define MAXIPPOOL	131072		// max number of ip addresses in pool
@@ -27,17 +27,17 @@
 #define STATISTICS
 #define STAT_CALLS
 #define RINGBUFFER
-#define	UDP		17
 #define TAPDEVICE	"/dev/net/tun"
-#define CLIUSERS	ETCDIR "l2tpns.users"	// CLI Users file
+#define	UDP		17
+#define HOMEDIR		"/home/l2tpns/"			// Base dir for data
+#define STATEFILE	"/tmp/l2tpns.dump"		// State dump file
+#define NOSTATEFILE	"/tmp/l2tpns.no_state_reload"	// If exists, state will not be reloaded
 #define CONFIGFILE	ETCDIR "l2tpns.cfg"	// Configuration file
-#define IPPOOLFILE	ETCDIR "l2tpns.ip_pool"	// Address pool configuration
-#define STATEFILE	"/tmp/l2tpns.dump"	// State dump file
-
+#define CLIUSERS	ETCDIR "l2tpns.users"		// CLI Users file
+#define IPPOOLFILE	ETCDIR "l2tpns.ip_pool"		// Address pool configuration
 #ifndef LIBDIR
 #define LIBDIR		"/usr/lib/l2tpns"
 #endif
-
 #define ACCT_TIME	3000		// 5 minute accounting interval
 #define	L2TPPORT	1701		// L2TP port
 #define RADPORT		1645		// old radius port...
@@ -52,20 +52,20 @@
 #define	PPPCCP		0x80FD
 #define PPPIP		0x0021
 #define PPPMP		0x003D
-#define ConfigReq	1
-#define ConfigAck	2
-#define ConfigNak	3
-#define ConfigRej	4
-#define TerminateReq	5
-#define TerminateAck	6
-#define CodeRej		7
-#define ProtocolRej	8
-#define EchoReq		9
-#define EchoReply	10
-#define DiscardRequest	11
-
-#undef TC_TBF
-#define TC_HTB
+enum
+{
+	ConfigReq = 1,
+	ConfigAck,
+	ConfigNak,
+	ConfigRej,
+	TerminateReq,
+	TerminateAck,
+	CodeRej,
+	ProtocolRej,
+	EchoReq,
+	EchoReply,
+	DiscardRequest
+};
 
 // Types
 typedef unsigned short u16;
@@ -78,6 +78,9 @@ typedef u16 tunnelidt;
 typedef u32 clockt;
 typedef u8 hasht[16];
 
+// dump header: update number if internal format changes
+#define DUMP_MAGIC "L2TPNS#" VERSION "#"
+
 // structures
 typedef struct routes           // route
 {
@@ -88,7 +91,7 @@ routet;
 
 typedef struct controls         // control message
 {
-	struct controls *next;       // next in queue
+	struct controls *next;  // next in queue
 	u16 length;             // length
 	u8 buf[MAXCONTROL];
 }
@@ -106,34 +109,37 @@ typedef struct stbft
 // 336 bytes per session
 typedef struct sessions
 {
-	sessionidt next;             // next session in linked list
-	sessionidt far;              // far end session ID
-	tunnelidt tunnel;            // tunnel ID
-	ipt ip;                 // IP of session set by RADIUS response
-	unsigned long sid;	// session id for hsddb
-	u16 nr;                 // next receive
-	u16 ns;                 // next send
-	u32 magic;              // ppp magic number
-	u32 cin, cout;               // byte counts
-	u32 pin, pout;               // packet counts
-	u32 id;                 // session id
-	clockt opened;             // when started
-	clockt die;                // being closed, when to finally free
-	time_t last_packet;	// Last packet from the user (used for idle timeouts)
-	ipt dns1, dns2;               // DNS servers
-	routet route[MAXROUTE];    // static routes
-	u8 radius;             // which radius session is being used (0 for not waiting on authentication)
-	u8 flags;              // various bit flags
-	u8 snoop;		// are we snooping this session?
-	u8 throttle;		// is this session throttled?
-	u8 walled_garden;	// is this session stuck in the walled garden?
-	u16 mru;		// maximum receive unit
-	u16 tbf;		// filter bucket for throttling
+	sessionidt next;		// next session in linked list
+	sessionidt far;			// far end session ID
+	tunnelidt tunnel;		// tunnel ID
+	ipt ip;				// IP of session set by RADIUS response
+	int ip_pool_index;		// index to IP pool
+	unsigned long sid;		// session id for hsddb
+	u16 nr;				// next receive
+	u16 ns;				// next send
+	u32 magic;			// ppp magic number
+	u32 cin, cout;			// byte counts
+	u32 pin, pout;			// packet counts
+	u32 total_cin;			// This counter is never reset while a session is open
+	u32 total_cout;			// This counter is never reset while a session is open
+	u32 id;				// session id
+	clockt opened;			// when started
+	clockt die;			// being closed, when to finally free
+	time_t last_packet;		// Last packet from the user (used for idle timeouts)
+	ipt dns1, dns2;			// DNS servers
+	routet route[MAXROUTE];		// static routes
+	u8 radius;			// which radius session is being used (0 for not waiting on authentication)
+	u8 flags;			// various bit flags
+	u8 snoop;			// are we snooping this session?
+	u8 throttle;			// is this session throttled?
+	u8 servicenet;			// is this session servicenetted?
+	u16 mru;			// maximum receive unit
+	u16 tbf;			// filter bucket for throttling
 	char random_vector[MAXTEL];
 	int random_vector_length;
-	char user[129];          // user (needed in seesion for radius stop messages)
-	char called[MAXTEL];     // called number
-	char calling[MAXTEL];     // calling number
+	char user[129];			// user (needed in seesion for radius stop messages)
+	char called[MAXTEL];		// called number
+	char calling[MAXTEL];		// calling number
 	unsigned long tx_connect_speed;
 	unsigned long rx_connect_speed;
 }
@@ -145,16 +151,17 @@ sessiont;
 // 168 bytes per tunnel
 typedef struct tunnels
 {
-	tunnelidt next;		// next tunnel in linked list
 	tunnelidt far;		// far end tunnel ID
 	ipt ip;			// Ip for far end
 	portt port;		// port for far end
 	u16 window;		// Rx window
 	u16 nr;			// next receive
 	u16 ns;			// next send
+	int state;		// current state (tunnelstate enum)
 	clockt last;		// when last control message sent (used for resend timeout)
 	clockt retry;		// when to try resenting pending control
 	clockt die;		// being closed, when to finally free
+	clockt lastrec;		// when the last control message was received
 	char hostname[128];	// tunnel hostname
 	char vendor[128];	// LAC vendor
 	u8 try;			// number of retrys on a control message
@@ -167,10 +174,9 @@ tunnelt;
 // 180 bytes per radius session
 typedef struct radiuss          // outstanding RADIUS requests
 {
-	u8 next;               // next in free list
 	sessionidt session;          // which session this applies to
 	hasht auth;               // request authenticator
-	clockt retry;              // ehwne to try next
+	clockt retry;              // when to try next
 	char calling[MAXTEL];    // calling number
 	char pass[129];          // password
 	u8 id;                 // ID for PPP response
@@ -184,6 +190,8 @@ typedef struct
 {
 	ipt	address;
 	char	assigned;	// 1 if assigned, 0 if free
+	clockt	last;		// last used
+	char	user[129];      // user (try to have ip addresses persistent)
 }
 ippoolt;
 
@@ -202,15 +210,27 @@ struct Tringbuffer
 };
 #endif
 
+/*
+ * Possible tunnel states
+ * TUNNELFREE -> TUNNELOPEN -> TUNNELDIE -> TUNNELFREE
+ */
 enum
 {
-    RADIUSNULL,                   // Not in use
-    RADIUSCHAP,                   // sending CHAP down PPP
-    RADIUSAUTH,                   // sending auth to RADIUS server
-    RADIUSIPCP,                   // sending IPCP to end user
-    RADIUSSTART,                  // sending start accounting to RADIUS server
-    RADIUSSTOP,                   // sending stop accounting to RADIUS server
-    RADIUSWAIT                   // waiting timeout before available, in case delayed replies
+	TUNNELFREE,		// Not in use
+	TUNNELOPEN,		// Active tunnel
+	TUNNELDIE,		// Currently closing
+	TUNNELOPENING		// Busy opening
+};
+
+enum
+{
+	RADIUSNULL,             // Not in use
+	RADIUSCHAP,             // sending CHAP down PPP
+	RADIUSAUTH,             // sending auth to RADIUS server
+	RADIUSIPCP,             // sending IPCP to end user
+	RADIUSSTART,            // sending start accounting to RADIUS server
+	RADIUSSTOP,             // sending stop accounting to RADIUS server
+	RADIUSWAIT		// waiting timeout before available, in case delayed replies
 };
 
 struct Tstats
@@ -297,6 +317,49 @@ struct Tstats
 #define SET_STAT(x, y)
 #endif
 
+struct configt
+{
+	int		debug;				// debugging level
+	time_t		start_time;			// time when l2tpns was started
+	char		bandwidth[256];			// current bandwidth
+
+	char		config_file[128];
+	int		reload_config;			// flag to re-read config (set by cli)
+
+	char		tapdevice[10];			// tap device name
+	char		log_filename[128];
+	char		l2tpsecret[64];
+
+	char		radiussecret[64];
+	int		radius_accounting;
+	ipt		radiusserver[MAXRADSERVER];	// radius servers
+	u8		numradiusservers;		// radius server count
+
+	ipt		default_dns1, default_dns2;
+
+	ipt		snoop_destination_host;
+	u16		snoop_destination_port;
+
+	unsigned long	rl_rate;
+	int		save_state;
+	uint32_t	cluster_address;
+	int		ignore_cluster_updates;
+	char		accounting_dir[128];
+	ipt		bind_address;
+	int		target_uid;
+	int		dump_speed;
+	char		plugins[64][MAXPLUGINS];
+	char		old_plugins[64][MAXPLUGINS];
+};
+
+struct config_descriptt
+{
+	char *key;
+	int offset;
+	int size;
+	enum { INT, STRING, UNSIGNED_LONG, SHORT, BOOL, IP } type;
+};
+
 // arp.c
 void sendarp(int ifr_idx, const unsigned char* mac, ipt ip);
 
@@ -321,6 +384,7 @@ void radiussend(u8 r, u8 state);
 void processrad(u8 *buf, int len);
 void radiusretry(u8 r);
 u8 radiusnew(sessionidt s);
+void radiusclear(u8 r, sessionidt s);
 
 // throttle.c
 int throttle_session(sessionidt s, int throttle);
@@ -343,7 +407,6 @@ void initudp(void);
 void initdata(void);
 void initippool();
 sessionidt sessionbyip(ipt ip);
-/* NB - sessionbyuser ignores walled garden'd sessions */
 sessionidt sessionbyuser(char *username);
 void sessionshutdown(sessionidt s, char *reason);
 void sessionsendarp(sessionidt s);
@@ -365,14 +428,14 @@ void processarp(u8 * buf, int len);
 void processudp(u8 * buf, int len, struct sockaddr_in *addr);
 void processtap(u8 * buf, int len);
 void processcontrol(u8 * buf, int len, struct sockaddr_in *addr);
-ipt assign_ip_address();
-void free_ip_address(ipt address);
+int assign_ip_address(sessionidt s);
+void free_ip_address(sessionidt s);
 void snoop_send_packet(char *packet, u16 size);
 void dump_acct_info();
 void mainloop(void);
 #define log _log
 #ifndef log_hex
-#define log_hex(a,b,c,d) do{if (a <= debug) _log_hex(a,0,0,0,b,c,d);}while (0)
+#define log_hex(a,b,c,d) do{if (a <= config->debug) _log_hex(a,0,0,0,b,c,d);}while (0)
 #endif
 void _log(int level, ipt address, sessionidt s, tunnelidt t, const char *format, ...);
 void _log_hex(int level, ipt address, sessionidt s, tunnelidt t, const char *title, const char *data, int maxsize);
@@ -380,10 +443,10 @@ void build_chap_response(char *challenge, u8 id, u16 challenge_length, char **ch
 int sessionsetup(tunnelidt t, sessionidt s, u8 routes);
 int cluster_send_session(int s);
 int cluster_send_tunnel(int t);
-#ifdef HAVE_LIBCLI
+int cluster_send_goodbye();
 void init_cli();
+void cli_do_file(FILE *fh);
 void cli_do(int sockfd);
-#endif
 #ifdef RINGBUFFER
 void ringbuffer_dump(FILE *stream);
 #endif
@@ -391,3 +454,9 @@ void initplugins();
 int run_plugins(int plugin_type, void *data);
 void add_plugin(char *plugin_name);
 void remove_plugin(char *plugin_name);
+void tunnelclear(tunnelidt t);
+void host_unreachable(ipt destination, u16 id, ipt source, char *packet, int packet_len);
+
+extern tunnelt *tunnel;
+extern sessiont *session;
+#define sessionfree (session[0].next)

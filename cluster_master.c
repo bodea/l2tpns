@@ -1,5 +1,5 @@
 // L2TPNS Cluster Master
-// $Id: cluster_master.c,v 1.1 2003-12-16 07:07:39 fred_nerk Exp $
+// $Id: cluster_master.c,v 1.2 2004-03-05 00:09:03 fred_nerk Exp $
 
 #include <stdio.h>
 #include <netinet/in.h>
@@ -51,6 +51,7 @@ int handle_hello(char *buf, int l, struct sockaddr_in *src_addr, uint32_t addr);
 int handle_tunnel(char *buf, int l, uint32_t addr);
 int handle_session(char *buf, int l, uint32_t addr);
 int handle_ping(char *buf, int l, uint32_t addr);
+int handle_goodbye(char *buf, int l, uint32_t addr);
 int backup_up(slave *s);
 int backup_down(slave *s);
 int return_state(slave *s);
@@ -91,7 +92,7 @@ int main(int argc, char *argv[])
 
     signal(SIGCHLD, sigchild_handler);
 
-    log(0, "Cluster Manager $Id: cluster_master.c,v 1.1 2003-12-16 07:07:39 fred_nerk Exp $ starting\n");
+    log(0, "Cluster Manager $Id: cluster_master.c,v 1.2 2004-03-05 00:09:03 fred_nerk Exp $ starting\n");
 
     to.tv_sec = 1;
     to.tv_usec = 0;
@@ -156,6 +157,7 @@ int main(int argc, char *argv[])
 
 int processmsg(char *buf, int l, struct sockaddr_in *src_addr)
 {
+    slave *s;
     char mtype;
     uint32_t addr;
 
@@ -167,6 +169,16 @@ int processmsg(char *buf, int l, struct sockaddr_in *src_addr)
     l -= sizeof(uint32_t);
 
     mtype = *buf; buf++; l--;
+
+    if (mtype != C_GOODBYE && (s = find_slave(addr)) && s->down)
+    {
+	char *hostname;
+	hostname = calloc(l + 1, 1);
+	memcpy(hostname, buf, l);
+	log(1, "Slave \"%s\" (for %s) has come back.\n", hostname, inet_toa(s->ip_address));
+	backup_down(s);
+	free(hostname);
+    }
 
     switch (mtype)
     {
@@ -186,6 +198,10 @@ int processmsg(char *buf, int l, struct sockaddr_in *src_addr)
 	case C_SESSION:
 	    if (!find_slave(addr)) handle_hello((char *)(buf + 1), *(char *)buf, src_addr, addr);
 	    handle_session(buf, l, addr);
+	    break;
+	case C_GOODBYE:
+	    if (!find_slave(addr)) break;
+	    handle_goodbye(buf, l, addr);
 	    break;
     }
     return mtype;
@@ -475,6 +491,27 @@ int backup_down(slave *s)
 	sleep(2);
 	kill(s->pid, SIGKILL);
     }
+    return 0;
+}
+
+int handle_goodbye(char *buf, int l, uint32_t addr)
+{
+    int i;
+    slave *s;
+
+    // Is this a slave we have state information for?
+    if ((s = find_slave(addr)))
+    {
+        log(0, "Received goodbye for slave %s\n", s->hostname);
+	ll_delete(slaves, s);
+	for (i = 0; i < s->num_tunnels; i++)
+	    if (s->tunnels[i]) free(s->tunnels[i]);
+	for (i = 0; i < s->num_sessions; i++)
+	    if (s->sessions[i]) free(s->sessions[i]);
+	if (s->hostname) free(s->hostname);
+	free(s);
+    }
+
     return 0;
 }
 

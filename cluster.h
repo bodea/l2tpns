@@ -1,11 +1,12 @@
 // L2TPNS Clustering Stuff
-// $Id: cluster.h,v 1.1 2003-12-16 07:07:39 fred_nerk Exp $
+// $Id: cluster.h,v 1.2 2004-03-05 00:09:03 fred_nerk Exp $
 
 #define C_HELLO			1
 #define C_HELLO_RESPONSE	2
 #define C_PING			3
 #define C_TUNNEL		4
 #define C_SESSION		5
+#define C_GOODBYE		6
 
 #define CLUSTERPORT		32792
 #define CLUSTERCLIENTPORT	32793

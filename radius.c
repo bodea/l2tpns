@@ -1,5 +1,5 @@
 // L2TPNS Radius Stuff
-// $Id: radius.c,v 1.1 2003-12-16 07:07:39 fred_nerk Exp $
+// $Id: radius.c,v 1.2 2004-03-05 00:09:03 fred_nerk Exp $
 
 #include <time.h>
 #include <stdio.h>
@@ -16,20 +16,13 @@
 #include "plugin.h"
 #include "util.h"
 
-extern char *radiussecret;
 extern radiust *radius;
 extern sessiont *session;
 extern tunnelt *tunnel;
-extern ipt radiusserver[MAXRADSERVER]; // radius servers
 extern u32 sessionid;
-extern u8 radiusfree;
 extern int radfd;
-extern u8 numradiusservers;
-extern char debug;
-extern unsigned long default_dns1, default_dns2;
 extern struct Tstats *_statistics;
-extern int radius_accounting;
-extern uint32_t bind_address;
+extern struct configt *config;
 
 const char *radius_state(int state)
 {
@@ -51,27 +44,35 @@ void initrad(void)
 
 void radiusclear(u8 r, sessionidt s)
 {
-	radius[r].state = RADIUSNULL;
 	if (s) session[s].radius = 0;
-	memset(&radius[r], 0, sizeof(radius[r]));
-	radius[r].next = radiusfree;
-	radiusfree = r;
+	memset(&radius[r], 0, sizeof(radius[r])); // radius[r].state = RADIUSNULL;
+}
+
+static u8 new_radius()
+{
+	u8 i;
+	for (i = 1; i < MAXRADIUS; i++)
+	{
+		if (radius[i].state == RADIUSNULL)
+			return i;
+	}
+	log(0, 0, 0, 0, "Can't find a free radius session! This could be bad!\n");
+	return 0;
 }
 
 u8 radiusnew(sessionidt s)
 {
 	u8 r;
-	if (!radiusfree)
+	if (!(r = new_radius()))
 	{
 		log(1, 0, s, session[s].tunnel, "No free RADIUS sessions\n");
 		STAT(radius_overflow);
 		return 0;
 	};
-	r = radiusfree;
-	session[s].radius = r;
-	radiusfree = radius[r].next;
 	memset(&radius[r], 0, sizeof(radius[r]));
+	session[s].radius = r;
 	radius[r].session = s;
+	radius[r].state = RADIUSWAIT;
 	return r;
 }
 
@@ -87,19 +88,19 @@ void radiussend(u8 r, u8 state)
 #ifdef STAT_CALLS
 	STAT(call_radiussend);
 #endif
-	if (!numradiusservers)
-	{
-		log(0, 0, 0, 0, "No RADIUS servers\n");
-		return;
-	}
-	if (!radiussecret)
-	{
-		log(0, 0, 0, 0, "No RADIUS secret\n");
-		return;
-	}
 	s = radius[r].session;
+	if (!config->numradiusservers)
+	{
+		log(0, 0, s, session[s].tunnel, "No RADIUS servers\n");
+		return;
+	}
+	if (!*config->radiussecret)
+	{
+		log(0, 0, s, session[s].tunnel, "No RADIUS secret\n");
+		return;
+	}
 
-	if (state != RADIUSAUTH && !radius_accounting)
+	if (state != RADIUSAUTH && !config->radius_accounting)
 	{
 		// Radius accounting is turned off
 		radiusclear(r, s);
@@ -111,7 +112,7 @@ void radiussend(u8 r, u8 state)
 	radius[r].state = state;
 	radius[r].retry = backoff(radius[r].try++);
 	log(4, 0, s, session[s].tunnel, "Send RADIUS %d state %s try %d\n", r, radius_state(radius[r].state), radius[r].try);
-	if (radius[r].try > numradiusservers * 2)
+	if (radius[r].try > config->numradiusservers * 2)
 	{
 		if (s)
 		{
@@ -177,7 +178,7 @@ void radiussend(u8 r, u8 state)
 				{
 					MD5_CTX ctx;
 					MD5Init(&ctx);
-					MD5Update(&ctx, radiussecret, strlen(radiussecret));
+					MD5Update(&ctx, config->radiussecret, strlen(config->radiussecret));
 					if (p)
 						MD5Update(&ctx, pass + p - 16, 16);
 					else
@@ -280,7 +281,7 @@ void radiussend(u8 r, u8 state)
 	// NAS-IP-Address
 	*p = 4;
 	p[1] = 6;
-	*(u32 *)(p + 2) = bind_address;
+	*(u32 *)(p + 2) = config->bind_address;
 	p += p[1];
 
 	// All AVpairs added
@@ -295,14 +296,14 @@ void radiussend(u8 r, u8 state)
 	    MD5Update(&ctx, b, 4);
 	    MD5Update(&ctx, z, 16);
 	    MD5Update(&ctx, b + 20, (p - b) - 20);
-	    MD5Update(&ctx, radiussecret, strlen(radiussecret));
+	    MD5Update(&ctx, config->radiussecret, strlen(config->radiussecret));
 	    MD5Final(hash, &ctx);
 	    memcpy(b + 4, hash, 16);
 	    memcpy(radius[r].auth, hash, 16);
 	}
 	memset(&addr, 0, sizeof(addr));
 	addr.sin_family = AF_INET;
-	*(u32 *) & addr.sin_addr = htonl(radiusserver[(radius[r].try - 1) % numradiusservers]);
+	*(u32 *) & addr.sin_addr = config->radiusserver[(radius[r].try - 1) % config->numradiusservers];
 	addr.sin_port = htons((state == RADIUSAUTH) ? RADPORT : RADAPORT);
 
 	log_hex(5, "RADIUS Send", b, (p - b));
@@ -348,7 +349,7 @@ void processrad(u8 * buf, int len)
 	MD5Update(&ctx, buf, 4);
 	MD5Update(&ctx, radius[r].auth, 16);
 	MD5Update(&ctx, buf + 20, len - 20);
-	MD5Update(&ctx, radiussecret, strlen(radiussecret));
+	MD5Update(&ctx, config->radiussecret, strlen(config->radiussecret));
 	MD5Final(hash, &ctx);
 	do {
 		if (memcmp(hash, buf + 4, 16))
@@ -534,22 +535,22 @@ void processrad(u8 * buf, int len)
 			// Check for Assign-IP-Address
 			if (!session[s].ip || session[s].ip == 0xFFFFFFFE)
 			{
-				session[s].ip = assign_ip_address();
+				assign_ip_address(s);
 				if (session[s].ip)
 					log(3, 0, s, t, "   No IP allocated by radius. Assigned %s from pool\n",
 							inet_toa(htonl(session[s].ip)));
 				else
 					log(3, 0, s, t, "   No IP allocated by radius. None available in pool\n");
 			}
-			if (!session[s].dns1 && default_dns1)
+			if (!session[s].dns1 && config->default_dns1)
 			{
-				session[s].dns1 = htonl(default_dns1);
-				log(3, 0, s, t, "   Sending dns1 = %s\n", inet_toa(default_dns1));
+				session[s].dns1 = htonl(config->default_dns1);
+				log(3, 0, s, t, "   Sending dns1 = %s\n", inet_toa(config->default_dns1));
 			}
-			if (!session[s].dns2 && default_dns2)
+			if (!session[s].dns2 && config->default_dns2)
 			{
-				session[s].dns2 = htonl(default_dns2);
-				log(3, 0, s, t, "   Sending dns2 = %s\n", inet_toa(default_dns2));
+				session[s].dns2 = htonl(config->default_dns2);
+				log(3, 0, s, t, "   Sending dns2 = %s\n", inet_toa(config->default_dns2));
 			}
 
 			if (session[s].ip)
@@ -612,3 +613,18 @@ void radiusretry(u8 r)
 	}
 }
 
+void radius_clean()
+{
+	int i;
+
+	log(1, 0, 0, 0, "Cleaning radius session array\n");
+
+	for (i = 1; i < MAXRADIUS; i++)
+	{
+		if (radius[i].retry == 0
+				|| !session[radius[i].session].opened
+				|| session[radius[i].session].die
+				|| session[radius[i].session].tunnel == 0)
+			radiusclear(i, 0);
+	}
+}

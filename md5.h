@@ -1,8 +1,6 @@
 /* GLOBAL.H - RSAREF types and constants
  */
 
-#include "config.h"
-
 /* PROTOTYPES should be set to one if and only if the compiler supports
   function argument prototyping.
 The following makes PROTOTYPES default to 0 if it has not already
