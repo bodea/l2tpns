@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.15 2004-08-02 05:40:21 fred_nerk Exp $
+// $Id: l2tpns.h,v 1.16 2004-08-26 04:44:26 fred_nerk Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -40,6 +40,7 @@
 #define MAX_LOG_LENGTH	512		// Maximum size of log message
 #define ECHO_TIMEOUT	60		// Time between last packet sent and LCP ECHO generation
 #define IDLE_TIMEOUT	240		// Time between last packet sent and LCP ECHO generation
+#define BUSY_WAIT_TIMEOUT	3000	// 5 minutes in 1/10th seconds to wait for radius to cleanup on shutdown
 
 // Constants
 #include "config.h"

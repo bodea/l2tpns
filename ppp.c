@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.12 2004-08-13 00:02:50 fred_nerk Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.13 2004-08-26 04:44:26 fred_nerk Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -251,7 +251,7 @@ void dumplcp(u8 *p, int l)
 		{
 			case 1: // Maximum-Receive-Unit
 				if (length == 4)
-				log(4, 0, 0, 0, "    %s %d\n", lcp_types[type], ntohs(*(u16 *)(o + 2)));
+					log(4, 0, 0, 0, "    %s %d\n", lcp_types[type], ntohs(*(u16 *)(o + 2)));
 				else
 					log(4, 0, 0, 0, "    %s odd length %d\n", lcp_types[type], length);
 				break;
@@ -259,7 +259,7 @@ void dumplcp(u8 *p, int l)
 				{
 					if (length == 4)
 					{
-					int proto = ntohs(*(u16 *)(o + 2));
+						int proto = ntohs(*(u16 *)(o + 2));
 						log(4, 0, 0, 0, "   %s 0x%x (%s)\n", lcp_types[type], proto,
 							proto == 0xC223 ? "CHAP" :
 							proto == 0xC023 ? "PAP"  : "UNKNOWN");
@@ -278,8 +278,8 @@ void dumplcp(u8 *p, int l)
 				{
 					if (length == 6)
 					{
-					u32 magicno = ntohl(*(u32 *)(o + 2));
-					log(4, 0, 0, 0, "    %s %x\n", lcp_types[type], magicno);
+						u32 magicno = ntohl(*(u32 *)(o + 2));
+						log(4, 0, 0, 0, "    %s %x\n", lcp_types[type], magicno);
 					}
 					else
 						log(4, 0, 0, 0, "   %s odd length %d\n", lcp_types[type], length);

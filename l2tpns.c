@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.22 2004-08-13 00:02:50 fred_nerk Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.23 2004-08-26 04:43:52 fred_nerk Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -540,18 +540,26 @@ int cmd_show_ipcache(struct cli_def *cli, char *command, char **argv, int argc)
 
 	cli_print(cli, "%7s %s", "Sess#", "IP Address");
 
-	for (i = 0; i < 256; ++i) {
-		if (!d[i]) continue;
+	for (i = 0; i < 256; ++i)
+	{
+		if (!d[i])
+			continue;
 		e = (char**) d[i];
-		for (j = 0; j < 256; ++j) {
-			if (!e[j]) continue;
+		for (j = 0; j < 256; ++j)
+		{
+			if (!e[j])
+				continue;
 			f = (char**) e[j];
-			for (k = 0; k < 256; ++k) {
-				if (!f[k]) continue;
+			for (k = 0; k < 256; ++k)
+			{
+				if (!f[k])
+					continue;
 				g = (char**)f[k];
-				for (l = 0; l < 256; ++l) {
-					if (!g[l]) continue;
-					cli_print(cli, "%7d %d.%d.%d.%d",  (int) g[l], i, j, k, l);
+				for (l = 0; l < 256; ++l)
+				{
+					if (!g[l])
+						continue;
+					cli_print(cli, "%7d %d.%d.%d.%d", (int) g[l], i, j, k, l);
 					++count;
 				}
 			}
@@ -573,7 +581,8 @@ sessionidt sessionbyuser(char *username)
 	int s;
 	CSTAT(call_sessionbyuser);
 
-	for (s = 1; s < MAXSESSION ; ++s) {
+	for (s = 1; s < MAXSESSION ; ++s)
+	{
 		if (session[s].walled_garden)
 			continue;		// Skip walled garden users.
 
@@ -742,7 +751,8 @@ void processipout(u8 * buf, int len)
 		static int rate = 0;	// Number of ICMP packets we've sent this second.
 		static int last = 0;	// Last time we reset the ICMP packet counter 'rate'.
 
-		if (last != time_now) {
+		if (last != time_now)
+		{
 			last = time_now;
 			rate = 0;
 		}
@@ -782,7 +792,8 @@ void processipout(u8 * buf, int len)
 	// Add on L2TP header
 	{
 		u8 *p = makeppp(b, sizeof(b), buf, len, t, s, PPPIP);
-		if (!p) {
+		if (!p)
+		{
 			log(3, session[s].ip, s, t, "failed to send packet in processipout.\n");
 			return;
 		}
@@ -808,7 +819,8 @@ void send_ipout(sessionidt s, u8 *buf, int len)
 
 	u8 b[MAXETHER + 20];
 
-	if (len < 0 || len > MAXETHER) {
+	if (len < 0 || len > MAXETHER)
+	{
 		log(1,0,0,0, "Odd size IP packet: %d bytes\n", len);
 		return;
 	}
@@ -833,7 +845,8 @@ void send_ipout(sessionidt s, u8 *buf, int len)
 	// Add on L2TP header
 	{
 		u8 *p = makeppp(b, sizeof(b),  buf, len, t, s, PPPIP);
-		if (!p) {
+		if (!p)
+		{
 			log(3, session[s].ip, s, t, "failed to send packet in send_ipout.\n");
 			return;
 		}
@@ -963,8 +976,10 @@ int throttle_session(sessionidt s, int throttle)
 	if (!*session[s].user)
 	        return 0; // User not logged in
 
-	if (throttle) {
-		if (session[s].tbf_in || session[s].tbf_out) {
+	if (throttle)
+	{
+		if (session[s].tbf_in || session[s].tbf_out)
+		{
 			if (throttle == session[s].throttle)
 				return 1;
 
@@ -977,7 +992,9 @@ int throttle_session(sessionidt s, int throttle)
 		session[s].tbf_in = new_tbf(s, throttle*1024/4, throttle*1024/8, send_ipin);
 		session[s].tbf_out = new_tbf(s, throttle*1024/4, throttle*1024/8, send_ipout);
 
-		if (throttle != session[s].throttle) {	// Changed. Flood to slaves.
+		if (throttle != session[s].throttle)
+		{
+			// Changed. Flood to slaves.
 			session[s].throttle = throttle;
 			cluster_send_session(s);
 		}
@@ -996,7 +1013,9 @@ int throttle_session(sessionidt s, int throttle)
 	free_tbf(session[s].tbf_out);
 	session[s].tbf_out = 0;
 
-	if (throttle != session[s].throttle) {	// Changed. Flood to slaves.
+	if (throttle != session[s].throttle)
+	{
+		// Changed. Flood to slaves.
 		session[s].throttle = throttle;
 		cluster_send_session(s);
 	}
@@ -1030,7 +1049,8 @@ void sessionshutdown(sessionidt s, char *reason)
 	}
 
 	// RADIUS Stop message
-	if (session[s].opened && !walled_garden && !dead) {
+	if (session[s].opened && !walled_garden && !dead)
+	{
 		u16 r = session[s].radius;
 		if (!r)
 		{
@@ -1105,7 +1125,8 @@ void sendipcp(tunnelidt t, sessionidt s)
 	}
 
 	q = makeppp(buf,sizeof(buf), 0, 0, t, s, PPPIPCP);
-	if (!q) {
+	if (!q)
+	{
 		log(3, session[s].ip, s, t, "failed to send packet in sendipcp.\n");
 		return;
 	}
@@ -1287,7 +1308,8 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 		char called[MAXTEL] = ""; // called number
 		char calling[MAXTEL] = ""; // calling number
 
-		if (!config->cluster_iam_master) {
+		if (!config->cluster_iam_master)
+		{
 			master_forward_packet(buf, len, addr->sin_addr.s_addr, addr->sin_port);
 			return;
 		}
@@ -1308,7 +1330,8 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 				//
 				// Is this a duplicate of the first packet? (SCCRQ)
 				//
-			for ( i = 1; i <= config->cluster_highest_tunnelid ; ++i) {
+			for (i = 1; i <= config->cluster_highest_tunnelid ; ++i)
+			{
 				if (tunnel[i].state != TUNNELOPENING ||
 					tunnel[i].ip != ntohl(*(ipt *) & addr->sin_addr) ||
 					tunnel[i].port != ntohs(addr->sin_port) )
@@ -1318,7 +1341,8 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 			}
 		}
 
-		if (!t) {
+		if (!t)
+		{
 			if (!(t = new_tunnel()))
 			{
 				log(1, ntohl(addr->sin_addr.s_addr), 0, 0, "No more tunnels\n");
@@ -1457,17 +1481,21 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 					{
 						u16 rescode = ntohs(*(u16 *)(b));
 						const char* resdesc = "(unknown)";
-						if (message == 4) { /* StopCCN */
+						if (message == 4)
+						{ /* StopCCN */
 							if (rescode <= MAX_STOPCCN_RESULT_CODE)
 								resdesc = stopccn_result_codes[rescode];
-						} else if (message == 14) { /* CDN */
+						}
+						else if (message == 14)
+						{ /* CDN */
 							if (rescode <= MAX_CDN_RESULT_CODE)
 								resdesc = cdn_result_codes[rescode];
 						}
 
 						log(4, ntohl(addr->sin_addr.s_addr), s, t, "   Result Code %d: %s\n",
 							rescode, resdesc);
-						if (n >= 4) {
+						if (n >= 4)
+						{
 							u16 errcode = ntohs(*(u16 *)(b + 2));
 							const char* errdesc = "(unknown)";
 							if (errcode <= MAX_ERROR_CODE)
@@ -2066,7 +2094,8 @@ int regular_cleanups(void)
 			u8 b[MAXCONTROL] = {0};
 
 			u8 *q = makeppp(b, sizeof(b), 0, 0, session[s].tunnel, s, PPPLCP);
-			if (!q) {
+			if (!q)
+			{
 				log(3, session[s].ip, s, t, "failed to send ECHO packet.\n");
 				continue;
 			}
@@ -2156,16 +2185,29 @@ int regular_cleanups(void)
 int still_busy(void)
 {
 	int i;
-	static int last_talked = 0;
-	for (i = config->cluster_highest_tunnelid ; i > 0 ; --i) {
+	static clockt last_talked = 0;
+	static clockt start_busy_wait = 0;
+	if (start_busy_wait == 0)
+		start_busy_wait = TIME;
+
+	for (i = config->cluster_highest_tunnelid ; i > 0 ; --i)
+	{
 		if (!tunnel[i].controlc)
 			continue;
 
-		if (last_talked != TIME) {
+		if (last_talked != TIME)
+		{
 			log(2,0,0,0, "Tunnel %d still has un-acked control messages.\n", i);
 			last_talked = TIME;
 		}
 		return 1;
+	}
+
+	// We stop waiting for radius after BUSY_WAIT_TIMEOUT 1/10th seconds
+	if (abs(TIME - start_busy_wait) > BUSY_WAIT_TIMEOUT)
+	{
+		log(1, 0, 0, 0, "Giving up waiting for RADIUS to be empty. Shutting down anyway.\n");
+		return 0;
 	}
 
 	for (i = 1; i < MAXRADIUS; i++)
@@ -2175,7 +2217,8 @@ int still_busy(void)
 	        if (radius[i].state == RADIUSWAIT)
 			continue;
 
-		if (last_talked != TIME) {
+		if (last_talked != TIME)
+		{
 			log(2,0,0,0, "Radius session %d is still busy (sid %d)\n", i, radius[i].session);
 			last_talked = TIME;
 		}
@@ -2300,7 +2343,8 @@ void mainloop(void)
 			for (i = 0; i < config->num_radfds; i++)
 				if (FD_ISSET(radfds[i], &r))
 					processrad(buf, recv(radfds[i], buf, sizeof(buf), 0), i);
-			if (FD_ISSET(cluster_sockfd, &r)) {
+			if (FD_ISSET(cluster_sockfd, &r))
+			{
 				int size;
 				size = recvfrom(cluster_sockfd, buf, sizeof(buf), MSG_WAITALL, (void *) &addr, &alen);
 				processcluster(buf, size, addr.sin_addr.s_addr);
@@ -2350,7 +2394,8 @@ void mainloop(void)
 			// Runs on all machines both master and slave.
 		{
 			static clockt last_run = 0;
-			if (last_run != TIME) {
+			if (last_run != TIME)
+			{
 				last_run = TIME;
 				tbf_run_timer();
 			}
@@ -2360,10 +2405,15 @@ void mainloop(void)
 		 * something to read, else under load this will never actually run....
 		 *
 		 */
-		if (config->cluster_iam_master && next_clean <= time_now) {
-			if (regular_cleanups()) { // Did it finish?
+		if (config->cluster_iam_master && next_clean <= time_now)
+		{
+			if (regular_cleanups())
+			{
+				// Did it finish?
 				next_clean = time_now + 1 ;	// Didn't finish. Check quickly.
-			} else {
+			}
+			else
+			{
 				next_clean = time_now + config->cleanup_interval; // Did. Move to next interval.
 			}
 		}
@@ -2473,7 +2523,8 @@ void initdata(void)
 	memset(ip_address_pool, 0, sizeof(ippoolt) * MAXIPPOOL);
 
 		// Put all the sessions on the free list marked as undefined.
-	for (i = 1; i < MAXSESSION - 1; i++) {
+	for (i = 1; i < MAXSESSION - 1; i++)
+	{
 		session[i].next = i + 1;
 		session[i].tunnel = T_UNDEF;	// mark it as not filled in.
 	}
@@ -2481,9 +2532,8 @@ void initdata(void)
 	sessionfree = 1;
 
 		// Mark all the tunnels as undefined (waiting to be filled in by a download).
-	for (i = 1; i < MAXTUNNEL- 1; i++) {
+	for (i = 1; i < MAXTUNNEL- 1; i++)
 		tunnel[i].state = TUNNELUNDEF;	// mark it as not filled in.
-	}
 
 	if (!*hostname)
 	{
@@ -2605,7 +2655,8 @@ void rebuild_address_pool(void)
 		//
 		// Zero the IP pool allocation, and build
 		// a map from IP address to pool index.
-	for (i = 1; i < MAXIPPOOL; ++i) {
+	for (i = 1; i < MAXIPPOOL; ++i)
+	{
 		ip_address_pool[i].assigned = 0;
 		ip_address_pool[i].session = 0;
 		if (!ip_address_pool[i].address)
@@ -2614,13 +2665,16 @@ void rebuild_address_pool(void)
 		cache_ipmap(ip_address_pool[i].address, -i);	// Map pool IP to pool index.
 	}
 
-	for (i = 0; i < MAXSESSION; ++i) {
+	for (i = 0; i < MAXSESSION; ++i)
+	{
 		int ipid;
 		if (!session[i].ip || !session[i].tunnel)
 			continue;
 		ipid = - lookup_ipmap(htonl(session[i].ip));
 
-		if (session[i].ip_pool_index < 0) {	// Not allocated out of the pool.
+		if (session[i].ip_pool_index < 0)
+		{
+			// Not allocated out of the pool.
 			if (ipid < 1)			// Not found in the pool either? good.
 				continue;
 
@@ -2631,7 +2685,8 @@ void rebuild_address_pool(void)
 		}
 
 
-		if (ipid > MAXIPPOOL || ipid < 0) {
+		if (ipid > MAXIPPOOL || ipid < 0)
+		{
 			log(0, 0, i, 0, "Session %d has a pool IP that's not found in the pool! (%d)\n", i, ipid);
 			ipid = -1;
 			session[i].ip_pool_index = ipid;
@@ -2786,7 +2841,6 @@ void snoop_send_packet(char *packet, u16 size, ipt destination, u16 port)
 }
 
 void dump_acct_info()
-
 {
 	char filename[1024];
 	char timestr[64];
@@ -2825,10 +2879,10 @@ void dump_acct_info()
 
 		log(4, 0, 0, 0, "Dumping accounting information for %s\n", session[i].user);
 		fprintf(f, "%s %s %d %u %u\n",
-		        session[i].user,		// username
-		        inet_toa(htonl(session[i].ip)),	// ip
-		        (session[i].throttle) ? 2 : 1,	// qos
-		        (u32)session[i].cin,		// uptxoctets
+		        session[i].user, 		// username
+		        inet_toa(htonl(session[i].ip)), 	// ip
+		        (session[i].throttle) ? 2 : 1, 	// qos
+		        (u32)session[i].cin, 		// uptxoctets
 		        (u32)session[i].cout);		// downrxoctets
 
 		session[i].pin = session[i].cin = 0;
@@ -3441,7 +3495,8 @@ void read_config_file()
 	FILE *f;
 
 	if (!config->config_file) return;
-	if (!(f = fopen(config->config_file, "r"))) {
+	if (!(f = fopen(config->config_file, "r")))
+	{
 		fprintf(stderr, "Can't open config file %s: %s\n", config->config_file, strerror(errno));
 		return;
 	}
@@ -3554,7 +3609,8 @@ int load_session(sessionidt s, sessiont *new)
 
 		// Sanity checks.
 	if (new->ip_pool_index >= MAXIPPOOL ||
-		new->tunnel >= MAXTUNNEL) {
+		new->tunnel >= MAXTUNNEL)
+	{
 		log(0,0,s,0, "Strange session update received!\n");
 			// FIXME! What to do here?
 		return 0;
@@ -3585,7 +3641,9 @@ int load_session(sessionidt s, sessiont *new)
 				uncache_ipmap(session[s].ip);
 		}
 
-		if (new->ip) {		// If there's a new one, add it.
+		if (new->ip)
+		{
+			// If there's a new one, add it.
 			if (new->ip_pool_index == -1)
 				routeset(s, new->ip, 0, 0, 1);
 			else
@@ -3869,7 +3927,8 @@ void become_master(void)
 	int s;
 	run_plugins(PLUGIN_BECOME_MASTER, NULL);
 
-	for (s = 1; s <= config->cluster_highest_sessionid ; ++s) {
+	for (s = 1; s <= config->cluster_highest_sessionid ; ++s)
+	{
 		if (!session[s].tunnel) // Not an in-use session.
 			continue;
 
@@ -3891,7 +3950,8 @@ int cmd_show_hist_idle(struct cli_def *cli, char *command, char **argv, int argc
 	time(&time_now);
 	for (i = 0; i < 64;++i) buckets[i] = 0;
 
-	for (s = 1; s <= config->cluster_highest_sessionid ; ++s) {
+	for (s = 1; s <= config->cluster_highest_sessionid ; ++s)
+	{
 		int idle;
 		if (!session[s].tunnel)
 			continue;
@@ -3907,7 +3967,8 @@ int cmd_show_hist_idle(struct cli_def *cli, char *command, char **argv, int argc
 		++buckets[idle];
 	}
 
-	for (i = 0; i < 63; ++i) {
+	for (i = 0; i < 63; ++i)
+	{
 		cli_print(cli, "%3d seconds  : %7.2f%% (%6d)", i * 5, (double) buckets[i] * 100.0 / count , buckets[i]);
 	}
 	cli_print(cli, "lots of secs : %7.2f%% (%6d)", (double) buckets[63] * 100.0 / count , buckets[i]);
@@ -3927,7 +3988,8 @@ int cmd_show_hist_open(struct cli_def *cli, char *command, char **argv, int argc
 	time(&time_now);
 	for (i = 0; i < 64;++i) buckets[i] = 0;
 
-	for (s = 1; s <= config->cluster_highest_sessionid ; ++s) {
+	for (s = 1; s <= config->cluster_highest_sessionid ; ++s)
+	{
 		int open = 0, d;
 		if (!session[s].tunnel)
 			continue;
@@ -3935,7 +3997,8 @@ int cmd_show_hist_open(struct cli_def *cli, char *command, char **argv, int argc
 		d = time_now - session[s].opened;
 		if (d < 0)
 			d = 0;
-		while (d > 1 && open < 32) {
+		while (d > 1 && open < 32)
+		{
 			++open;
 			d >>= 1; // half.
 		}
@@ -3944,7 +4007,8 @@ int cmd_show_hist_open(struct cli_def *cli, char *command, char **argv, int argc
 	}
 
 	s = 1;
-	for (i = 0; i  < 30; ++i) {
+	for (i = 0; i  < 30; ++i)
+	{
 		cli_print(cli, " < %8d seconds : %7.2f%% (%6d)", s, (double) buckets[i] * 100.0 / count , buckets[i]);
 		s <<= 1;
 	}
