@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.34 2004-11-30 00:50:03 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.35 2004-11-30 01:08:21 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -478,9 +478,9 @@ void processlcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 		if (!response)
 		{
 			// Send back a ConfigAck
-			q = makeppp(b, sizeof(b), p, l, t, s, PPPLCP);
+			q = response = makeppp(b, sizeof(b), p, l, t, s, PPPLCP);
 			if (!q) return;
-			response = *q = ConfigAck;
+			*q = ConfigAck;
 		}
 
 		LOG(3, s, t, "Sending %s\n", ppp_lcp_types[response]);
