@@ -1,6 +1,6 @@
 // L2TPNS Radius Stuff
 
-char const *cvs_id_radius = "$Id: radius.c,v 1.18 2004-11-29 02:17:18 bodea Exp $";
+char const *cvs_id_radius = "$Id: radius.c,v 1.19 2004-11-30 06:50:26 bodea Exp $";
 
 #include <time.h>
 #include <stdio.h>
@@ -471,11 +471,12 @@ void processrad(u8 *buf, int len, char socket_index)
 				// Extract IP, routes, etc
 				u8 *p = buf + 20;
 				u8 *e = buf + len;
-				for (p = buf + 20; p < e && p[1]; p += p[1])
+				for (; p + 2 <= e && p[1] && p + p[1] <= e; p += p[1])
 				{
 					if (*p == 8)
 					{
 						// Framed-IP-Address
+					    	if (p[1] < 6) continue;
 						session[s].ip = ntohl(*(u32 *) (p + 2));
 						session[s].ip_pool_index = -1;
 						LOG(3, s, session[s].tunnel, "   Radius reply contains IP address %s\n",
@@ -484,6 +485,7 @@ void processrad(u8 *buf, int len, char socket_index)
 					else if (*p == 135)
 					{
 						// DNS address
+					    	if (p[1] < 6) continue;
 						session[s].dns1 = ntohl(*(u32 *) (p + 2));
 						LOG(3, s, session[s].tunnel, "   Radius reply contains primary DNS address %s\n",
 							fmtaddr(htonl(session[s].dns1), 0));
@@ -491,6 +493,7 @@ void processrad(u8 *buf, int len, char socket_index)
 					else if (*p == 136)
 					{
 						// DNS address
+					    	if (p[1] < 6) continue;
 						session[s].dns2 = ntohl(*(u32 *) (p + 2));
 						LOG(3, s, session[s].tunnel, "   Radius reply contains secondary DNS address %s\n",
 							fmtaddr(htonl(session[s].dns2), 0));
@@ -581,48 +584,51 @@ void processrad(u8 *buf, int len, char socket_index)
 							LOG(3, s, session[s].tunnel, "    Unknown filter\n");
 
 					}
-					else if (*p == 26)
+					else if (*p == 26 && p[1] >= 7)
 					{
 						// Vendor-Specific Attribute
 						int vendor = ntohl(*(int *)(p + 2));
 						char attrib = *(p + 6);
 						char attrib_length = *(p + 7) - 2;
+						char *avpair, *value, *key, *newp;
+
 						LOG(3, s, session[s].tunnel, "   Radius reply contains Vendor-Specific.  Vendor=%d Attrib=%d Length=%d\n", vendor, attrib, attrib_length);
-						if (attrib_length == 0) continue;
-						if (attrib != 1)
-							LOG(3, s, session[s].tunnel, "      Unknown vendor-specific\n");
-						else
+						if (vendor != 9 || attrib != 1)
 						{
-							char *avpair, *value, *key, *newp;
-							avpair = key = calloc(attrib_length + 1, 1);
-							memcpy(avpair, p + 8, attrib_length);
-							LOG(3, s, session[s].tunnel, "      Cisco-Avpair value: %s\n", avpair);
-							do {
-								value = strchr(key, '=');
-								if (!value) break;
-								*value++ = 0;
-
-								// Trim quotes off reply string
-								if (*value == '\'' || *value == '\"')
-								{
-									char *x;
-									value++;
-									x = value + strlen(value) - 1;
-									if (*x == '\'' || *x == '\"')
-										*x = 0;
-								}
-
-								// Run hooks
-								newp = strchr(value, ',');
-								if (newp) *newp++ = 0;
-								{
-									struct param_radius_response p = { &tunnel[session[s].tunnel], &session[s], key, value };
-									run_plugins(PLUGIN_RADIUS_RESPONSE, &p);
-								}
-								key = newp;
-							} while (newp);
-							free(avpair);
+							LOG(3, s, session[s].tunnel, "      Unknown vendor-specific\n");
+							continue;
 						}
+
+						if (attrib_length < 0) continue;
+
+						avpair = key = calloc(attrib_length + 1, 1);
+						memcpy(avpair, p + 8, attrib_length);
+						LOG(3, s, session[s].tunnel, "      Cisco-Avpair value: %s\n", avpair);
+						do {
+							value = strchr(key, '=');
+							if (!value) break;
+							*value++ = 0;
+
+							// Trim quotes off reply string
+							if (*value == '\'' || *value == '\"')
+							{
+								char *x;
+								value++;
+								x = value + strlen(value) - 1;
+								if (*x == '\'' || *x == '\"')
+									*x = 0;
+							}
+
+							// Run hooks
+							newp = strchr(value, ',');
+							if (newp) *newp++ = 0;
+							{
+								struct param_radius_response p = { &tunnel[session[s].tunnel], &session[s], key, value };
+								run_plugins(PLUGIN_RADIUS_RESPONSE, &p);
+							}
+							key = newp;
+						} while (newp);
+						free(avpair);
 					}
 				}
 			}
