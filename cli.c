@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.17 2004-09-21 05:09:09 fred_nerk Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.18 2004-10-28 03:31:11 bodea Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -104,7 +104,7 @@ int cmd_uptime(struct cli_def *cli, char *command, char **argv, int argc);
 int regular_stuff(struct cli_def *cli);
 void parsemac(char *string, char mac[6]);
 
-void init_cli()
+void init_cli(char *hostname)
 {
 	FILE *f;
 	char buf[4096];
@@ -114,8 +114,8 @@ void init_cli()
 	struct sockaddr_in addr;
 
 	cli = cli_init();
-	if (config->hostname && *config->hostname)
-		cli_set_hostname(cli, config->hostname);
+	if (hostname && *hostname)
+		cli_set_hostname(cli, hostname);
 	else
 		cli_set_hostname(cli, "l2tpns");
 
@@ -229,8 +229,8 @@ void init_cli()
 	addr.sin_port = htons(23);
 	if (bind(clifd, (void *) &addr, sizeof(addr)) < 0)
 	{
-			log(0, 0, 0, 0, "Error listening on cli port 23: %s\n", strerror(errno));
-			return;
+		log(0, 0, 0, 0, "Error listening on cli port 23: %s\n", strerror(errno));
+		return;
 	}
 	listen(clifd, 10);
 }
@@ -258,9 +258,6 @@ void cli_do(int sockfd)
 			log(0, 0, 0, 0, "This is probably really really bad.\n");
 		}
 	}
-
-	if (config->hostname && *config->hostname)
-		cli_set_hostname(cli, config->hostname);
 
 	signal(SIGPIPE, SIG_DFL);
 	signal(SIGCHLD, SIG_DFL);
@@ -368,7 +365,7 @@ int cli_arg_help(struct cli_def *cli, int cr_ok, char *entry, ...)
 
 	va_end(ap);
 	if (cr_ok)
-			cli_print(cli, "  <cr>");
+		cli_print(cli, "  <cr>");
 
 	return CLI_OK;
 }
@@ -396,27 +393,27 @@ int cmd_show_session(struct cli_def *cli, char *command, char **argv, int argc)
 				continue;
 			}
 			cli_print(cli, "\r\nSession %d:", s);
-			cli_print(cli, "		User:				%s", session[s].user[0] ? session[s].user : "none");
-			cli_print(cli, "		Calling Num:		%s", session[s].calling);
-			cli_print(cli, "		Called Num:		%s", session[s].called);
-			cli_print(cli, "		Tunnel ID:		%d", session[s].tunnel);
-			cli_print(cli, "		IP address:		%s", inet_toa(htonl(session[s].ip)));
-			cli_print(cli, "		Unique SID:		%lu", session[s].unique_id);
-			cli_print(cli, "		Idle time:		%u seconds", abs(time_now - session[s].last_packet));
-			cli_print(cli, "		Next Recv:		%u", session[s].nr);
-			cli_print(cli, "		Next Send:		%u", session[s].ns);
-			cli_print(cli, "		Bytes In/Out:		%lu/%lu", (unsigned long)session[s].total_cout, (unsigned long)session[s].total_cin);
-			cli_print(cli, "		Pkts In/Out:		%lu/%lu", (unsigned long)session[s].pout, (unsigned long)session[s].pin);
-			cli_print(cli, "		MRU:				%d", session[s].mru);
-			cli_print(cli, "		Radius Session:		%u", session[s].radius);
-			cli_print(cli, "		Rx Speed:		%lu", session[s].rx_connect_speed);
-			cli_print(cli, "		Tx Speed:		%lu", session[s].tx_connect_speed);
+			cli_print(cli, "	User:		%s", session[s].user[0] ? session[s].user : "none");
+			cli_print(cli, "	Calling Num:	%s", session[s].calling);
+			cli_print(cli, "	Called Num:	%s", session[s].called);
+			cli_print(cli, "	Tunnel ID:	%d", session[s].tunnel);
+			cli_print(cli, "	IP address:	%s", inet_toa(htonl(session[s].ip)));
+			cli_print(cli, "	Unique SID:	%lu", session[s].unique_id);
+			cli_print(cli, "	Idle time:	%u seconds", abs(time_now - session[s].last_packet));
+			cli_print(cli, "	Next Recv:	%u", session[s].nr);
+			cli_print(cli, "	Next Send:	%u", session[s].ns);
+			cli_print(cli, "	Bytes In/Out:	%lu/%lu", (unsigned long)session[s].total_cout, (unsigned long)session[s].total_cin);
+			cli_print(cli, "	Pkts In/Out:	%lu/%lu", (unsigned long)session[s].pout, (unsigned long)session[s].pin);
+			cli_print(cli, "	MRU:		%d", session[s].mru);
+			cli_print(cli, "	Radius Session:	%u", session[s].radius);
+			cli_print(cli, "	Rx Speed:	%lu", session[s].rx_connect_speed);
+			cli_print(cli, "	Tx Speed:	%lu", session[s].tx_connect_speed);
 			if (session[s].snoop_ip && session[s].snoop_port)
-				cli_print(cli, "		Intercepted:	%s:%d", inet_toa(session[s].snoop_ip), session[s] .snoop_port);
+				cli_print(cli, "	Intercepted:	%s:%d", inet_toa(session[s].snoop_ip), session[s] .snoop_port);
 			else
-				cli_print(cli, "		Intercepted:	no");
-			cli_print(cli, "		Throttled:		%s", session[s].throttle ? "YES" : "no");
-			cli_print(cli, "		Walled Garden:		%s", session[s].walled_garden ? "YES" : "no");
+				cli_print(cli, "	Intercepted:	no");
+			cli_print(cli, "	Throttled:	%s", session[s].throttle ? "YES" : "no");
+			cli_print(cli, "	Walled Garden:	%s", session[s].walled_garden ? "YES" : "no");
 			b_in = session[s].tbf_in;
 			b_out = session[s].tbf_out;
 			if (b_in || b_out)
@@ -471,6 +468,7 @@ int cmd_show_session(struct cli_def *cli, char *command, char **argv, int argc)
 			"idle",
 			"LAC",
 			"CLI");
+
 	for (i = 1; i < MAXSESSION; i++)
 	{
 		char *userip, *tunnelip;
@@ -541,20 +539,21 @@ int cmd_show_tunnels(struct cli_def *cli, char *command, char **argv, int argc)
 					continue;
 				}
 				cli_print(cli, "\r\nTunnel %d:", t);
-				cli_print(cli, "		State:				%s", states[tunnel[t].state]);
-				cli_print(cli, "		Hostname:		%s", tunnel[t].hostname[0] ? tunnel[t].hostname : "(none)");
-				cli_print(cli, "		Remote IP:		%s", inet_toa(htonl(tunnel[t].ip)));
-				cli_print(cli, "		Remote Port:		%d", tunnel[t].port);
-				cli_print(cli, "		Rx Window:		%u", tunnel[t].window);
-				cli_print(cli, "		Next Recv:		%u", tunnel[t].nr);
-				cli_print(cli, "		Next Send:		%u", tunnel[t].ns);
-				cli_print(cli, "		Queue Len:		%u", tunnel[t].controlc);
-				cli_print(cli, "		Last Packet Age:%u", (unsigned)(time_now - tunnel[t].last));
+				cli_print(cli, "	State:		%s", states[tunnel[t].state]);
+				cli_print(cli, "	Hostname:	%s", tunnel[t].hostname[0] ? tunnel[t].hostname : "(none)");
+				cli_print(cli, "	Remote IP:	%s", inet_toa(htonl(tunnel[t].ip)));
+				cli_print(cli, "	Remote Port:	%d", tunnel[t].port);
+				cli_print(cli, "	Rx Window:	%u", tunnel[t].window);
+				cli_print(cli, "	Next Recv:	%u", tunnel[t].nr);
+				cli_print(cli, "	Next Send:	%u", tunnel[t].ns);
+				cli_print(cli, "	Queue Len:	%u", tunnel[t].controlc);
+				cli_print(cli, "	Last Packet Age:%u", (unsigned)(time_now - tunnel[t].last));
 
 				for (x = 0; x < MAXSESSION; x++)
-						if (session[x].tunnel == t && session[x].opened && !session[x].die)
-								sprintf(s, "%s%u ", s, x);
-				cli_print(cli, "		Sessions:		%s", s);
+					if (session[x].tunnel == t && session[x].opened && !session[x].die)
+						sprintf(s, "%s%u ", s, x);
+
+				cli_print(cli, "	Sessions:	%s", s);
 			}
 			return CLI_OK;
 		}
@@ -1005,20 +1004,20 @@ int cmd_show_banana(struct cli_def *cli, char *command, char **argv, int argc)
 	if (CLI_HELP_REQUESTED)
 		return CLI_HELP_NO_ARGS;
 
-	cli_print(cli, " _\n"
-					  "//\\\n"
-					  "V  \\\n"
-					  " \\  \\_\n"
-					  "  \\,'.`-.\n"
-					  "   |\\ `. `.\n"
-					  "   ( \\  `. `-.						_,.-:\\\n"
-					  "	\\ \\   `.  `-._			 __..--' ,-';/\n"
-					  "	 \\ `.   `-.   `-..___..---'   _.--' ,'/\n"
-					  "	  `. `.	`-._		__..--'	,' /\n"
-					  "		`. `-_	 ``--..''	   _.-' ,'\n"
-					  "		  `-_ `-.___		__,--'   ,'\n"
-					  "			 `-.__  `----\"\"\"	__.-'\n"
-					  "hh				`--..____..--'");
+	cli_print(cli,	" _\n"
+			"//\\\n"
+			"V  \\\n"
+			" \\  \\_\n"
+			"  \\,'.`-.\n"
+			"   |\\ `. `.\n"
+			"   ( \\  `. `-.                        _,.-:\\\n"
+			"    \\ \\   `.  `-._             __..--' ,-';/\n"
+			"     \\ `.   `-.   `-..___..---'   _.--' ,'/\n"
+			"      `. `.    `-._        __..--'    ,' /\n"
+			"        `. `-_     ``--..''       _.-' ,'\n"
+			"          `-_ `-.___        __,--'   ,'\n"
+			"             `-.__  `----\"\"\"    __.-'\n"
+			"hh                `--..____..--'");
 
 	return CLI_OK;
 }
@@ -1279,17 +1278,17 @@ int cmd_throttle(struct cli_def *cli, char *command, char **argv, int argc)
 	{
 		switch (argc)
 		{
-			case 1:
-				return cli_arg_help(cli, 0, "user", "Username of session to throttle", NULL);
+		case 1:
+			return cli_arg_help(cli, 0, "user", "Username of session to throttle", NULL);
 
-			case 2:
-				return cli_arg_help(cli, 1, "rate", "Incoming rate in kb/s", NULL);
+		case 2:
+			return cli_arg_help(cli, 1, "rate", "Incoming rate in kb/s", NULL);
 
-			case 3:
-				return cli_arg_help(cli, 1, "rate", "Outgoing rate in kb/s", NULL);
+		case 3:
+			return cli_arg_help(cli, 1, "rate", "Outgoing rate in kb/s", NULL);
 
-			default:
-				return cli_arg_help(cli, argc > 1, "user", "Username of session to throttle", NULL);
+		default:
+			return cli_arg_help(cli, argc > 1, "user", "Username of session to throttle", NULL);
 		}
 	}
 
@@ -1376,13 +1375,13 @@ int cmd_debug(struct cli_def *cli, char *command, char **argv, int argc)
 
 	if (CLI_HELP_REQUESTED)
 		return cli_arg_help(cli, 1,
-			"all",	  "Enable debugging for all except \"data\"",
-			"critical", "", // FIXME: add descriptions
+			"all",		"Enable debugging for all except \"data\"",
+			"critical",	"", // FIXME: add descriptions
 			"error",	"",
-			"warning",  "",
-			"info",	 "",
+			"warning",	"",
+			"info",		"",
 			"calls",	"",
-			"data",	 "",
+			"data",		"",
 			NULL);
 
 	if (!argc)
@@ -1394,11 +1393,11 @@ int cmd_debug(struct cli_def *cli, char *command, char **argv, int argc)
 			{
 				cli_print(cli, "Currently debugging:%s%s%s%s%s%s",
 					(debug_flags.critical) ? " critical" : "",
-					(debug_flags.error)	? " error"	: "",
+					(debug_flags.error)    ? " error"    : "",
 					(debug_flags.warning)  ? " warning"  : "",
-					(debug_flags.info)	 ? " info"	 : "",
-					(debug_flags.calls)	? " calls"	: "",
-					(debug_flags.data)	 ? " data"	 : "");
+					(debug_flags.info)     ? " info"     : "",
+					(debug_flags.calls)    ? " calls"    : "",
+					(debug_flags.data)     ? " data"     : "");
 
 				return CLI_OK;
 			}
@@ -1416,12 +1415,12 @@ int cmd_debug(struct cli_def *cli, char *command, char **argv, int argc)
 			len = 2; /* distinguish [cr]itical from [ca]lls */
 
 		if (!strncasecmp(argv[i], "critical", len)) { debug_flags.critical = 1; continue; }
-		if (!strncasecmp(argv[i], "error",	len)) { debug_flags.error = 1;	continue; }
+		if (!strncasecmp(argv[i], "error",    len)) { debug_flags.error = 1;    continue; }
 		if (!strncasecmp(argv[i], "warning",  len)) { debug_flags.warning = 1;  continue; }
-		if (!strncasecmp(argv[i], "info",	 len)) { debug_flags.info = 1;	 continue; }
-		if (!strncasecmp(argv[i], "calls",	len)) { debug_flags.calls = 1;	continue; }
-		if (!strncasecmp(argv[i], "data",	 len)) { debug_flags.data = 1;	 continue; }
-		if (!strncasecmp(argv[i], "all",	  len))
+		if (!strncasecmp(argv[i], "info",     len)) { debug_flags.info = 1;     continue; }
+		if (!strncasecmp(argv[i], "calls",    len)) { debug_flags.calls = 1;    continue; }
+		if (!strncasecmp(argv[i], "data",     len)) { debug_flags.data = 1;     continue; }
+		if (!strncasecmp(argv[i], "all",      len))
 		{
 			memset(&debug_flags, 1, sizeof(debug_flags));
 			debug_flags.data = 0;
@@ -1440,18 +1439,18 @@ int cmd_no_debug(struct cli_def *cli, char *command, char **argv, int argc)
 
 	if (CLI_HELP_REQUESTED)
 		return cli_arg_help(cli, 1,
-			"all",	  "Disable all debugging",
-			"critical", "", // FIXME: add descriptions
+			"all",		"Disable all debugging",
+			"critical",	"", // FIXME: add descriptions
 			"error",	"",
-			"warning",  "",
-			"info",	 "",
+			"warning",	"",
+			"info",		"",
 			"calls",	"",
-			"data",	 "",
+			"data",		"",
 			NULL);
 
 	if (!argc)
 	{
-			memset(&debug_flags, 0, sizeof(debug_flags));
+		memset(&debug_flags, 0, sizeof(debug_flags));
 		return CLI_OK;
 	}
 
@@ -1463,12 +1462,12 @@ int cmd_no_debug(struct cli_def *cli, char *command, char **argv, int argc)
 			len = 2; /* distinguish [cr]itical from [ca]lls */
 
 		if (!strncasecmp(argv[i], "critical", len)) { debug_flags.critical = 0; continue; }
-		if (!strncasecmp(argv[i], "error",	len)) { debug_flags.error = 0;	continue; }
+		if (!strncasecmp(argv[i], "error",    len)) { debug_flags.error = 0;    continue; }
 		if (!strncasecmp(argv[i], "warning",  len)) { debug_flags.warning = 0;  continue; }
-		if (!strncasecmp(argv[i], "info",	 len)) { debug_flags.info = 0;	 continue; }
-		if (!strncasecmp(argv[i], "calls",	len)) { debug_flags.calls = 0;	continue; }
-		if (!strncasecmp(argv[i], "data",	 len)) { debug_flags.data = 0;	 continue; }
-		if (!strncasecmp(argv[i], "all",	  len))
+		if (!strncasecmp(argv[i], "info",     len)) { debug_flags.info = 0;     continue; }
+		if (!strncasecmp(argv[i], "calls",    len)) { debug_flags.calls = 0;    continue; }
+		if (!strncasecmp(argv[i], "data",     len)) { debug_flags.data = 0;     continue; }
+		if (!strncasecmp(argv[i], "all",      len))
 		{
 			memset(&debug_flags, 0, sizeof(debug_flags));
 			continue;
@@ -1658,33 +1657,33 @@ int cmd_set(struct cli_def *cli, char *command, char **argv, int argc)
 			cli_print(cli, "Setting \"%s\" to \"%s\"", argv[0], argv[1]);
 			switch (config_values[i].type)
 			{
-				case STRING:
-					strncpy((char *)value, argv[1], config_values[i].size - 1);
-					break;
-				case INT:
-					*(int *)value = atoi(argv[1]);
-					break;
-				case UNSIGNED_LONG:
-					*(unsigned long *)value = atol(argv[1]);
-					break;
-				case SHORT:
-					*(short *)value = atoi(argv[1]);
-					break;
-				case IP:
-					*(unsigned *)value = inet_addr(argv[1]);
-					break;
-				case MAC:
-					parsemac(argv[1], (char *)value);
-					break;
-				case BOOL:
-					if (strcasecmp(argv[1], "yes") == 0 || strcasecmp(argv[1], "true") == 0 || strcasecmp(argv[1], "1") == 0)
-						*(int *)value = 1;
-					else
-						*(int *)value = 0;
-					break;
-				default:
-					cli_print(cli, "Unknown variable type");
-					break;
+			case STRING:
+				strncpy((char *)value, argv[1], config_values[i].size - 1);
+				break;
+			case INT:
+				*(int *)value = atoi(argv[1]);
+				break;
+			case UNSIGNED_LONG:
+				*(unsigned long *)value = atol(argv[1]);
+				break;
+			case SHORT:
+				*(short *)value = atoi(argv[1]);
+				break;
+			case IP:
+				*(unsigned *)value = inet_addr(argv[1]);
+				break;
+			case MAC:
+				parsemac(argv[1], (char *)value);
+				break;
+			case BOOL:
+				if (strcasecmp(argv[1], "yes") == 0 || strcasecmp(argv[1], "true") == 0 || strcasecmp(argv[1], "1") == 0)
+					*(int *)value = 1;
+				else
+					*(int *)value = 0;
+				break;
+			default:
+				cli_print(cli, "Unknown variable type");
+				break;
 			}
 			config->reload_config = 1;
 			return CLI_OK;
@@ -1709,11 +1708,11 @@ int regular_stuff(struct cli_def *cli)
 		{
 			// Always show messages if we are doing general debug
 			if (ringbuffer->buffer[i].level == 0 && debug_flags.critical) show_message = 1;
-			if (ringbuffer->buffer[i].level == 1 && debug_flags.error) show_message = 1;
-			if (ringbuffer->buffer[i].level == 2 && debug_flags.warning) show_message = 1;
-			if (ringbuffer->buffer[i].level == 3 && debug_flags.info) show_message = 1;
-			if (ringbuffer->buffer[i].level == 4 && debug_flags.calls) show_message = 1;
-			if (ringbuffer->buffer[i].level == 5 && debug_flags.data) show_message = 1;
+			if (ringbuffer->buffer[i].level == 1 && debug_flags.error)    show_message = 1;
+			if (ringbuffer->buffer[i].level == 2 && debug_flags.warning)  show_message = 1;
+			if (ringbuffer->buffer[i].level == 3 && debug_flags.info)     show_message = 1;
+			if (ringbuffer->buffer[i].level == 4 && debug_flags.calls)    show_message = 1;
+			if (ringbuffer->buffer[i].level == 5 && debug_flags.data)     show_message = 1;
 		}
 
 		if (show_message)
@@ -1755,4 +1754,3 @@ void parsemac(char *string, char mac[6])
 		return;
 	memset(mac, 0, 6);
 }
-
