@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.44 2004-12-18 01:20:05 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.45 2005-01-07 07:15:10 bodea Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -720,6 +720,7 @@ static int cmd_show_counters(struct cli_def *cli, char *command, char **argv, in
 	cli_print(cli, "%-30s%u", "call_dump_acct_info",	GET_STAT(call_dump_acct_info));
 	cli_print(cli, "%-30s%u", "call_radiussend",		GET_STAT(call_radiussend));
 	cli_print(cli, "%-30s%u", "call_radiusretry",		GET_STAT(call_radiusretry));
+	cli_print(cli, "%-30s%u", "call_random_data",		GET_STAT(call_random_data));
 #endif
 	return CLI_OK;
 }
@@ -1822,7 +1823,7 @@ static int cmd_set(struct cli_def *cli, char *command, char **argv, int argc)
 
 	for (i = 0; config_values[i].key; i++)
 	{
-		void *value = ((void *)config) + config_values[i].offset;
+		void *value = ((void *) config) + config_values[i].offset;
 		if (strcmp(config_values[i].key, argv[0]) == 0)
 		{
 			// Found a value to set
@@ -1830,7 +1831,7 @@ static int cmd_set(struct cli_def *cli, char *command, char **argv, int argc)
 			switch (config_values[i].type)
 			{
 			case STRING:
-				strncpy((char *) value, argv[1], config_values[i].size - 1);
+				snprintf((char *) value, config_values[i].size, "%s", argv[1]);
 				break;
 			case INT:
 				*(int *) value = atoi(argv[1]);
@@ -2052,7 +2053,7 @@ static int cmd_router_bgp_neighbour(struct cli_def *cli, char *command, char **a
 
 		if (!config->neighbour[i].name[0])
 		{
-			snprintf(config->neighbour[i].name, sizeof(config->neighbour[i].name), argv[0]);
+			snprintf(config->neighbour[i].name, sizeof(config->neighbour[i].name), "%s", argv[0]);
 			config->neighbour[i].keepalive = -1;
 			config->neighbour[i].hold = -1;
 		}
