@@ -7,15 +7,12 @@ man8dir = /usr/share/man/man8
 statedir = /var/lib/l2tpns
 
 DEFINES =
-DEFINES += -DSTATISTICS
-DEFINES += -DSTAT_CALLS
-DEFINES += -DRINGBUFFER
-DEFINES += -DBGP
 DEFINES += -DLIBDIR='"$(libdir)"'
 DEFINES += -DETCDIR='"$(etcdir)"'
 DEFINES += -DSTATEDIR='"$(statedir)"'
 
-OPTIM = -g
+OPTIM =
+OPTIM += -g
 OPTIM += -O3
 OPTIM += -funroll-loops
 OPTIM += -fomit-frame-pointer
@@ -33,14 +30,21 @@ INSTALL = install -c -D -o root -g root
 
 l2tpns.LIBS = -lm -lcli -ldl
 
-OBJS = arp.o bgp.o cli.o cluster.o constants.o control.o icmp.o \
-    l2tpns.o ll.o md5.o ppp.o radius.o tbf.o util.o
+OBJS = arp.o cli.o cluster.o constants.o control.o icmp.o l2tpns.o \
+    ll.o md5.o ppp.o radius.o tbf.o util.o
 
 PROGRAMS = l2tpns nsctl
 PLUGINS = garden.so throttlectl.so autothrottle.so snoopctl.so \
     autosnoop.so stripdomain.so setrxspeed.so
 
 TESTS = generateload bounce 
+
+DEFINES += -DSTATISTICS
+DEFINES += -DSTAT_CALLS
+DEFINES += -DRINGBUFFER
+
+DEFINES += -DBGP
+OBJS += bgp.o
 
 all: programs plugins tests
 programs: $(PROGRAMS)
@@ -87,7 +91,7 @@ install: all
 	$(INSTALL) -m 0644 Docs/l2tpns.8 $(DESTDIR)$(man8dir)/l2tpns.8
 	$(INSTALL) -m 0644 Docs/nsctl.8 $(DESTDIR)$(man8dir)/nsctl.8
 
-	gzip $(DESTDIR)$(man5dir)/*.5 $(DESTDIR)$(man8dir)/*.8
+	gzip --best $(DESTDIR)$(man5dir)/*.5 $(DESTDIR)$(man8dir)/*.8
 
 	@if [ -f $(DESTDIR)$(etcdir)/startup-config ]; then \
 		echo '***' Installing default config files in $(DESTDIR)$(etcdir) as .defaults; \
