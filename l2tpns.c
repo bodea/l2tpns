@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.30 2004-10-05 02:50:03 fred_nerk Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.31 2004-10-25 15:07:51 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -2458,7 +2458,7 @@ void mainloop(void)
 }
 
 // Init data structures
-void initdata(void)
+void initdata(int optdebug, char *optconfig)
 {
 	int i;
 	char *p;
@@ -2475,7 +2475,8 @@ void initdata(void)
 	}
 	memset(config, 0, sizeof(struct configt));
 	time(&config->start_time);
-	strncpy(config->config_file, CONFIGFILE, sizeof(config->config_file) - 1);
+	config->debug = optdebug;
+	strncpy(config->config_file, optconfig, strlen(optconfig));
 	if (!(tunnel = shared_malloc(sizeof(tunnelt) * MAXTUNNEL)))
 	{
 		log(0, 0, 0, 0, "Error doing malloc for tunnels: %s\n", strerror(errno));
@@ -2906,13 +2907,14 @@ int main(int argc, char *argv[])
 {
 	int o;
 	int optdebug = 0;
+	char *optconfig = CONFIGFILE;
 
 	_program_name = strdup(argv[0]);
 
 	time(&basetime);             // start clock
 
 	// scan args
-	while ((o = getopt(argc, argv, "vc:h:a:")) >= 0)
+	while ((o = getopt(argc, argv, "dvc:h:")) >= 0)
 	{
 		switch (o)
 		{
@@ -2924,10 +2926,12 @@ int main(int argc, char *argv[])
 			case 'v':
 				optdebug++;
 				break;
+			case 'c':
+			    	optconfig = optarg;
+				break;
 			case 'h':
 				snprintf(hostname, sizeof(hostname), "%s", optarg);
 				break;
-			case '?':
 			default:
 				printf("Args are:\n"
 				       "\t-d\tDetach from terminal\n"
@@ -2949,9 +2953,7 @@ int main(int argc, char *argv[])
 
 	initiptables();
 	initplugins();
-	initdata();
-
-	config->debug = optdebug;
+	initdata(optdebug, optconfig);
 
 	init_tbf();
 	init_cli();
