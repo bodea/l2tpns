@@ -1,5 +1,5 @@
 // L2TPNS Rate Limiting Stuff
-// $Id: rl.c,v 1.2 2004-03-05 00:09:03 fred_nerk Exp $
+// $Id: rl.c,v 1.3 2004-04-05 05:29:13 fred_nerk Exp $
 
 #include <stdio.h>
 #include <sys/file.h>
@@ -25,7 +25,7 @@ int next_tbf = 1;
 void init_rl()
 {
     char *commands[] = {
-	"tc qdisc add dev " DEVICE " root handle 1: htb default 1",
+	"tc qdisc add dev " DEVICE " root handle 1: htb",
 	"tc class add dev " DEVICE " parent 1: classid 1:1 htb rate 100mbit burst 300k",
 	"tc filter del dev " DEVICE " protocol ip pref 1 fw",
 	"iptables -t mangle -N throttle 2>&1 >/dev/null",
