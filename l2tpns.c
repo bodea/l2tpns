@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.13 2004-07-11 07:57:35 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.14 2004-07-12 08:21:45 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -111,6 +111,7 @@ struct config_descriptt config_values[] = {
 	CONFIG("cleanup_interval", cleanup_interval, INT),
 	CONFIG("multi_read_count", multi_read_count, INT),
 	CONFIG("scheduler_fifo", scheduler_fifo, BOOL),
+	CONFIG("lock_pages", lock_pages, BOOL),
 	CONFIG("icmp_rate", icmp_rate, INT),
 	CONFIG("cluster_address", cluster_address, IP),
 	CONFIG("cluster_interface", cluster_interface, STRING),
@@ -143,10 +144,10 @@ char *plugin_functions[] = {
 
 #define max_plugin_functions (sizeof(plugin_functions) / sizeof(char *))
 
-tunnelt *tunnel = NULL;		// Array of tunnel structures.
-sessiont *session = NULL;	// Array of session structures.
+tunnelt *tunnel = NULL;			// Array of tunnel structures.
+sessiont *session = NULL;		// Array of session structures.
 sessioncountt *sess_count = NULL;	// Array of partial per-session traffic counters.
-radiust *radius = NULL;		// Array of radius structures.
+radiust *radius = NULL;			// Array of radius structures.
 ippoolt *ip_address_pool = NULL;	// Array of dynamic IP addresses.
 controlt *controlfree = 0;
 struct Tstats *_statistics = NULL;
@@ -2954,6 +2955,15 @@ int main(int argc, char *argv[])
 	signal(SIGINT, sigterm_handler);
 	signal(SIGQUIT, sigquit_handler);
 	signal(SIGCHLD, sigchild_handler);
+
+	// Prevent us from getting paged out
+	if (config->lock_pages)
+	{
+		if (!mlockall(MCL_CURRENT))
+			log(1, 0, 0, 0, "Locking pages into memory\n");
+		else
+			log(0, 0, 0, 0, "Can't lock pages: %s\n", strerror(errno));
+	}
 
 	alarm(1);
 

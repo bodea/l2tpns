@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.11 2004-07-08 16:54:35 bodea Exp $
+// $Id: l2tpns.h,v 1.12 2004-07-12 08:21:45 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -413,9 +413,9 @@ struct configt
 	char		old_plugins[64][MAXPLUGINS];
 
 	int		next_tbf;			// Next HTB id available to use
-	int		scheduler_fifo;			// If 1, will force scheduler to use SCHED_FIFO.
-							// Don't use this unless you have a dual processor machine!
-	int		icmp_rate;			// Max number of ICMP unreachable per second to send
+	int		scheduler_fifo;			// If the system has multiple CPUs, use FIFO scheduling policy for this process.
+	int		lock_pages;			// Lock pages into memory.
+	int		icmp_rate;			// Max number of ICMP unreachable per second to send>
 
 	u32		cluster_address;		// Multicast address of cluster.
 							// Send to this address to have everyone hear.
