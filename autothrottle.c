@@ -1,11 +1,10 @@
 #include <string.h>
-#include <malloc.h>
-#include <stdlib.h>
-#include <sys/wait.h>
-#include <sys/types.h>
 #include "l2tpns.h"
 #include "plugin.h"
-#include "control.h"
+
+/* set up throttling based on RADIUS reply */
+
+char const *cvs_id = "$Id: autothrottle.c,v 1.6 2004-11-05 02:39:35 bodea Exp $";
 
 int __plugin_api_version = 1;
 struct pluginfuncs *p;
@@ -85,8 +84,3 @@ int plugin_init(struct pluginfuncs *funcs)
 {
 	return ((p = funcs)) ? 1 : 0;
 }
-
-void plugin_done()
-{
-}
-

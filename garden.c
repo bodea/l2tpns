@@ -7,7 +7,9 @@
 #include "plugin.h"
 #include "control.h"
 
-char const *cvs_id = "$Id: garden.c,v 1.9 2004-11-03 13:23:58 bodea Exp $";
+/* walled garden */
+
+char const *cvs_id = "$Id: garden.c,v 1.10 2004-11-05 02:39:35 bodea Exp $";
 
 int __plugin_api_version = 1;
 static struct pluginfuncs *p = 0;
