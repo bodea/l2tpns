@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.32 2005-04-01 08:46:03 bodea Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.33 2005-04-01 08:55:29 bodea Exp $";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -657,8 +657,6 @@ static void cluster_check_sessions(int highsession, int freesession_ptr, int hig
 			if (session[i].tunnel == T_UNDEF) session[i].tunnel = T_FREE; // Defined.
 			continue;
 		}
-		if (session[i].tunnel != T_UNDEF)
-			continue;
 
 		if (session[i].tunnel == T_UNDEF)
 			++config->cluster_undefined_sessions;
