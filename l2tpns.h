@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.36 2004-11-25 02:45:27 bodea Exp $
+// $Id: l2tpns.h,v 1.37 2004-11-25 12:41:35 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -205,6 +205,7 @@ sessiont;
 
 #define SF_IPCP_ACKED	1	// Has this session seen an IPCP Ack?
 #define SF_LCP_ACKED	2	// LCP negotiated
+#define SF_CCP_ACKED	4	// CCP negotiated
 
 typedef struct {
 	u32	cin;

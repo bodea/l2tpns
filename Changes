@@ -1,5 +1,5 @@
 * Thu Nov 25 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.9
-- Drop sendccp.  If client sends a CCP request for compression just NAK it.
+- Revise CCP, send ConfigReq once only.
 - Don't copy the old buffer into Config{Nak,Rej} LCP responses (oops);
   add length checks when appending.
 - Have makeppp print a backtrace on overflow.

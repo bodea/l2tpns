@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.28 2004-11-25 02:45:27 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.29 2004-11-25 12:41:35 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -22,6 +22,8 @@ extern char hostname[];
 extern u32 eth_tx;
 extern time_t time_now;
 extern struct configt *config;
+
+static void initccp(tunnelidt t, sessionidt s);
 
 // Process PAP messages
 void processpap(tunnelidt t, sessionidt s, u8 *p, u16 l)
@@ -589,8 +591,8 @@ void processipcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 
 		LOG(3, session[s].ip, s, t, "IPCP Acked, session is now active\n");
 
-		// clear  LCP_ACKED flag  for possible fast renegotiaion for routers
-		session[s].flags &= ~SF_LCP_ACKED;
+		// clear LCP_ACKED/CCP_ACKED flag for possible fast renegotiaion for routers
+		session[s].flags &= ~(SF_LCP_ACKED|SF_CCP_ACKED);
 
 		return;
 	}
@@ -806,11 +808,23 @@ void processccp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 	LOG_HEX(5, "CCP", p, l);
 	switch (l > 1 ? *p : 0)
 	{
+	case ConfigAck:
+		session[s].flags |= SF_CCP_ACKED;
+		return;
+
 	case ConfigReq:
-		if (l < 6)
-			*p = ConfigAck;		// accept no compression
-		else
-			*p = ConfigRej;		// reject
+		if (l < 6) // accept no compression
+		{
+			*p = ConfigAck;
+			break;
+		}
+
+		// compression requested--reject
+		*p = ConfigRej;
+
+		// send CCP request for no compression for our end if not negotiated
+		if (!(session[s].flags & SF_CCP_ACKED))
+			initccp();
 
 		break;
 
@@ -924,10 +938,10 @@ u8 *makeppp(u8 *b, int size, u8 *p, int l, tunnelidt t, sessionidt s, u16 mtype)
 	return b;
 }
 
-// Send initial LCP ConfigReq
+// Send initial LCP ConfigReq for PAP, set magic no.
 void initlcp(tunnelidt t, sessionidt s)
 {
-	char b[500] = {0}, *q;
+	char b[500], *q;
 
 	if (!(q = makeppp(b, sizeof(b), NULL, 0, t, s, PPPLCP)))
 		return;
@@ -942,5 +956,24 @@ void initlcp(tunnelidt t, sessionidt s)
 	*(u8 *)(q + 10) = 3;
 	*(u8 *)(q + 11) = 4;
 	*(u16 *)(q + 12) = htons(PPPPAP); // PAP
-	tunnelsend(b, 12 + 14, t);
+
+	LOG_HEX(5, "PPPLCP", q, 14);
+	tunnelsend(b, (q - b) + 14, t);
+}
+
+// Send CCP request for no compression
+static void sendccp(tunnelidt t, sessionidt s)
+{
+	char b[500], *q;
+
+	if (!(q = makeppp(b, sizeof(b), NULL, 0, t, s, PPPCCP)))
+		return;
+
+	LOG(4, 0, s, t, "Sending CCP ConfigReq for no compression\n");
+	*q = ConfigReq;
+	*(u8 *)(q + 1) = (time_now % 255) + 1; // ID
+	*(u16 *)(q + 2) = htons(4); // Length
+
+	LOG_HEX(5, "PPPCCP", q, 4);
+	tunnelsend(b, (q - b) + 4 , t);
 }
