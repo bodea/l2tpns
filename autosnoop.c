@@ -23,12 +23,12 @@ int plugin_radius_response(struct param_radius_response *data)
 			if (*data->value) data->s->snoop_ip = inet_addr(data->value);
 			if (data->s->snoop_ip == INADDR_NONE) data->s->snoop_ip = 0;
 			if (*x) data->s->snoop_port = atoi(x);
-			p->log(3, 0, 0, 0, "         Intercepting user to %s:%d\n",
+			p->_log(3, 0, 0, 0, "         Intercepting user to %s:%d\n",
 				p->inet_toa(data->s->snoop_ip), data->s->snoop_port);
 		}
 		else
 		{
-			p->log(3, 0, 0, 0, "         Not Intercepting user (reply string should be snoop=ip:port)\n");
+			p->_log(3, 0, 0, 0, "         Not Intercepting user (reply string should be snoop=ip:port)\n");
 		}
 	}
 	return PLUGIN_RET_OK;

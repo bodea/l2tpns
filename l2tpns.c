@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.38 2004-11-02 06:45:03 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.39 2004-11-03 13:23:58 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -239,7 +239,7 @@ void _log(int level, ipt address, sessionidt s, tunnelidt t, const char *format,
 	va_end(ap);
 }
 
-void _log_hex(int level, ipt address, sessionidt s, tunnelidt t, const char *title, const char *data, int maxsize)
+void _log_hex(int level, const char *title, const char *data, int maxsize)
 {
 	int i, j;
 	const u8 *d = (const u8 *)data;
@@ -249,7 +249,7 @@ void _log_hex(int level, ipt address, sessionidt s, tunnelidt t, const char *tit
 	// No support for log_hex to syslog
 	if (log_stream)
 	{
-		log(level, address, s, t, "%s (%d bytes):\n", title, maxsize);
+		_log(level, 0, 0, 0, "%s (%d bytes):\n", title, maxsize);
 		setvbuf(log_stream, NULL, _IOFBF, 16384);
 
 		for (i = 0; i < maxsize; )

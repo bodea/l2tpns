@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.27 2004-11-02 23:43:52 bodea Exp $
+// $Id: l2tpns.h,v 1.28 2004-11-03 13:23:59 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -539,12 +539,14 @@ int cmd_show_ipcache(struct cli_def *cli, char *command, char **argv, int argc);
 int cmd_show_hist_idle(struct cli_def *cli, char *command, char **argv, int argc);
 int cmd_show_hist_open(struct cli_def *cli, char *command, char **argv, int argc);
 
-#define log _log
-#ifndef log_hex
-#define log_hex(a,b,c,d) do{if (a <= config->debug) _log_hex(a,0,0,0,b,c,d);}while (0)
-#endif
+#undef log
+#undef log_hex
+#define log(D, a, s, t, f, ...)	({ if (D <= config->debug) _log(D, a, s, t, f, ## __VA_ARGS__); })
+#define log_hex(D, t, d, s)	({ if (D <= config->debug) _log_hex(D, t, d, s); })
+
 void _log(int level, ipt address, sessionidt s, tunnelidt t, const char *format, ...) __attribute__((format (printf, 5, 6)));
-void _log_hex(int level, ipt address, sessionidt s, tunnelidt t, const char *title, const char *data, int maxsize);
+void _log_hex(int level, const char *title, const char *data, int maxsize);
+
 void build_chap_response(char *challenge, u8 id, u16 challenge_length, char **challenge_response);
 int sessionsetup(tunnelidt t, sessionidt s);
 int cluster_send_session(int s);
