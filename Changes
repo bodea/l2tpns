@@ -1,4 +1,4 @@
-* Thu Mar 10 2005 Brendan O'Dea <bod@optusnet.com.au> 2.1.0
+* Fri Apr 1 2005 Brendan O'Dea <bod@optusnet.com.au> 2.1.0
 - Add IPv6 support from Jonathan McDowell.
 - Add CHAP support from Jordan Hrycaj (work in progress).
 - Sanity check that cluster_send_session is not called from a child
@@ -39,6 +39,7 @@
 - Add result/error codes to CDN when shutting down sessions.  Sends 2/7
   (general error, try another LNS) when out of IP addresses, and 3
   (adminstrative) for everything else (suggestion from Chris Gates).
+- sessionshutdown: only send RADIUS stop when there's an ip address.
 
 * Fri Dec 17 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.13
 - Better cluster master collision resolution: keep a counter of state

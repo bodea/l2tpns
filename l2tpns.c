@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.88 2005-03-10 06:18:47 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.89 2005-04-01 06:39:00 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -1453,7 +1453,7 @@ void sessionshutdown(sessionidt s, char *reason, int result, int error)
 		run_plugins(PLUGIN_KILL_SESSION, &data);
 	}
 
-	if (!walled_garden && !session[s].die)
+	if (session[s].ip && !walled_garden && !session[s].die)
 	{
 		// RADIUS Stop message
 		uint16_t r = session[s].radius;
@@ -2644,7 +2644,7 @@ static int regular_cleanups(void)
 			continue;
 		}
 
-		// No data in IDLE_TIMEOUT seconds, send LCP ECHO
+		// No data in ECHO_TIMEOUT seconds, send LCP ECHO
 		if (session[s].user[0] && (time_now - session[s].last_packet >= ECHO_TIMEOUT))
 		{
 			uint8_t b[MAXCONTROL] = {0};
