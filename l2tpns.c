@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.83 2005-02-09 00:45:34 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.84 2005-02-14 06:58:39 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -660,7 +660,7 @@ sessionidt sessionbyip(in_addr_t ip)
 	int s = lookup_ipmap(ip);
 	CSTAT(sessionbyip);
 
-	if (s > 0 && s < MAXSESSION && session[s].tunnel)
+	if (s > 0 && s < MAXSESSION && session[s].opened)
 		return (sessionidt) s;
 
 	return 0;
@@ -679,7 +679,7 @@ sessionidt sessionbyipv6(struct in6_addr ip)
 		s = lookup_ipv6map(ip);
 	}
 
-	if (s > 0 && s < MAXSESSION && session[s].tunnel)
+	if (s > 0 && s < MAXSESSION && session[s].opened)
 		return s;
 
 	return 0;
@@ -815,8 +815,11 @@ sessionidt sessionbyuser(char *username)
 	int s;
 	CSTAT(sessionbyuser);
 
-	for (s = 1; s < MAXSESSION ; ++s)
+	for (s = 1; s <= config->cluster_highest_sessionid ; ++s)
 	{
+		if (!session[s].opened)
+			continue;
+
 		if (session[s].walled_garden)
 			continue;		// Skip walled garden users.
 
@@ -858,17 +861,16 @@ void send_garp(in_addr_t ip)
 	sendarp(ifr.ifr_ifindex, mac, ip);
 }
 
-// Find session by username, 0 for not found
 static sessiont *sessiontbysessionidt(sessionidt s)
 {
-	if (!s || s > MAXSESSION) return NULL;
+	if (!s || s >= MAXSESSION) return NULL;
 	return &session[s];
 }
 
 static sessionidt sessionidtbysessiont(sessiont *s)
 {
 	sessionidt val = s-session;
-	if (s < session || val > MAXSESSION) return 0;
+	if (s < session || val >= MAXSESSION) return 0;
 	return val;
 }
 
@@ -1357,7 +1359,7 @@ static void controladd(controlt * c, tunnelidt t, sessionidt s)
 //
 void throttle_session(sessionidt s, int rate_in, int rate_out)
 {
-	if (!session[s].tunnel)
+	if (!session[s].opened)
 		return; // No-one home.
 
 	if (!*session[s].user)
@@ -1395,7 +1397,7 @@ void throttle_session(sessionidt s, int rate_in, int rate_out)
 // add/remove filters from session (-1 = no change)
 static void filter_session(sessionidt s, int filter_in, int filter_out)
 {
-	if (!session[s].tunnel)
+	if (!session[s].opened)
 		return; // No-one home.
 
 	if (!*session[s].user)
@@ -1438,9 +1440,9 @@ void sessionshutdown(sessionidt s, char *reason)
 
 	CSTAT(sessionshutdown);
 
-	if (!session[s].tunnel)
+	if (!session[s].opened)
 	{
-		LOG(3, s, session[s].tunnel, "Called sessionshutdown on a session with no tunnel.\n");
+		LOG(3, s, session[s].tunnel, "Called sessionshutdown on an unopened session.\n");
 		return;                   // not a live session
 	}
 
@@ -1451,7 +1453,7 @@ void sessionshutdown(sessionidt s, char *reason)
 		run_plugins(PLUGIN_KILL_SESSION, &data);
 	}
 
-	if (session[s].opened && !walled_garden && !session[s].die)
+	if (!walled_garden && !session[s].die)
 	{
 		// RADIUS Stop message
 		uint16_t r = session[s].radius;
@@ -1514,7 +1516,7 @@ void sessionshutdown(sessionidt s, char *reason)
 	}
 
 	if (!session[s].die)
-		session[s].die = now() + 150; // Clean up in 15 seconds
+		session[s].die = TIME + 150; // Clean up in 15 seconds
 
 	// update filter refcounts
 	if (session[s].filter_in) ip_filters[session[s].filter_in - 1].used--;
@@ -1589,12 +1591,21 @@ void sendipcp(tunnelidt t, sessionidt s)
 }
 
 // kill a session now
-static void sessionkill(sessionidt s, char *reason)
+void sessionkill(sessionidt s, char *reason)
 {
 
 	CSTAT(sessionkill);
 
-	session[s].die = now();
+	if (!session[s].opened) // not alive
+		return;
+
+	if (session[s].next)
+	{
+		LOG(0, s, session[s].tunnel, "Tried to kill a session with next pointer set (%d)\n", session[s].next);
+		return;
+	}
+
+	session[s].die = TIME;
 	sessionshutdown(s, reason);  // close radius/routes, etc.
 	if (session[s].radius)
 		radiusclear(session[s].radius, s); // cant send clean accounting data, session is killed
@@ -1636,7 +1647,7 @@ static void tunnelkill(tunnelidt t, char *reason)
 		controlfree = c;
 	}
 	// kill sessions
-	for (s = 1; s < MAXSESSION; s++)
+	for (s = 1; s <= config->cluster_highest_sessionid ; ++s)
 		if (session[s].tunnel == t)
 			sessionkill(s, reason);
 
@@ -1663,12 +1674,12 @@ static void tunnelshutdown(tunnelidt t, char *reason)
 	LOG(1, 0, t, "Shutting down tunnel %d (%s)\n", t, reason);
 
 	// close session
-	for (s = 1; s < MAXSESSION; s++)
+	for (s = 1; s <= config->cluster_highest_sessionid ; ++s)
 		if (session[s].tunnel == t)
 			sessionshutdown(s, reason);
 
 	tunnel[t].state = TUNNELDIE;
-	tunnel[t].die = now() + 700; // Clean up in 70 seconds
+	tunnel[t].die = TIME + 700; // Clean up in 70 seconds
 	cluster_send_tunnel(t);
 	// TBA - should we wait for sessions to stop?
 	{                            // Send StopCCN
@@ -2202,7 +2213,8 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 					if (!sessionfree)
 					{
 						STAT(session_overflow);
-						tunnelshutdown(t, "No free sessions");
+						LOG(1, 0, t, "No free sessions");
+						return;
 					}
 					else
 					{
@@ -2226,7 +2238,7 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 
 						c = controlnew(11); // sending ICRP
 						session[s].id = sessionid++;
-						session[s].opened = time(NULL);
+						session[s].opened = time_now;
 						session[s].tunnel = t;
 						session[s].far = asession;
 						session[s].last_packet = time_now;
@@ -2306,7 +2318,7 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 			l -= 2;
 		}
 
-		if (s && !session[s].tunnel)	// Is something wrong??
+		if (s && !session[s].opened)	// Is something wrong??
 		{
 			if (!config->cluster_iam_master)
 			{
@@ -2316,9 +2328,7 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 			}
 
 
-			LOG(1, s, t, "UDP packet contains session %d but no session[%d].tunnel "
-				     "exists (LAC said tunnel = %d).  Dropping packet.\n", s, s, t);
-
+			LOG(1, s, t, "UDP packet contains session which is not opened.  Dropping packet.\n");
 			STAT(tunnel_rx_errors);
 			return;
 		}
@@ -2525,7 +2535,7 @@ static int regular_cleanups(void)
 		if (s > config->cluster_highest_sessionid)
 			s = 1;
 
-		if (!session[s].tunnel)	// Session isn't in use
+		if (!session[s].opened)	// Session isn't in use
 			continue;
 
 		if (!session[s].die && session[s].ip && !(session[s].flags & SF_IPCP_ACKED))
@@ -3269,8 +3279,9 @@ void rebuild_address_pool(void)
 	for (i = 0; i < MAXSESSION; ++i)
 	{
 		int ipid;
-		if (!session[i].ip || !session[i].tunnel)
+		if (!(session[i].opened && session[i].ip))
 			continue;
+
 		ipid = - lookup_ipmap(htonl(session[i].ip));
 
 		if (session[i].ip_pool_index < 0)
@@ -4016,7 +4027,7 @@ int sessionsetup(tunnelidt t, sessionidt s)
 
 	LOG(3, s, t, "Doing session setup for session\n");
 
-	if (!session[s].ip || session[s].ip == 0xFFFFFFFE)
+	if (!session[s].ip)
 	{
 		assign_ip_address(s);
 		if (!session[s].ip)
@@ -4619,7 +4630,7 @@ void become_master(void)
 	{
 		for (s = 1; s <= config->cluster_highest_sessionid ; ++s)
 		{
-			if (!session[s].tunnel) // Not an in-use session.
+			if (!session[s].opened) // Not an in-use session.
 				continue;
 
 			run_plugins(PLUGIN_NEW_SESSION_MASTER, &session[s]);
@@ -4651,7 +4662,7 @@ int cmd_show_hist_idle(struct cli_def *cli, char *command, char **argv, int argc
 	for (s = 1; s <= config->cluster_highest_sessionid ; ++s)
 	{
 		int idle;
-		if (!session[s].tunnel)
+		if (!session[s].opened)
 			continue;
 
 		idle = time_now - session[s].last_packet;
@@ -4689,7 +4700,7 @@ int cmd_show_hist_open(struct cli_def *cli, char *command, char **argv, int argc
 	for (s = 1; s <= config->cluster_highest_sessionid ; ++s)
 	{
 		int open = 0, d;
-		if (!session[s].tunnel)
+		if (!session[s].opened)
 			continue;
 
 		d = time_now - session[s].opened;

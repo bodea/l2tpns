@@ -1,6 +1,6 @@
 // L2TPNS Radius Stuff
 
-char const *cvs_id_radius = "$Id: radius.c,v 1.23 2005-01-25 04:19:06 bodea Exp $";
+char const *cvs_id_radius = "$Id: radius.c,v 1.24 2005-02-14 06:58:39 bodea Exp $";
 
 #include <time.h>
 #include <stdio.h>
@@ -470,6 +470,9 @@ void processrad(uint8_t *buf, int len, char socket_index)
 						session[s].ip_pool_index = -1;
 						LOG(3, s, session[s].tunnel, "   Radius reply contains IP address %s\n",
 							fmtaddr(htonl(session[s].ip), 0));
+
+						if (session[s].ip == 0xFFFFFFFE)
+							session[s].ip = 0; // assign from pool
 					}
 					else if (*p == 135)
 					{
@@ -649,8 +652,8 @@ void processrad(uint8_t *buf, int len, char socket_index)
 			}
 			else if (r_code == AccessReject)
 			{
-				LOG(2, s, session[s].tunnel, "   Authentication denied for %s\n", session[s].user);
-				sessionshutdown(s, "Authentication denied");
+				LOG(2, s, session[s].tunnel, "   Authentication rejected for %s\n", session[s].user);
+				sessionkill(s, "Authentication rejected");
 				break;
 			}
 
