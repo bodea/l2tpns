@@ -35,6 +35,7 @@
 - Simplify AVP unhiding code.
 - Add optional "username" parameter to ungarden control, allowing the
   username to be reset before going online.
+- Add result/error codes to StopCCN when shutting down tunnels.
 
 * Fri Dec 17 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.13
 - Better cluster master collision resolution: keep a counter of state
