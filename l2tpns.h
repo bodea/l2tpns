@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.47 2004-12-16 08:49:53 bodea Exp $
+// $Id: l2tpns.h,v 1.48 2004-12-16 23:40:31 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -307,71 +307,76 @@ enum
 
 struct Tstats
 {
-    time_t		start_time;
-    time_t		last_reset;
+    time_t	start_time;
+    time_t	last_reset;
 
-    unsigned long	tun_rx_packets;
-    unsigned long	tun_tx_packets;
-    unsigned long	tun_rx_bytes;
-    unsigned long	tun_tx_bytes;
-    unsigned long	tun_rx_errors;
-    unsigned long	tun_tx_errors;
+    uint32_t	tun_rx_packets;
+    uint32_t	tun_tx_packets;
+    uint32_t	tun_rx_bytes;
+    uint32_t	tun_tx_bytes;
+    uint32_t	tun_rx_errors;
+    uint32_t	tun_tx_errors;
 
-    unsigned long	tunnel_rx_packets;
-    unsigned long	tunnel_tx_packets;
-    unsigned long	tunnel_rx_bytes;
-    unsigned long	tunnel_tx_bytes;
-    unsigned long	tunnel_rx_errors;
-    unsigned long	tunnel_tx_errors;
+    uint32_t	tunnel_rx_packets;
+    uint32_t	tunnel_tx_packets;
+    uint32_t	tunnel_rx_bytes;
+    uint32_t	tunnel_tx_bytes;
+    uint32_t	tunnel_rx_errors;
+    uint32_t	tunnel_tx_errors;
 
-    unsigned long	tunnel_retries;
-    unsigned long	radius_retries;
+    uint32_t	tunnel_retries;
+    uint32_t	radius_retries;
 
-    unsigned long	arp_sent;
+    uint32_t	arp_sent;
 
-    unsigned long	packets_snooped;
+    uint32_t	packets_snooped;
 
-    unsigned long	tunnel_created;
-    unsigned long	session_created;
-    unsigned long	tunnel_timeout;
-    unsigned long	session_timeout;
-    unsigned long	radius_timeout;
-    unsigned long	radius_overflow;
-    unsigned long	tunnel_overflow;
-    unsigned long	session_overflow;
+    uint32_t	tunnel_created;
+    uint32_t	session_created;
+    uint32_t	tunnel_timeout;
+    uint32_t	session_timeout;
+    uint32_t	radius_timeout;
+    uint32_t	radius_overflow;
+    uint32_t	tunnel_overflow;
+    uint32_t	session_overflow;
 
-    unsigned long	ip_allocated;
-    unsigned long	ip_freed;
+    uint32_t	ip_allocated;
+    uint32_t	ip_freed;
 
-    unsigned long	c_forwarded;
-    unsigned long	recv_forward;
+    uint32_t	c_forwarded;
+    uint32_t	recv_forward;
+
+    uint32_t	select_called;		// number of times select called
+    uint32_t	select_ready;		// number of fds returned by select
+    uint32_t	select_processed;	// number of read/writes handled per select
+
 #ifdef STATISTICS
-    unsigned long	call_processtun;
-    unsigned long	call_processipout;
-    unsigned long	call_processudp;
-    unsigned long	call_sessionbyip;
-    unsigned long	call_sessionbyuser;
-    unsigned long	call_sendarp;
-    unsigned long	call_sendipcp;
-    unsigned long	call_tunnelsend;
-    unsigned long	call_sessionkill;
-    unsigned long	call_sessionshutdown;
-    unsigned long	call_tunnelkill;
-    unsigned long	call_tunnelshutdown;
-    unsigned long	call_assign_ip_address;
-    unsigned long	call_free_ip_address;
-    unsigned long	call_dump_acct_info;
-    unsigned long	call_sessionsetup;
-    unsigned long	call_processpap;
-    unsigned long	call_processchap;
-    unsigned long	call_processlcp;
-    unsigned long	call_processipcp;
-    unsigned long	call_processipin;
-    unsigned long	call_processccp;
-    unsigned long	call_sendchap;
-    unsigned long	call_processrad;
-    unsigned long	call_radiussend;
-    unsigned long	call_radiusretry;
+    uint32_t	call_processtun;
+    uint32_t	call_processipout;
+    uint32_t	call_processudp;
+    uint32_t	call_sessionbyip;
+    uint32_t	call_sessionbyuser;
+    uint32_t	call_sendarp;
+    uint32_t	call_sendipcp;
+    uint32_t	call_tunnelsend;
+    uint32_t	call_sessionkill;
+    uint32_t	call_sessionshutdown;
+    uint32_t	call_tunnelkill;
+    uint32_t	call_tunnelshutdown;
+    uint32_t	call_assign_ip_address;
+    uint32_t	call_free_ip_address;
+    uint32_t	call_dump_acct_info;
+    uint32_t	call_sessionsetup;
+    uint32_t	call_processpap;
+    uint32_t	call_processchap;
+    uint32_t	call_processlcp;
+    uint32_t	call_processipcp;
+    uint32_t	call_processipin;
+    uint32_t	call_processccp;
+    uint32_t	call_sendchap;
+    uint32_t	call_processrad;
+    uint32_t	call_radiussend;
+    uint32_t	call_radiusretry;
 #endif
 };
 

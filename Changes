@@ -1,4 +1,4 @@
-* Thu Dec 16 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.13
+* Fri Dec 17 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.13
 - Better cluster master collision resolution: keep a counter of state
   changes, propagated in the heartbeats; the master with the highest #
   of changes (that has kept in contact with the LAC through the
@@ -10,6 +10,7 @@
   startup-config (from Jonathan's Debian package patches).
 - Read multiple packets off cluster_sockfd as well as udpfd, tunfd in an
   attempt to avoid losing the cluster in high load (DoS) conditions.
+- Add counters for select_called, select_ready and select_processed.
 - Compress logs.
 - Retain counters of shutdown sessions to dump once per minute.
 - Use standard uintN_t types for portability.

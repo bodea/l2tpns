@@ -2,10 +2,11 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.41 2004-12-16 08:49:52 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.42 2004-12-16 23:40:30 bodea Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
+#include <unistd.h>
 #include <sys/file.h>
 #include <sys/stat.h>
 #include <syslog.h>
@@ -19,10 +20,10 @@ char const *cvs_id_cli = "$Id: cli.c,v 1.41 2004-12-16 08:49:52 bodea Exp $";
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <signal.h>
-#include <unistd.h>
 #include <dlfcn.h>
-#include <libcli.h>
 #include <netdb.h>
+#include <libcli.h>
+
 #include "l2tpns.h"
 #include "util.h"
 #include "cluster.h"
@@ -405,12 +406,12 @@ static int cmd_show_session(struct cli_def *cli, char *command, char **argv, int
 			cli_print(cli, "\tIdle time:\t%u seconds", abs(time_now - session[s].last_packet));
 			cli_print(cli, "\tNext Recv:\t%u", session[s].nr);
 			cli_print(cli, "\tNext Send:\t%u", session[s].ns);
-			cli_print(cli, "\tBytes In/Out:\t%lu/%lu", (unsigned long)session[s].total_cout, (unsigned long)session[s].total_cin);
-			cli_print(cli, "\tPkts In/Out:\t%lu/%lu", (unsigned long)session[s].pout, (unsigned long)session[s].pin);
+			cli_print(cli, "\tBytes In/Out:\t%u/%u", session[s].total_cout, session[s].total_cin);
+			cli_print(cli, "\tPkts In/Out:\t%u/%u", session[s].pout, session[s].pin);
 			cli_print(cli, "\tMRU:\t\t%d", session[s].mru);
 			cli_print(cli, "\tRadius Session:\t%u", session[s].radius);
-			cli_print(cli, "\tRx Speed:\t%lu", session[s].rx_connect_speed);
-			cli_print(cli, "\tTx Speed:\t%lu", session[s].tx_connect_speed);
+			cli_print(cli, "\tRx Speed:\t%u", session[s].rx_connect_speed);
+			cli_print(cli, "\tTx Speed:\t%u", session[s].tx_connect_speed);
 			if (session[s].filter_in && session[s].filter_in <= MAXFILTER)
 				cli_print(cli, "\tFilter in:\t%u (%s)", session[s].filter_in, ip_filters[session[s].filter_in - 1].name);
 			if (session[s].filter_out && session[s].filter_out <= MAXFILTER)
@@ -645,23 +646,22 @@ static int cmd_show_counters(struct cli_def *cli, char *command, char **argv, in
 		return CLI_HELP_NO_ARGS;
 
 	cli_print(cli, "%-10s %-8s %-10s %-8s", "Ethernet", "Bytes", "Packets", "Errors");
-	cli_print(cli, "%-10s %8lu %8lu %8lu", "RX",
+	cli_print(cli, "%-10s %8u %8u %8u", "RX",
 			GET_STAT(tun_rx_bytes),
 			GET_STAT(tun_rx_packets),
 			GET_STAT(tun_rx_errors));
-	cli_print(cli, "%-10s %8lu %8lu %8lu", "TX",
+	cli_print(cli, "%-10s %8u %8u %8u", "TX",
 			GET_STAT(tun_tx_bytes),
 			GET_STAT(tun_tx_packets),
 			GET_STAT(tun_tx_errors));
 	cli_print(cli, "");
 
 	cli_print(cli, "%-10s %-8s %-10s %-8s %-8s", "Tunnel", "Bytes", "Packets", "Errors", "Retries");
-	cli_print(cli, "%-10s %8lu %8lu %8lu %8lu", "RX",
+	cli_print(cli, "%-10s %8u %8u %8u", "RX",
 			GET_STAT(tunnel_rx_bytes),
 			GET_STAT(tunnel_rx_packets),
-			GET_STAT(tunnel_rx_errors),
-			0L);
-	cli_print(cli, "%-10s %8lu %8lu %8lu %8lu", "TX",
+			GET_STAT(tunnel_rx_errors));
+	cli_print(cli, "%-10s %8u %8u %8u %8u", "TX",
 			GET_STAT(tunnel_tx_bytes),
 			GET_STAT(tunnel_tx_packets),
 			GET_STAT(tunnel_tx_errors),
@@ -670,52 +670,55 @@ static int cmd_show_counters(struct cli_def *cli, char *command, char **argv, in
 
 	cli_print(cli, "%-30s%-10s", "Counter", "Value");
 	cli_print(cli, "-----------------------------------------");
-	cli_print(cli, "%-30s%lu", "radius_retries",		GET_STAT(radius_retries));
-	cli_print(cli, "%-30s%lu", "arp_sent",			GET_STAT(arp_sent));
-	cli_print(cli, "%-30s%lu", "packets_snooped",		GET_STAT(packets_snooped));
-	cli_print(cli, "%-30s%lu", "tunnel_created",		GET_STAT(tunnel_created));
-	cli_print(cli, "%-30s%lu", "session_created",		GET_STAT(session_created));
-	cli_print(cli, "%-30s%lu", "tunnel_timeout",		GET_STAT(tunnel_timeout));
-	cli_print(cli, "%-30s%lu", "session_timeout",		GET_STAT(session_timeout));
-	cli_print(cli, "%-30s%lu", "radius_timeout",		GET_STAT(radius_timeout));
-	cli_print(cli, "%-30s%lu", "radius_overflow",		GET_STAT(radius_overflow));
-	cli_print(cli, "%-30s%lu", "tunnel_overflow",		GET_STAT(tunnel_overflow));
-	cli_print(cli, "%-30s%lu", "session_overflow",		GET_STAT(session_overflow));
-	cli_print(cli, "%-30s%lu", "ip_allocated",		GET_STAT(ip_allocated));
-	cli_print(cli, "%-30s%lu", "ip_freed",			GET_STAT(ip_freed));
-	cli_print(cli, "%-30s%lu", "cluster_forwarded",		GET_STAT(c_forwarded));
-	cli_print(cli, "%-30s%lu", "recv_forward",		GET_STAT(recv_forward));
+	cli_print(cli, "%-30s%u", "radius_retries",		GET_STAT(radius_retries));
+	cli_print(cli, "%-30s%u", "arp_sent",			GET_STAT(arp_sent));
+	cli_print(cli, "%-30s%u", "packets_snooped",		GET_STAT(packets_snooped));
+	cli_print(cli, "%-30s%u", "tunnel_created",		GET_STAT(tunnel_created));
+	cli_print(cli, "%-30s%u", "session_created",		GET_STAT(session_created));
+	cli_print(cli, "%-30s%u", "tunnel_timeout",		GET_STAT(tunnel_timeout));
+	cli_print(cli, "%-30s%u", "session_timeout",		GET_STAT(session_timeout));
+	cli_print(cli, "%-30s%u", "radius_timeout",		GET_STAT(radius_timeout));
+	cli_print(cli, "%-30s%u", "radius_overflow",		GET_STAT(radius_overflow));
+	cli_print(cli, "%-30s%u", "tunnel_overflow",		GET_STAT(tunnel_overflow));
+	cli_print(cli, "%-30s%u", "session_overflow",		GET_STAT(session_overflow));
+	cli_print(cli, "%-30s%u", "ip_allocated",		GET_STAT(ip_allocated));
+	cli_print(cli, "%-30s%u", "ip_freed",			GET_STAT(ip_freed));
+	cli_print(cli, "%-30s%u", "cluster_forwarded",		GET_STAT(c_forwarded));
+	cli_print(cli, "%-30s%u", "recv_forward",		GET_STAT(recv_forward));
+	cli_print(cli, "%-30s%u", "select_called",		GET_STAT(select_called));
+	cli_print(cli, "%-30s%u", "select_ready",		GET_STAT(select_ready));
+	cli_print(cli, "%-30s%u", "select_processed",		GET_STAT(select_processed));
 
 
 #ifdef STATISTICS
 	cli_print(cli, "\n%-30s%-10s", "Counter", "Value");
 	cli_print(cli, "-----------------------------------------");
-	cli_print(cli, "%-30s%lu", "call_processtun",		GET_STAT(call_processtun));
-	cli_print(cli, "%-30s%lu", "call_processipout",		GET_STAT(call_processipout));
-	cli_print(cli, "%-30s%lu", "call_processudp",		GET_STAT(call_processudp));
-	cli_print(cli, "%-30s%lu", "call_processpap",		GET_STAT(call_processpap));
-	cli_print(cli, "%-30s%lu", "call_processchap",		GET_STAT(call_processchap));
-	cli_print(cli, "%-30s%lu", "call_processlcp",		GET_STAT(call_processlcp));
-	cli_print(cli, "%-30s%lu", "call_processipcp",		GET_STAT(call_processipcp));
-	cli_print(cli, "%-30s%lu", "call_processipin",		GET_STAT(call_processipin));
-	cli_print(cli, "%-30s%lu", "call_processccp",		GET_STAT(call_processccp));
-	cli_print(cli, "%-30s%lu", "call_processrad",		GET_STAT(call_processrad));
-	cli_print(cli, "%-30s%lu", "call_sendarp",		GET_STAT(call_sendarp));
-	cli_print(cli, "%-30s%lu", "call_sendipcp",		GET_STAT(call_sendipcp));
-	cli_print(cli, "%-30s%lu", "call_sendchap",		GET_STAT(call_sendchap));
-	cli_print(cli, "%-30s%lu", "call_sessionbyip",		GET_STAT(call_sessionbyip));
-	cli_print(cli, "%-30s%lu", "call_sessionbyuser",	GET_STAT(call_sessionbyuser));
-	cli_print(cli, "%-30s%lu", "call_tunnelsend",		GET_STAT(call_tunnelsend));
-	cli_print(cli, "%-30s%lu", "call_tunnelkill",		GET_STAT(call_tunnelkill));
-	cli_print(cli, "%-30s%lu", "call_tunnelshutdown",	GET_STAT(call_tunnelshutdown));
-	cli_print(cli, "%-30s%lu", "call_sessionkill",		GET_STAT(call_sessionkill));
-	cli_print(cli, "%-30s%lu", "call_sessionshutdown",	GET_STAT(call_sessionshutdown));
-	cli_print(cli, "%-30s%lu", "call_sessionsetup",		GET_STAT(call_sessionsetup));
-	cli_print(cli, "%-30s%lu", "call_assign_ip_address",	GET_STAT(call_assign_ip_address));
-	cli_print(cli, "%-30s%lu", "call_free_ip_address",	GET_STAT(call_free_ip_address));
-	cli_print(cli, "%-30s%lu", "call_dump_acct_info",	GET_STAT(call_dump_acct_info));
-	cli_print(cli, "%-30s%lu", "call_radiussend",		GET_STAT(call_radiussend));
-	cli_print(cli, "%-30s%lu", "call_radiusretry",		GET_STAT(call_radiusretry));
+	cli_print(cli, "%-30s%u", "call_processtun",		GET_STAT(call_processtun));
+	cli_print(cli, "%-30s%u", "call_processipout",		GET_STAT(call_processipout));
+	cli_print(cli, "%-30s%u", "call_processudp",		GET_STAT(call_processudp));
+	cli_print(cli, "%-30s%u", "call_processpap",		GET_STAT(call_processpap));
+	cli_print(cli, "%-30s%u", "call_processchap",		GET_STAT(call_processchap));
+	cli_print(cli, "%-30s%u", "call_processlcp",		GET_STAT(call_processlcp));
+	cli_print(cli, "%-30s%u", "call_processipcp",		GET_STAT(call_processipcp));
+	cli_print(cli, "%-30s%u", "call_processipin",		GET_STAT(call_processipin));
+	cli_print(cli, "%-30s%u", "call_processccp",		GET_STAT(call_processccp));
+	cli_print(cli, "%-30s%u", "call_processrad",		GET_STAT(call_processrad));
+	cli_print(cli, "%-30s%u", "call_sendarp",		GET_STAT(call_sendarp));
+	cli_print(cli, "%-30s%u", "call_sendipcp",		GET_STAT(call_sendipcp));
+	cli_print(cli, "%-30s%u", "call_sendchap",		GET_STAT(call_sendchap));
+	cli_print(cli, "%-30s%u", "call_sessionbyip",		GET_STAT(call_sessionbyip));
+	cli_print(cli, "%-30s%u", "call_sessionbyuser",		GET_STAT(call_sessionbyuser));
+	cli_print(cli, "%-30s%u", "call_tunnelsend",		GET_STAT(call_tunnelsend));
+	cli_print(cli, "%-30s%u", "call_tunnelkill",		GET_STAT(call_tunnelkill));
+	cli_print(cli, "%-30s%u", "call_tunnelshutdown",	GET_STAT(call_tunnelshutdown));
+	cli_print(cli, "%-30s%u", "call_sessionkill",		GET_STAT(call_sessionkill));
+	cli_print(cli, "%-30s%u", "call_sessionshutdown",	GET_STAT(call_sessionshutdown));
+	cli_print(cli, "%-30s%u", "call_sessionsetup",		GET_STAT(call_sessionsetup));
+	cli_print(cli, "%-30s%u", "call_assign_ip_address",	GET_STAT(call_assign_ip_address));
+	cli_print(cli, "%-30s%u", "call_free_ip_address",	GET_STAT(call_free_ip_address));
+	cli_print(cli, "%-30s%u", "call_dump_acct_info",	GET_STAT(call_dump_acct_info));
+	cli_print(cli, "%-30s%u", "call_radiussend",		GET_STAT(call_radiussend));
+	cli_print(cli, "%-30s%u", "call_radiusretry",		GET_STAT(call_radiusretry));
 #endif
 	return CLI_OK;
 }
@@ -754,7 +757,7 @@ static int cmd_show_version(struct cli_def *cli, char *command, char **argv, int
 			p = "HEAD";
 
 		e = strpbrk(p, " \t$");
-		cli_print(cli, "Tag: %.*s", e ? e - p + 1 : strlen(p), p);
+		cli_print(cli, "Tag: %.*s", (int) (e ? e - p + 1 : strlen(p)), p);
 	}
 	
 	if (file)
@@ -837,7 +840,7 @@ static int cmd_show_pool(struct cli_def *cli, char *command, char **argv, int ar
 			if (ip_address_pool[i].last)
 				cli_print(cli, "%-15s\tN %8s [%s] %ds",
 					fmtaddr(htonl(ip_address_pool[i].address), 0), "",
-					ip_address_pool[i].user, time_now - ip_address_pool[i].last);
+					ip_address_pool[i].user, (int) time_now - ip_address_pool[i].last);
 
 			else if (show_all)
 				cli_print(cli, "%-15s\tN", fmtaddr(htonl(ip_address_pool[i].address), 0));
@@ -1892,7 +1895,7 @@ int regular_stuff(struct cli_def *cli)
 			debug_levels[(int)ringbuffer->buffer[i].level],
 			ringbuffer->buffer[i].tunnel,
 			ringbuffer->buffer[i].session,
-			p - m, m);
+			(int) (p - m), m);
 
 		out++;
 	}
@@ -2161,7 +2164,7 @@ static int cmd_show_bgp(struct cli_def *cli, char *command, char **argv, int arg
 			    "----------- ------- -------- ----- ---- ---------");
 		}
 
-		cli_print(cli, "%-18.18s %5d %15s %-11s %7d %7ds %5s %4s %4d %4d",
+		cli_print(cli, "%-18.18s %5d %15s %-11s %7d %7lds %5s %4s %4d %4d",
 			bgp_peers[i].name,
 			bgp_peers[i].as,
 			addr,

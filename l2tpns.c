@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.71 2004-12-16 08:54:16 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.72 2004-12-16 23:40:31 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -2346,6 +2346,8 @@ static void mainloop(void)
 		n = select(n + 1, &r, 0, 0, &to);
 #endif /* BGP */
 
+		STAT(select_called);
+
 		TIME = now();
 		if (n < 0)
 		{
@@ -2365,11 +2367,14 @@ static void mainloop(void)
 			int tun_pkts = 0;
 			int cluster_pkts = 0;
 
+			INC_STAT(select_ready, n);
+
 			// nsctl commands
 			if (FD_ISSET(controlfd, &r))
 			{
 				alen = sizeof(addr);
 				processcontrol(buf, recvfrom(controlfd, buf, sizeof(buf), MSG_WAITALL, (void *) &addr, &alen), &addr, alen);
+				STAT(select_processed);
 				n--;
 			}
 
@@ -2381,6 +2386,7 @@ static void mainloop(void)
 					if (FD_ISSET(radfds[i], &r))
 					{
 						processrad(buf, recv(radfds[i], buf, sizeof(buf), 0), i);
+						STAT(select_processed);
 						n--;
 					}
 				}
@@ -2400,17 +2406,21 @@ static void mainloop(void)
 				else
 					LOG(0, 0, 0, "accept error: %s\n", strerror(errno));
 
+				STAT(select_processed);
 				n--;
 			}
 
 #ifdef BGP
 			for (i = 0; i < BGP_NUM_PEERS; i++)
 			{
-				int isr = bgp_set[i] ? FD_ISSET(bgp_peers[i].sock, &r) : 0;
-				int isw = bgp_set[i] ? FD_ISSET(bgp_peers[i].sock, &w) : 0;
+				int isr = bgp_set[i] ? !!FD_ISSET(bgp_peers[i].sock, &r) : 0;
+				int isw = bgp_set[i] ? !!FD_ISSET(bgp_peers[i].sock, &w) : 0;
 				bgp_process(&bgp_peers[i], isr, isw);
-				if (isr) n--;
-				if (isw) n--;
+				if (isr || isw)
+				{
+					INC_STAT(select_processed, isr + isw);
+				    	n -= (isr + isw);
+				}
 			}
 #endif /* BGP */
 
@@ -2423,6 +2433,7 @@ static void mainloop(void)
 					if ((s = recvfrom(udpfd, buf, sizeof(buf), 0, (void *) &addr, &alen)) > 0)
 					{
 						processudp(buf, s, &addr);
+						STAT(select_processed);
 						udp_pkts++;
 					}
 					else
@@ -2438,6 +2449,7 @@ static void mainloop(void)
 					if ((s = read(tunfd, buf, sizeof(buf))) > 0)
 					{
 						processtun(buf, s);
+						STAT(select_processed);
 					    	tun_pkts++;
 					}
 					else
@@ -2454,6 +2466,7 @@ static void mainloop(void)
 					if ((s = recvfrom(cluster_sockfd, buf, sizeof(buf), MSG_WAITALL, (void *) &addr, &alen)) > 0)
 					{
 						processcluster(buf, s, addr.sin_addr.s_addr);
+						STAT(select_processed);
 						cluster_pkts++;
 					}
 					else

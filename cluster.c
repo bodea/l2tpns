@@ -1,8 +1,12 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.25 2004-12-16 08:49:53 bodea Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.26 2004-12-16 23:40:31 bodea Exp $";
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <stdarg.h>
+#include <unistd.h>
+#include <inttypes.h>
 #include <sys/file.h>
 #include <sys/stat.h>
 #include <sys/socket.h>
@@ -13,12 +17,7 @@ char const *cvs_id_cluster = "$Id: cluster.c,v 1.25 2004-12-16 08:49:53 bodea Ex
 #include <string.h>
 #include <malloc.h>
 #include <errno.h>
-#include <stdlib.h>
-#include <stdarg.h>
-#include <unistd.h>
-#include <stdio.h>
 #include <libcli.h>
-#include <inttypes.h>
 
 #include "l2tpns.h"
 #include "cluster.h"
@@ -62,7 +61,7 @@ static struct {
 
 static struct {
 	in_addr_t peer;
-	time_t basetime;
+	uint32_t basetime;
 	clockt timestamp;
 	int uptodate;
 } peers[CLUSTER_MAX_SIZE];	// List of all the peers we've heard from.
@@ -1440,12 +1439,12 @@ int cmd_show_cluster(struct cli_def *cli, char *command, char **argv, int argc)
 				: "Not defined",
 			0.1 * (TIME - config->cluster_last_hb));
 		cli_print(cli, "Uptodate         : %s", config->cluster_iam_uptodate ? "Yes" : "No");
-		cli_print(cli, "Table version #  : %llu", config->cluster_table_version);
+		cli_print(cli, "Table version #  : %" PRIu64, config->cluster_table_version);
 		cli_print(cli, "Next sequence number expected: %d", config->cluster_seq_number);
 		cli_print(cli, "%d sessions undefined of %d", config->cluster_undefined_sessions, config->cluster_highest_sessionid);
 		cli_print(cli, "%d tunnels undefined of %d", config->cluster_undefined_tunnels, config->cluster_highest_tunnelid);
 	} else {
-		cli_print(cli, "Table version #  : %llu", config->cluster_table_version);
+		cli_print(cli, "Table version #  : %" PRIu64, config->cluster_table_version);
 		cli_print(cli, "Next heartbeat # : %d", config->cluster_seq_number);
 		cli_print(cli, "Highest session  : %d", config->cluster_highest_sessionid);
 		cli_print(cli, "Highest tunnel   : %d", config->cluster_highest_tunnelid);
@@ -1456,7 +1455,7 @@ int cmd_show_cluster(struct cli_def *cli, char *command, char **argv, int argc)
 	if (num_peers)
 		cli_print(cli, "%20s  %10s %8s", "Address", "Basetime", "Age");
 	for (i = 0; i < num_peers; ++i) {
-		cli_print(cli, "%20s  %10d %8d", fmtaddr(peers[i].peer, 0),
+		cli_print(cli, "%20s  %10u %8d", fmtaddr(peers[i].peer, 0),
 			peers[i].basetime, TIME - peers[i].timestamp);
 	}
 	return CLI_OK;
