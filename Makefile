@@ -1,12 +1,12 @@
-PREFIX=
-bindir = $(PREFIX)/usr/sbin
-etcdir = $(PREFIX)/etc/l2tpns
-libdir = $(PREFIX)/usr/lib/l2tpns
+DESTDIR =
+bindir = $(DESTDIR)/usr/sbin
+etcdir = $(DESTDIR)/etc/l2tpns
+libdir = $(DESTDIR)/usr/lib/l2tpns
 
 CC = gcc
-DEFINES= -DBGP -DRINGBUFFER -DSTAT_CALLS -DSTATISTICS
-OPTIM=-g -O3 -funroll-loops -fomit-frame-pointer -finline-functions
-CFLAGS=-Wall $(OPTIM) $(DEFINES)
+DEFINES = -DBGP -DRINGBUFFER -DSTAT_CALLS -DSTATISTICS
+OPTIM = -g -O3 -funroll-loops -fomit-frame-pointer -finline-functions
+CFLAGS = -Wall $(OPTIM) $(DEFINES)
 LDFLAGS = 
 LIBS = -lm -ldl -lcli
 INSTALL = /usr/bin/install -c
@@ -50,11 +50,11 @@ depend:
 install: all
 	$(INSTALL) -D -o root -g root -m 0755 l2tpns $(bindir)/l2tpns
 	$(INSTALL) -D -o root -g root -m 0755 nsctl $(bindir)/nsctl
-	$(INSTALL) -D -o root -g root -m 0600 etc/l2tpns.cfg.default $(etcdir)/l2tpns.cfg
+	$(INSTALL) -D -o root -g root -m 0600 etc/startup-config.default $(etcdir)/startup-config
 	$(INSTALL) -D -o root -g root -m 0644 etc/ip_pool.default $(etcdir)/l2tpns.ip_pool
 	$(INSTALL) -D -o root -g root -m 0600 etc/users.default $(etcdir)/l2tpns.users
-	for PLUGIN in $(PLUGINS); do \
-		$(INSTALL) -D -o root -g root -m 0755 $(PLUGIN) $(libdir)/$(PLUGIN); \
+	for plugin in $(PLUGINS); do \
+		$(INSTALL) -D -o root -g root -m 0755 $$plugin $(libdir)/$$plugin; \
 	done
 	if [ ! -e /dev/net/tun ]; then \
 		mkdir /dev/net; \
