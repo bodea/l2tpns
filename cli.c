@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.13 2004-08-26 06:22:37 fred_nerk Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.14 2004-08-26 06:24:12 fred_nerk Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -1284,6 +1284,12 @@ int cmd_throttle(struct cli_def *cli, char *command, char **argv, int argc)
 	if (!config->cluster_iam_master)
 	{
 		cli_print(cli, "Can't do this on a slave.  Do it on %s", inet_toa(config->cluster_master_address));
+		return CLI_OK;
+	}
+
+	if (argc == 0)
+	{
+		cli_print(cli, "You must specify at least a username");
 		return CLI_OK;
 	}
 
