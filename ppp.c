@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.24 2004-11-09 05:48:28 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.25 2004-11-09 05:49:08 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -783,7 +783,7 @@ void send_ipin(sessionidt s, u8 *buf, int len)
 	eth_tx += len - 4;
 
 	STAT(tun_tx_packets);
-	INC_STAT(tun_tx_bytes, l - 4);
+	INC_STAT(tun_tx_bytes, len - 4);
 }
 
 
