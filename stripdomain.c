@@ -2,7 +2,7 @@
 #include "l2tpns.h"
 #include "plugin.h"
 
-char const *cvs_id = "$Id: stripdomain.c,v 1.1 2004-09-02 04:29:30 fred_nerk Exp $";
+char const *cvs_id = "$Id: stripdomain.c,v 1.2 2004-11-03 13:29:31 bodea Exp $";
 
 int __plugin_api_version = 1;
 static struct pluginfuncs *p = 0;
@@ -16,7 +16,7 @@ int plugin_pre_auth(struct param_pre_auth *data)
 	// Strip off @domain
 	if ((x = strchr(data->username, '@')))
 	{
-		p->log(3, 0, 0, 0, "Stripping off trailing domain name \"%s\"\n", x);
+		p->_log(3, 0, 0, 0, "Stripping off trailing domain name \"%s\"\n", x);
 		*x = 0;
 	}
 
