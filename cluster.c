@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.22 2004-12-13 05:09:55 bodea Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.23 2004-12-15 01:04:34 bodea Exp $";
 
 #include <stdio.h>
 #include <sys/file.h>
@@ -1141,23 +1141,33 @@ static int cluster_process_heartbeat(u8 * data, int size, int more, u8 * p, u32 
 			LOG(0, 0, 0, "Heartbeat with zero basetime!  Ignoring\n");
 			return -1; // Skip it.
 		}
-		if (more >= 4 && h->table_version > config->cluster_table_version) {
-		    	LOG(0, 0, 0, "They've seen more state changes (%llu vs my %llu) so I'm gone!\n",
-				h->table_version, config->cluster_table_version);
 
-			kill(0, SIGTERM);
-			exit(1);
+		if (more >= 4) {
+			if (h->table_version > config->cluster_table_version) {
+				LOG(0, 0, 0, "They've seen more state changes (%llu vs my %llu) so I'm gone!\n",
+					h->table_version, config->cluster_table_version);
+
+				kill(0, SIGTERM);
+				exit(1);
+			} else if (h->table_version < config->cluster_table_version) {
+			    	return -1;
+			}
 		}
+
 		if (basetime > h->basetime) {
 			LOG(0, 0, 0, "They're an older master than me so I'm gone!\n");
 			kill(0, SIGTERM);
 			exit(1);
+		} else if (basetime < h->basetime)
+			return -1;
 		}
-		if (basetime == h->basetime && my_address < addr) { // Tie breaker.
+
+		if (my_address < addr) { // Tie breaker.
 			LOG(0, 0, 0, "They're a higher IP address than me, so I'm gone!\n");
 			kill(0, SIGTERM);
 			exit(1);
 		}
+
 		return -1; // Skip it.
 	}
 
