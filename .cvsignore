@@ -1,5 +1,6 @@
 *.o
 l2tpns
+nsctl
 state.dump
 *.swp
 cluster_master

@@ -2240,7 +2240,8 @@ int main(int argc, char *argv[])
 	initdata();
 	init_cli();
 	read_config_file();
-	log(0, 0, 0, 0, "$Id: l2tpns.c,v 1.3 2004-03-05 00:22:06 fred_nerk Exp $\n(c) Copyright 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced\n");
+	log(1, 0, 0, 0, "L2TPNS Version 1.1.0 - http://l2tpns.sourceforge.net/\n");
+	log(1, 0, 0, 0, "Licensed under the GPL\n");
 
 	/* Start up the cluster first, so that we don't have two machines with
 	 * the same IP at once.
