@@ -1,5 +1,5 @@
 // L2TPNS Clustering Stuff
-// $Id: cluster.h,v 1.7 2004-11-16 07:54:32 bodea Exp $
+// $Id: cluster.h,v 1.8 2004-12-03 06:40:02 bodea Exp $
 
 #ifndef __CLUSTER_H__
 #define __CLUSTER_H__
@@ -20,7 +20,7 @@
 #define C_CTUNNEL		13	// Compressed tunnel structure.
 #define C_GARDEN		14	// Gardened packet
 
-#define HB_VERSION		3	// Protocol version number..
+#define HB_VERSION		4	// Protocol version number..
 #define HB_MAX_SEQ		(1<<30)	// Maximum sequence number. (MUST BE A POWER OF 2!)
 #define HB_HISTORY_SIZE		64	// How many old heartbeats we remember?? (Must be a factor of HB_MAX_SEQ)
 
@@ -45,10 +45,12 @@ typedef struct {
 	u32	size_sess;	// Size of the session structure.
 
 	u32	size_tunn;	// size of the tunnel structure.
-	u32	interval;	// ping/heartbeat interval (if changed)
-	u32	timeout;	// heartbeat timeout (if changed)
+	u32	interval;	// ping/heartbeat interval
+	u32	timeout;	// heartbeat timeout
 
-	char reserved[128 - 11*sizeof(u32)];	// Pad out to 128 bytes.
+	u64	table_version;	// # state changes processed by cluster
+
+	char reserved[128 - 13*sizeof(u32)];	// Pad out to 128 bytes.
 } heartt;
 
 typedef struct {		/* Used to update byte counters on the */

@@ -1,3 +1,9 @@
+* Fri Dec 3 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.13
+- Better cluster master collision resolution: keep a counter of state
+  changes, propagated in the heartbeats; the master with the highest #
+  of changes (that has kept in contact with the LAC through the
+  outage) prevails.
+
 * Wed Dec 1 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.12
 - The "This time, for sure!" release.
 - Fix throttlectl plugin argument parsing.

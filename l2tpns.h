@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.44 2004-12-01 04:14:55 bodea Exp $
+// $Id: l2tpns.h,v 1.45 2004-12-03 06:40:02 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -15,7 +15,7 @@
 #include <sys/types.h>
 #include <libcli.h>
 
-#define VERSION	"2.0.12"
+#define VERSION	"2.0.13"
 
 // Limits
 #define MAXTUNNEL	500		// could be up to 65535
@@ -109,6 +109,7 @@ enum
 // Types
 typedef unsigned short u16;
 typedef unsigned int u32;
+typedef unsigned long long u64;
 typedef unsigned char u8;
 typedef u32 ipt;
 typedef u16 portt;
@@ -465,6 +466,7 @@ typedef struct
 
 	int		cluster_hb_interval;		// How often to send a heartbeat.
 	int		cluster_hb_timeout;		// How many missed heartbeats trigger an election.
+	u64		cluster_table_version;		// # state changes processed by cluster
 
 #ifdef BGP
 #define BGP_NUM_PEERS	2
