@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.32 2004-10-28 03:31:39 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.33 2004-10-28 03:58:38 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -2464,7 +2464,6 @@ void mainloop(void)
 void initdata(int optdebug, char *optconfig)
 {
 	int i;
-	char *p;
 
 	if (!(_statistics = shared_malloc(sizeof(struct Tstats))))
 	{
