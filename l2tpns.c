@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.39 2004-11-03 13:23:58 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.40 2004-11-04 05:08:36 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -23,6 +23,7 @@ char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.39 2004-11-03 13:23:58 bodea Exp 
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <ctype.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
@@ -2442,6 +2443,71 @@ void mainloop(void)
 	// Important!!! We MUST not process any packets past this point!
 }
 
+static void stripdomain(char *host)
+{
+	char *p;
+
+	if ((p = strchr(host, '.')))
+	{
+		char *domain = 0;
+		char _domain[1024];
+
+		// strip off domain
+		FILE *resolv = fopen("/etc/resolv.conf", "r");
+		if (resolv)
+		{
+			char buf[1024];
+			char *b;
+
+			while (fgets(buf, sizeof(buf), resolv))
+			{
+				if (strncmp(buf, "domain", 6) && strncmp(buf, "search", 6))
+					continue;
+
+				if (!isspace(buf[6]))
+					continue;
+
+				b = buf + 7;
+				while (isspace(*b)) b++;
+
+				if (*b)
+				{
+					char *d = b;
+					while (*b && !isspace(*b)) b++;
+					*b = 0;
+					if (buf[0] == 'd') // domain is canonical
+					{
+						domain = d;
+						break;
+					}
+
+					// first search line
+					if (!domain)
+					{
+						// hold, may be subsequent domain line
+						strncpy(_domain, d, sizeof(_domain))[sizeof(_domain)-1] = 0;
+						domain = _domain;
+					}
+				}
+			}
+
+			fclose(resolv);
+		}
+
+		if (domain)
+		{
+			int hl = strlen(host);
+			int dl = strlen(domain);
+			if (dl < hl && host[hl - dl - 1] == '.' && !strcmp(host + hl - dl, domain))
+				host[hl -dl - 1] = 0;
+		}
+		else
+		{
+			*p = 0; // everything after first dot
+		}
+	}
+}
+
 // Init data structures
 void initdata(int optdebug, char *optconfig)
 {
@@ -2536,10 +2602,9 @@ void initdata(int optdebug, char *optconfig)
 
 	if (!*hostname)
 	{
-		char *p;
 		// Grab my hostname unless it's been specified
 		gethostname(hostname, sizeof(hostname));
-		if ((p = strchr(hostname, '.'))) *p = 0;
+		stripdomain(hostname);
 	}
 
 	_statistics->start_time = _statistics->last_reset = time(NULL);
