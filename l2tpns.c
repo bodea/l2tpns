@@ -1,10 +1,10 @@
 // L2TP Network Server
 // Adrian Kennard 2002
-// Copyright (c) 2003, 2004 Optus Internet Engineering
+// Copyright (c) 2003, 2004, 2005 Optus Internet Engineering
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.74 2004-12-18 01:20:05 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.75 2005-01-07 07:18:33 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -62,6 +62,7 @@ int clifd = -1;			// Socket listening for CLI connections.
 int snoopfd = -1;		// UDP file handle for sending out intercept data
 int *radfds = NULL;		// RADIUS requests file handles
 int ifrfd = -1;			// File descriptor for routing, etc
+static int rand_fd = -1;	// Random data source
 time_t basetime = 0;		// base clock
 char hostname[1000] = "";	// us.
 static uint32_t sessionid = 0;	// session id for radius accounting
@@ -94,6 +95,7 @@ config_descriptt config_values[] = {
 	CONFIG("debug", debug, INT),
 	CONFIG("log_file", log_filename, STRING),
 	CONFIG("pid_file", pid_file, STRING),
+	CONFIG("random_device", random_device, STRING),
 	CONFIG("l2tp_secret", l2tpsecret, STRING),
 	CONFIG("primary_dns", default_dns1, IPv4),
 	CONFIG("secondary_dns", default_dns2, IPv4),
@@ -104,6 +106,7 @@ config_descriptt config_values[] = {
 	CONFIG("secondary_radius_port", radiusport[1], SHORT),
 	CONFIG("radius_accounting", radius_accounting, BOOL),
 	CONFIG("radius_secret", radiussecret, STRING),
+	CONFIG("radius_authtypes", radius_authtypes_s, STRING),
 	CONFIG("bind_address", bind_address, IPv4),
 	CONFIG("peer_address", peer_address, IPv4),
 	CONFIG("send_garp", send_garp, BOOL),
@@ -203,7 +206,6 @@ clockt backoff(uint8_t try)
 void _log(int level, sessionidt s, tunnelidt t, const char *format, ...)
 {
 	static char message[65536] = {0};
-	static char message2[65536] = {0};
 	va_list ap;
 
 #ifdef RINGBUFFER
@@ -227,18 +229,13 @@ void _log(int level, sessionidt s, tunnelidt t, const char *format, ...)
 	if (config->debug < level) return;
 
 	va_start(ap, format);
+	vsnprintf(message, sizeof(message), format, ap);
+
 	if (log_stream)
-	{
-		vsnprintf(message2, 65535, format, ap);
-		snprintf(message, 65535, "%s %02d/%02d %s", time_now_string, t, s, message2);
-		fprintf(log_stream, "%s", message);
-	}
+		fprintf(log_stream, "%s %02d/%02d %s", time_now_string, t, s, message);
 	else if (syslog_log)
-	{
-		vsnprintf(message2, 65535, format, ap);
-		snprintf(message, 65535, "%02d/%02d %s", t, s, message2);
-		syslog(level + 2, message); // We don't need LOG_EMERG or LOG_ALERT
-	}
+		syslog(level + 2, "%02d/%02d %s", t, s, message); // We don't need LOG_EMERG or LOG_ALERT
+
 	va_end(ap);
 }
 
@@ -293,6 +290,72 @@ void _log_hex(int level, const char *title, const char *data, int maxsize)
 	}
 }
 
+// initialise the random generator
+static void initrandom(char *source)
+{
+	static char path[sizeof(config->random_device)] = "*undefined*";
+
+	// reinitialise only if we are forced to do so or if the config has changed
+	if (source && !strncmp(path, source, sizeof(path)))
+		return;
+
+	// close previous source, if any
+	if (rand_fd >= 0) close(rand_fd);
+
+	rand_fd = -1;
+
+	if (source)
+	{
+		// register changes
+		snprintf(path, sizeof(path), "%s", source);
+
+		if (*path == '/')
+		{
+			rand_fd = open(path, O_RDONLY|O_NONBLOCK);
+			if (rand_fd < 0)
+				LOG(0, 0, 0, "Error opening the random device %s: %s\n",
+					path, strerror(errno));
+		}
+	}
+
+	// no source: seed prng
+	{
+		unsigned seed = time_now ^ getpid();
+		LOG(4, 0, 0, "Seeding the pseudo random generator: %u\n", seed);
+		srand(seed);
+	}
+}
+
+// fill buffer with random data
+void random_data(uint8_t *buf, int len)
+{
+	int n = 0;
+
+	CSTAT(random_data);
+	if (rand_fd >= 0)
+	{
+		n = read(rand_fd, buf, len);
+		if (n >= len) return;
+		if (n < 0)
+		{
+			if (errno != EAGAIN)
+			{
+				LOG(0, 0, 0, "Error reading from random source: %s\n",
+					strerror(errno));
+
+				// fall back to rand()
+				initrandom(0);
+			}
+
+			n = 0;
+		}
+	}
+
+	// append missing data
+	while (n < len)
+		// not using the low order bits from the prng stream
+		buf[n++] = (rand() >> 4) & 0xff;
+}
 
 // Add a route
 //
@@ -476,7 +539,7 @@ static int lookup_ipmap(in_addr_t ip)
 sessionidt sessionbyip(in_addr_t ip)
 {
 	int s = lookup_ipmap(ip);
-	CSTAT(call_sessionbyip);
+	CSTAT(sessionbyip);
 
 	if (s > 0 && s < MAXSESSION && session[s].tunnel)
 		return (sessionidt) s;
@@ -576,7 +639,7 @@ int cmd_show_ipcache(struct cli_def *cli, char *command, char **argv, int argc)
 sessionidt sessionbyuser(char *username)
 {
 	int s;
-	CSTAT(call_sessionbyuser);
+	CSTAT(sessionbyuser);
 
 	for (s = 1; s < MAXSESSION ; ++s)
 	{
@@ -640,7 +703,7 @@ void tunnelsend(uint8_t * buf, uint16_t l, tunnelidt t)
 {
 	struct sockaddr_in addr;
 
-	CSTAT(call_tunnelsend);
+	CSTAT(tunnelsend);
 
 	if (!t)
 	{
@@ -716,7 +779,7 @@ static void processipout(uint8_t * buf, int len)
 
 	uint8_t b[MAXETHER + 20];
 
-	CSTAT(call_processipout);
+	CSTAT(processipout);
 
 	if (len < MIN_IP_SIZE)
 	{
@@ -1051,7 +1114,7 @@ void sessionshutdown(sessionidt s, char *reason)
 	int walled_garden = session[s].walled_garden;
 
 
-	CSTAT(call_sessionshutdown);
+	CSTAT(sessionshutdown);
 
 	if (!session[s].tunnel)
 	{
@@ -1079,9 +1142,7 @@ void sessionshutdown(sessionidt s, char *reason)
 			}
 			else
 			{
-				int n;
-				for (n = 0; n < 15; n++)
-					radius[r].auth[n] = rand();
+				random_data(radius[r].auth, sizeof(radius[r].auth));
 			}
 		}
 
@@ -1142,7 +1203,7 @@ void sendipcp(tunnelidt t, sessionidt s)
 	uint16_t r = session[s].radius;
 	uint8_t *q;
 
-	CSTAT(call_sendipcp);
+	CSTAT(sendipcp);
 
 	if (!r)
 		r = radiusnew(s);
@@ -1181,7 +1242,7 @@ void sendipcp(tunnelidt t, sessionidt s)
 static void sessionkill(sessionidt s, char *reason)
 {
 
-	CSTAT(call_sessionkill);
+	CSTAT(sessionkill);
 
 	session[s].die = now();
 	sessionshutdown(s, reason);  // close radius/routes, etc.
@@ -1211,7 +1272,7 @@ static void tunnelkill(tunnelidt t, char *reason)
 	sessionidt s;
 	controlt *c;
 
-	CSTAT(call_tunnelkill);
+	CSTAT(tunnelkill);
 
 	tunnel[t].state = TUNNELDIE;
 
@@ -1241,7 +1302,7 @@ static void tunnelshutdown(tunnelidt t, char *reason)
 {
 	sessionidt s;
 
-	CSTAT(call_tunnelshutdown);
+	CSTAT(tunnelshutdown);
 
 	if (!tunnel[t].last || !tunnel[t].far || tunnel[t].state == TUNNELFREE)
 	{
@@ -1276,7 +1337,7 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 	uint8_t *p = buf + 2;
 
 
-	CSTAT(call_processudp);
+	CSTAT(processudp);
 
 	udp_rx += len;
 	udp_rx_pkt++;
@@ -1523,12 +1584,12 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 				b += 2;
 				n -= 6;
 
-				LOG(4, s, t, "   AVP %d (%s) len %d\n", mtype, avpnames[mtype], n);
+				LOG(4, s, t, "   AVP %d (%s) len %d\n", mtype, avp_name(mtype), n);
 				switch (mtype)
 				{
 				case 0:     // message type
 					message = ntohs(*(uint16_t *) b);
-					LOG(4, s, t, "   Message type = %d (%s)\n", *b, l2tp_message_types[message]);
+					LOG(4, s, t, "   Message type = %d (%s)\n", *b, l2tp_message_type(message));
 					mandatorymessage = flags;
 					break;
 				case 1:     // result code
@@ -1537,23 +1598,18 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 						const char* resdesc = "(unknown)";
 						if (message == 4)
 						{ /* StopCCN */
-							if (rescode <= MAX_STOPCCN_RESULT_CODE)
-								resdesc = stopccn_result_codes[rescode];
+							resdesc = stopccn_result_code(rescode);
 						}
 						else if (message == 14)
 						{ /* CDN */
-							if (rescode <= MAX_CDN_RESULT_CODE)
-								resdesc = cdn_result_codes[rescode];
+							resdesc = cdn_result_code(rescode);
 						}
 
 						LOG(4, s, t, "   Result Code %d: %s\n", rescode, resdesc);
 						if (n >= 4)
 						{
 							uint16_t errcode = ntohs(*(uint16_t *)(b + 2));
-							const char* errdesc = "(unknown)";
-							if (errcode <= MAX_ERROR_CODE)
-								errdesc = error_codes[errcode];
-							LOG(4, s, t, "   Error Code %d: %s\n", errcode, errdesc);
+							LOG(4, s, t, "   Error Code %d: %s\n", errcode, error_code(errcode));
 						}
 						if (n > 4)
 							LOG(4, s, t, "   Error String: %.*s\n", n-4, b+4);
@@ -1681,9 +1737,9 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 					}
 				case 29:    // Proxy Authentication Type
 					{
-						uint16_t authtype = ntohs(*(uint16_t *)b);
-						LOG(4, s, t, "   Proxy Auth Type %d (%s)\n", authtype, authtypes[authtype]);
-						requestchap = (authtype == 2);
+						uint16_t atype = ntohs(*(uint16_t *)b);
+						LOG(4, s, t, "   Proxy Auth Type %d (%s)\n", atype, auth_type(atype));
+						requestchap = (atype == 2);
 						break;
 					}
 				case 30:    // Proxy Authentication Name
@@ -1827,12 +1883,9 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 						LOG(3, s, t, "New session (%d/%d)\n", tunnel[t].far, session[s].far);
 						control16(c, 14, s, 1); // assigned session
 						controladd(c, t, s); // send the reply
-						{
-							// Generate a random challenge
-							int n;
-							for (n = 0; n < 15; n++)
-								radius[r].auth[n] = rand();
-						}
+
+						// Generate a random challenge
+						random_data(radius[r].auth, sizeof(radius[r].auth));
 						strncpy(radius[r].calling, calling, sizeof(radius[r].calling) - 1);
 						strncpy(session[s].called, called, sizeof(session[s].called) - 1);
 						strncpy(session[s].calling, calling, sizeof(session[s].calling) - 1);
@@ -1982,7 +2035,7 @@ static void processtun(uint8_t * buf, int len)
 	STAT(tun_rx_packets);
 	INC_STAT(tun_rx_bytes, len);
 
-	CSTAT(call_processtun);
+	CSTAT(processtun);
 
 	eth_rx_pkt++;
 	eth_rx += len;
@@ -2625,6 +2678,7 @@ static void initdata(int optdebug, char *optconfig)
 	config->debug = optdebug;
 	config->num_tbfs = MAXTBFS;
 	config->rl_rate = 28; // 28kbps
+	strcpy(config->random_device, RANDOMDEVICE);
 
 	if (!(tunnel = shared_malloc(sizeof(tunnelt) * MAXTUNNEL)))
 	{
@@ -2655,12 +2709,12 @@ static void initdata(int optdebug, char *optconfig)
 		exit(1);
 	}
 
-if (!(ip_filters = shared_malloc(sizeof(ip_filtert) * MAXFILTER)))
-{
-	LOG(0, 0, 0, "Error doing malloc for ip_filters: %s\n", strerror(errno));
-	exit(1);
-}
-memset(ip_filters, 0, sizeof(ip_filtert) * MAXFILTER);
+	if (!(ip_filters = shared_malloc(sizeof(ip_filtert) * MAXFILTER)))
+	{
+		LOG(0, 0, 0, "Error doing malloc for ip_filters: %s\n", strerror(errno));
+		exit(1);
+	}
+	memset(ip_filters, 0, sizeof(ip_filtert) * MAXFILTER);
 
 #ifdef RINGBUFFER
 	if (!(ringbuffer = shared_malloc(sizeof(struct Tringbuffer))))
@@ -2730,7 +2784,7 @@ static int assign_ip_address(sessionidt s)
 	char reuse = 0;
 
 
-	CSTAT(call_assign_ip_address);
+	CSTAT(assign_ip_address);
 
 	for (i = 1; i < ip_pool_size; i++)
 	{
@@ -2783,7 +2837,7 @@ static void free_ip_address(sessionidt s)
 	int i = session[s].ip_pool_index;
 
 
-	CSTAT(call_free_ip_address);
+	CSTAT(free_ip_address);
 
 	if (!session[s].ip)
 		return; // what the?
@@ -3054,7 +3108,7 @@ static void dump_acct_info(int all)
 	FILE *f = NULL;
 
 
-	CSTAT(call_dump_acct_info);
+	CSTAT(dump_acct_info);
 
 	if (shut_acct_n)
 	{
@@ -3128,7 +3182,7 @@ int main(int argc, char *argv[])
 	init_tbf(config->num_tbfs);
 
 	LOG(0, 0, 0, "L2TPNS version " VERSION "\n");
-	LOG(0, 0, 0, "Copyright (c) 2003, 2004 Optus Internet Engineering\n");
+	LOG(0, 0, 0, "Copyright (c) 2003, 2004, 2005 Optus Internet Engineering\n");
 	LOG(0, 0, 0, "Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced\n");
 	{
 		struct rlimit rlim;
@@ -3533,6 +3587,7 @@ static int facility_value(char *name)
 static void update_config()
 {
 	int i;
+	char *p;
 	static int timeout = 0;
 	static int interval = 0;
 
@@ -3544,6 +3599,7 @@ static void update_config()
 		fclose(log_stream);
 		log_stream = NULL;
 	}
+
 	if (*config->log_filename)
 	{
 		if (strstr(config->log_filename, "syslog:") == config->log_filename)
@@ -3575,7 +3631,6 @@ static void update_config()
 		setbuf(log_stream, NULL);
 	}
 
-
 	// Update radius
 	config->numradiusservers = 0;
 	for (i = 0; i < MAXRADSERVER; i++)
@@ -3600,6 +3655,59 @@ static void update_config()
 
 	config->num_radfds = 2 << RADIUS_SHIFT;
 
+	// parse radius_authtypes_s
+	config->radius_authtypes = config->radius_authprefer = 0;
+	p = config->radius_authtypes_s;
+	while (*p)
+	{
+		char *s = strpbrk(p, " \t,");
+		int type = 0;
+
+		if (s)
+		{
+			*s++ = 0;
+			while (*s == ' ' || *s == '\t')
+				s++;
+
+			if (!*s)
+				s = 0;
+		}
+
+		if (!strncasecmp("chap", p, strlen(p)))
+			type = AUTHCHAP;
+		else if (!strncasecmp("pap", p, strlen(p)))
+			type = AUTHPAP;
+		else
+			LOG(0, 0, 0, "Invalid RADIUS authentication type \"%s\"", p);
+
+		config->radius_authtypes |= type;
+		if (!config->radius_authprefer)
+			config->radius_authprefer = type;
+	}
+
+	if (!config->radius_authtypes)
+	{
+		LOG(0, 0, 0, "Defaulting to PAP authentication\n");
+		config->radius_authtypes = config->radius_authprefer = AUTHPAP;
+	}
+
+	// normalise radius_authtypes_s
+	if (config->radius_authprefer == AUTHPAP)
+	{
+		strcpy(config->radius_authtypes_s, "pap");
+		if (config->radius_authtypes & AUTHCHAP)
+			strcat(config->radius_authtypes_s, ", chap");
+	}
+	else
+	{
+		strcpy(config->radius_authtypes_s, "chap");
+		if (config->radius_authtypes & AUTHPAP)
+			strcat(config->radius_authtypes_s, ", pap");
+	}
+
+	// re-initialise the random number source
+	initrandom(config->random_device);
+
 	// Update plugins
 	for (i = 0; i < MAXPLUGINS; i++)
 	{
@@ -3617,6 +3725,7 @@ static void update_config()
 			remove_plugin(config->old_plugins[i]);
 		}
 	}
+
 	memcpy(config->old_plugins, config->plugins, sizeof(config->plugins));
 	if (!config->cleanup_interval) config->cleanup_interval = 10;
 	if (!config->multi_read_count) config->multi_read_count = 10;
@@ -3695,7 +3804,7 @@ int sessionsetup(tunnelidt t, sessionidt s)
 	sessionidt i;
 	int r;
 
-	CSTAT(call_sessionsetup);
+	CSTAT(sessionsetup);
 
 	LOG(3, s, t, "Doing session setup for session\n");
 
