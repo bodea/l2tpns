@@ -1,3 +1,6 @@
+* Wed Dec 1 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.10
+- Fix byte ordering of LCP header length (thanks Yuri).
+
 * Tue Nov 30 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.9
 - Revise CCP, send ConfigReq once only.
 - Don't copy the old buffer into Config{Nak,Rej} LCP responses (oops);
