@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.37 2004-11-30 01:35:19 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.38 2004-11-30 19:34:57 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -401,7 +401,7 @@ void processlcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 					*q++ = 6;
 					memset(q, 0, 4); // asyncmap 0
 					q += 4;
-					*((u16 *) (response + 2)) = q - response; // LCP header length
+					*((u16 *) (response + 2)) = htons(q - response); // LCP header length
 					break;
 
 				case 3: // Authentication-Protocol
@@ -438,7 +438,7 @@ void processlcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 						memcpy(q, o, length);
 						*(u16 *)(q += 2) = htons(PPPPAP); // NAK -> Use PAP instead
 						q += length;
-						*((u16 *) (response + 2)) = q - response;
+						*((u16 *) (response + 2)) = htons(q - response);
 					}
 					break;
 
@@ -469,7 +469,7 @@ void processlcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 
 					memcpy(q, o, length);
 					q += length;
-					*((u16 *) (response + 2)) = q - response; // LCP header length
+					*((u16 *) (response + 2)) = htons(q - response); // LCP header length
 			}
 			x -= length;
 			o += length;
