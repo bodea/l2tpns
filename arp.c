@@ -1,6 +1,6 @@
 // L2TPNS: arp
 
-char const *cvs_id_arp = "$Id: arp.c,v 1.3 2004-06-28 02:43:13 fred_nerk Exp $";
+char const *cvs_id_arp = "$Id: arp.c,v 1.4 2004-07-08 16:19:09 bodea Exp $";
 
 #include <string.h>
 #include <unistd.h>
@@ -28,6 +28,9 @@ void sendarp(int ifr_idx, const unsigned char* mac, ipt ip)
 	int fd;
 	struct sockaddr_ll sll;
 	struct arp_buf buf;
+
+	CSTAT(call_sendarp);
+	STAT(arp_sent);
 
 	/* Ethernet */
 	memset(buf.eth.ether_dhost, 0xFF, ETH_ALEN);
