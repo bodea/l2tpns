@@ -4,11 +4,10 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-// FIXME don't clean up tunnels with vlan set
 // FIXME immediately clear tunnels with vlan set when last session closes
 // FIXME make outgoing packets work from PPPoE
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.28.2.2 2004-09-23 06:15:38 fred_nerk Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.28.2.3 2004-10-05 04:56:25 fred_nerk Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -24,6 +23,7 @@ char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.28.2.2 2004-09-23 06:15:38 fred_n
 #include <sys/mman.h>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <netpacket/packet.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -56,7 +56,7 @@ char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.28.2.2 2004-09-23 06:15:38 fred_n
 // Globals
 struct configt *config = NULL;	// all configuration
 int tunfd = -1;			// tun interface file handle. (network device)
-int tapfd = 0;			// tap interface file handle. (network device)
+int pcapfd = 0;			// tap interface file handle. (network device)
 int udpfd = -1;			// UDP file handle
 int controlfd = -1;		// Control signal handle
 int snoopfd = -1;		// UDP file handle for sending out intercept data
@@ -136,8 +136,9 @@ struct config_descriptt config_values[] = {
 	CONFIG("bgp_peer1_as", bgp_peer_as[0], SHORT),
 	CONFIG("bgp_peer2", bgp_peer[1], STRING),
 	CONFIG("bgp_peer2_as", bgp_peer_as[1], SHORT),
-	CONFIG("mac_address", mac_address, MAC),
 #endif /* BGP */
+	CONFIG("mac_address", mac_address, MAC),
+	CONFIG("pppoe_interface", pppoe_interface, STRING),
 	{ NULL, 0, 0, 0 },
 };
 
@@ -426,44 +427,55 @@ void inittun(void)
 	tunidx = ifr.ifr_ifindex;
 }
 
-// Set up TAP interface
-void inittap(void)
+// Set up Ethernet interface
+void initpcap(void)
 {
 	int fd;
+	int ifindex;
 	struct ifreq ifr;
-	struct sockaddr_in sin = {0};
-	memset(&ifr, 0, sizeof(ifr));
+	struct sockaddr_ll sll;
 
-	ifr.ifr_flags = IFF_TAP;
-
-	tapfd = open(TUNDEVICE, O_RDWR);
-	if (tapfd < 0)
-	{                          // fatal
-		log(0, 0, 0, 0, "Can't open %s: %s\n", TUNDEVICE, strerror(errno));
-		exit( -1);
-	}
-	{
-		int flags = fcntl(tapfd, F_GETFL, 0);
-		fcntl(tapfd, F_SETFL, flags | O_NONBLOCK);
-	}
-	if (ioctl(tapfd, TUNSETIFF, (void *) &ifr) < 0)
-	{
-		log(0, 0, 0, 0, "Can't set tap interface: %s\n", strerror(errno));
-		exit( -1);
-	}
-	assert(strlen(ifr.ifr_name) < sizeof(config->tapdevice));
-	strcpy(config->tapdevice, ifr.ifr_name);
+	if (!*config->pppoe_interface) return;
 
 	fd = socket(PF_INET, SOCK_DGRAM, 0);
 
-	// Get current hardware address
 	memset(&ifr, 0, sizeof(ifr));
-	strncpy(ifr.ifr_name, config->tapdevice, sizeof(ifr.ifr_name) - 1);
+	strncpy(ifr.ifr_name, config->pppoe_interface, sizeof(ifr.ifr_name) - 1);
 	if (ioctl(fd, SIOCGIFHWADDR, &ifr) < 0)
 	{
-		perror("get tap hwaddr");
+		log(0, 0, 0, 0, "Error getting %s hardware address: %s\n", config->pppoe_interface, strerror(errno));
 		exit(-1);
 	}
+	printf("Hardware address is %s\n", ether_ntoa((struct ether_addr *)&ifr.ifr_hwaddr.sa_data));
+
+	if (ioctl(fd, SIOCGIFINDEX, &ifr) < 0)
+	{
+		log(0, 0, 0, 0, "Error getting %s index: %s\n", config->pppoe_interface, strerror(errno));
+		exit(-1);
+	}
+	ifindex = ifr.ifr_ifindex;
+
+        memset(&sll, 0, sizeof(sll));
+        sll.sll_family = AF_PACKET;
+        sll.sll_ifindex = ifindex;
+        sll.sll_protocol = htons(ETH_P_ALL);
+
+	if ((pcapfd = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_ALL))) <= 0)
+	{
+		log(0, 0, 0, 0, "Error creating %s socket: %s\n", config->pppoe_interface, strerror(errno));
+		exit(-1);
+	}
+
+	{
+		int flags = fcntl(pcapfd, F_GETFL, 0);
+		fcntl(pcapfd, F_SETFL, flags | O_NONBLOCK);
+	}
+
+        if (bind(pcapfd, (struct sockaddr *)&sll, sizeof(sll)) == -1)
+	{
+		log(0, 0, 0, 0, "Error binding socket to %s: %s\n", config->pppoe_interface, strerror(errno));
+                exit(-1);
+        }
 
 	/*
 	log(2, 0, 0, 0, "Setting hardware address of %s to %s\n", ifr.ifr_name, ether_ntoa(&config->mac_address));
@@ -471,24 +483,22 @@ void inittap(void)
 	memcpy(&ifr.ifr_hwaddr.sa_data, &config->mac_address, 6);
 	if (ioctl(fd, SIOCSIFHWADDR, &ifr) < 0)
 	{
-		perror("set tap hwaddr");
+		log(0, 0, 0, 0, "Error setting %s hardware address: %s\n", config->pppoe_interface, strerror(errno));
 		exit(-1);
 	}
 	*/
 
-	sin.sin_family = AF_INET;
-	sin.sin_addr.s_addr = 0x02020202; // 2.2.2.2
-	memcpy(&ifr.ifr_addr, &sin, sizeof(struct sockaddr));
-
-	if (ioctl(fd, SIOCSIFADDR, (void *) &ifr) < 0)
+	ifr.ifr_mtu = 1540;
+	if (ioctl(fd, SIOCSIFMTU, &ifr) < 0)
 	{
-		log(0, 0, 0, 0, "Error setting tap address: %s\n", strerror(errno));
-		exit(1);
+		log(0, 0, 0, 0, "Error setting %s MTU to %d: %s\n", config->pppoe_interface, ifr.ifr_mtu, strerror(errno));
 	}
-	ifr.ifr_flags = IFF_UP;
+
+	// Bring interface up
+	ifr.ifr_flags = IFF_UP | IFF_PROMISC;
 	if (ioctl(fd, SIOCSIFFLAGS, &ifr) < 0)
 	{
-		perror("set tap flags");
+		log(0, 0, 0, 0, "Error setting %s flags: %s\n", config->pppoe_interface, strerror(errno));
 		exit( -1);
 	}
 }
@@ -719,6 +729,60 @@ sessionidt sessionidtbysessiont(sessiont *s)
 	return val;
 }
 
+// send a packet for a PPPoE user
+void pppoesend(u8 *buf, u16 l, sessionidt s)
+{
+	tunnelidt t;
+	char *rp, *ud;
+	static char *response = NULL;
+
+	if (!(t = session[s].tunnel))
+	{
+		log(0, 0, s, t, "pppoesend() called with session %d which has no tunnel\n", s);
+		return;
+	}
+
+	log(4, 0, s, t, "pppoesend(%p, %u, %d)\n", buf, l, s);
+
+	if (!response)
+		response = (char *)malloc(1600);
+
+	buf += 8;
+	l -= 8;
+
+	memcpy(response, &session[s].client_mac, 6);
+	memcpy(response + 6, &config->mac_address, 6);
+
+	if (tunnel[t].vlan > 1)
+	{
+		log(4, 0, s, t, "Sending a vlan packet\n");
+		*(u16 *)(response + 12) = htons(ETH_P_8021Q);
+		*(u16 *)(response + 14) = htons(tunnel[t].vlan) & htons(0xFFF);// VLAN ID
+		*(u16 *)(response + 16) = htons(ETH_P_PPP_SES);
+		*(u8 *)(response + 18) = 0x11;				// PPPoE ver 1 type 1
+		*(u8 *)(response + 19) = 0;				// code
+		rp = (response + 19);
+		ud = (response + 24);
+	}
+	else
+	{
+		log(4, 0, s, t, "Sending a non-vlan packet\n");
+		*(u16 *)(response + 12) = htons(ETH_P_PPP_SES);
+		*(u8 *)(response + 14) = 0x11;				// PPPoE ver 1 type 1
+		*(u8 *)(response + 15) = 0;				// code
+		rp = (response + 15);
+		ud = (response + 20);					// data starts here
+	}
+	*(u16 *)(rp + 1) = htons(s);
+	memcpy(ud, buf, l);
+	ud += l;
+	*(u16 *)(rp + 3) = htons(l);
+	log_hex(5, "Sending PPPoE packet", response, ud - response);
+	if (write(pcapfd, response, ud - response) <= 0)
+		log(0, 0, s, t, "Error writing %d bytes to pcapfd: %s\n", ud-response, strerror(errno));
+	return;
+}
+
 // actually send a control message for a specific tunnel
 void tunnelsend(u8 * buf, u16 l, tunnelidt t)
 {
@@ -776,6 +840,14 @@ void tunnelsend(u8 * buf, u16 l, tunnelidt t)
 	INC_STAT(tunnel_tx_bytes, l);
 }
 
+void returnpacket(u8 *buf, u16 l, sessionidt s, tunnelidt t)
+{
+	if (tunnel[t].vlan)
+		pppoesend(buf, l + 1, s);
+	else
+		tunnelsend(buf, l, t);
+}
+
 //
 // Tiny helper function to write data to
 // the 'tun' device.
@@ -785,7 +857,7 @@ int tun_write(u8 * data, int size)
 	return write(tunfd, data, size);
 }
 
-// process outgoing (to tunnel) IP
+// process outgoing (to user) IP
 //
 void processipout(u8 * buf, int len)
 {
@@ -868,36 +940,11 @@ void processipout(u8 * buf, int len)
 	if (sp->snoop_ip && sp->snoop_port)
 		snoop_send_packet(buf, len, sp->snoop_ip, sp->snoop_port);
 
-	if (session[s].flags & SESSIONPPPOE)
+	if (0 && session[s].flags & SESSIONPPPOE)
 	{
-		u8 *p = NULL;
 		log(5, session[s].ip, s, t, "Ethernet -> PPPoE (%d bytes)\n", len);
 
-		// Add on the tap and PPPoE headers
-		if (session[s].vlan)
-		{
-			// This is an 802.1Q tagged packet
-			memcpy(p, &session[s].client_mac, 6);			// Destination MAC
-			memcpy(p + 6, &config->mac_address, 6);			// Source MAC
-			*(u16 *)(p + 12) = htons(ETH_P_8021Q);			// This is a 802.1Q tagged frame
-			*(u16 *)(p + 14) = htons(session[s].vlan & 0xFFF);	// VLAN ID
-			*(u16 *)(p + 16) = htons(ETH_P_PPP_SES);		// PPP session stage
-			*(u8 *)(p + 18) = 0x11;					// PPPoE ver 1 type 1
-			*(u8 *)(p + 19) = 0;					// code
-			*(u16 *)(p + 20) = htons(session[s].sid);		// session id
-			*(u16 *)(p + 22) = htons(len - 24);			// length
-		}
-		else
-		{
-			// Don't tag the packet, it's just plain ethernet
-			memcpy(p, &session[s].client_mac, 6);			// Destination MAC
-			memcpy(p + 6, &config->mac_address, 6);			// Source MAC
-			*(u16 *)(p + 12) = htons(ETH_P_PPP_SES);		// PPP session stage
-			*(u8 *)(p + 14) = 0x11;					// PPPoE ver 1 type 1
-			*(u8 *)(p + 15) = 0;					// code
-			*(u16 *)(p + 16) = htons(session[s].sid);		// session id
-			*(u16 *)(p + 18) = htons(len - 20);			// length
-		}
+		// FIXME add on PPPoE header and write to pcapfd
 	}
 	else
 	{
@@ -910,7 +957,7 @@ void processipout(u8 * buf, int len)
 			log(3, session[s].ip, s, t, "failed to send packet in processipout.\n");
 			return;
 		}
-		tunnelsend(b, len + (p-b), t); // send it...
+		returnpacket(b, len + (p-b), s, t); // send it...
 	}
 
 	sp->cout += len; // byte count
@@ -963,7 +1010,7 @@ void send_ipout(sessionidt s, u8 *buf, int len)
 			log(3, session[s].ip, s, t, "failed to send packet in send_ipout.\n");
 			return;
 		}
-		tunnelsend(b, len + (p-b), t); // send it...
+		returnpacket(b, len + (p-b), s, t); // send it...
 	}
 	sp->cout += len; // byte count
 	sp->total_cout += len; // byte count
@@ -1145,7 +1192,6 @@ void sessionshutdown(sessionidt s, char *reason)
 	int dead = session[s].die;
 	int walled_garden = session[s].walled_garden;
 
-
 	CSTAT(call_sessionshutdown);
 
 	if (!session[s].tunnel)
@@ -1165,7 +1211,7 @@ void sessionshutdown(sessionidt s, char *reason)
 	}
 
 	// RADIUS Stop message
-	if (session[s].opened && !walled_garden && !dead)
+	if (session[s].opened && !walled_garden && !dead && *session[s].user)
 	{
 		u16 r = session[s].radius;
 		if (!r)
@@ -1187,7 +1233,8 @@ void sessionshutdown(sessionidt s, char *reason)
 	}
 
 	if (session[s].ip)
-	{                          // IP allocated, clear and unroute
+	{
+		// IP allocated, clear and unroute
 		int r;
 		for (r = 0; r < MAXROUTE && session[s].route[r].ip; r++)
 		{
@@ -1206,7 +1253,8 @@ void sessionshutdown(sessionidt s, char *reason)
 		if (session[s].throttle)	// Unthrottle if throttled.
 			throttle_session(s, 0);
 	}
-	{                            // Send CDN
+	{
+		// Send CDN
 		controlt *c = controlnew(14); // sending CDN
 		control16(c, 1, 3, 1);    // result code (admin reasons - TBA make error, general error, add message
 		control16(c, 14, s, 1);   // assigned session (our end)
@@ -1253,7 +1301,7 @@ void sendipcp(tunnelidt t, sessionidt s)
 	q[4] = 3;
 	q[5] = 6;
 	*(u32 *) (q + 6) = config->bind_address ? config->bind_address : my_address; // send my IP
-	tunnelsend(buf, 10 + (q - buf), t); // send it
+	returnpacket(buf, 10 + (q - buf), s, t); // send it
 	session[s].flags &= ~SF_IPCP_ACKED;	// Clear flag.
 }
 
@@ -1940,33 +1988,7 @@ void processudp(u8 *buf, int len, struct sockaddr_in *addr)
 		}
 	}
 	else
-	{                          // data
-		u16 prot;
-
-		log_hex(5, "Receive Tunnel Data", p, l);
-		if (l > 2 && p[0] == 0xFF && p[1] == 0x03)
-		{                     // HDLC address header, discard
-			p += 2;
-			l -= 2;
-		}
-		if (l < 2)
-		{
-			log(1, ntohl(addr->sin_addr.s_addr), s, t, "Short ppp length %d\n", l);
-			STAT(tunnel_rx_errors);
-			return;
-		}
-		if (*p & 1)
-		{
-			prot = *p++;
-			l--;
-		}
-		else
-		{
-			prot = ntohs(*(u16 *) p);
-			p += 2;
-			l -= 2;
-		}
-
+	{
 		if (s && !session[s].tunnel)	// Is something wrong??
 		{
 			if (!config->cluster_iam_master)
@@ -1975,7 +1997,6 @@ void processudp(u8 *buf, int len, struct sockaddr_in *addr)
 				master_forward_packet(buf, len, addr->sin_addr.s_addr, addr->sin_port);
 				return;
 			}
-
 
 			log(1, ntohl(addr->sin_addr.s_addr), s, t, "UDP packet contains session %d "
 					"but no session[%d].tunnel exists (LAC said"
@@ -1987,69 +2008,101 @@ void processudp(u8 *buf, int len, struct sockaddr_in *addr)
 		if (session[s].die)
 		{
 			log(3, ntohl(addr->sin_addr.s_addr), s, t, "Session %d is closing. Don't process PPP packets\n", s);
-// I'm pretty sure this isn't right -- mo.
-//			return;              // closing session, PPP not processed
+			// I'm pretty sure this isn't right -- mo.
+			// return;              // closing session, PPP not processed
 		}
-		if (prot == PPPPAP)
+		processppp(s, t, buf, len, p, l, addr);
+	}
+}
+
+void processppp(sessionidt s, tunnelidt t, u8 *buf, int len, u8 *p, int l, struct sockaddr_in *addr)
+{
+	u16 prot;
+
+	log_hex(5, "Receive PPP Frame", p, l);
+	if (l > 2 && p[0] == 0xFF && p[1] == 0x03)
+	{
+		// discard HDLC address header
+		p += 2;
+		l -= 2;
+	}
+	if (l < 2)
+	{
+		log(1, ntohl(addr->sin_addr.s_addr), s, t, "Short ppp length %d\n", l);
+		STAT(tunnel_rx_errors);
+		return;
+	}
+	if (*p & 1)
+	{
+		prot = *p++;
+		l--;
+	}
+	else
+	{
+		prot = ntohs(*(u16 *) p);
+		p += 2;
+		l -= 2;
+	}
+
+	if (prot == PPPPAP)
+	{
+		session[s].last_packet = time_now;
+		if (!config->cluster_iam_master) { master_forward_packet(buf, len, addr->sin_addr.s_addr, addr->sin_port); return; }
+		processpap(t, s, p, l);
+	}
+	else if (prot == PPPCHAP)
+	{
+		session[s].last_packet = time_now;
+		if (!config->cluster_iam_master) { master_forward_packet(buf, len, addr->sin_addr.s_addr, addr->sin_port); return; }
+		processchap(t, s, p, l);
+	}
+	else if (prot == PPPLCP)
+	{
+		session[s].last_packet = time_now;
+		if (!config->cluster_iam_master) { master_forward_packet(buf, len, addr->sin_addr.s_addr, addr->sin_port); return; }
+		processlcp(t, s, p, l);
+	}
+	else if (prot == PPPIPCP)
+	{
+		session[s].last_packet = time_now;
+		if (!config->cluster_iam_master) { master_forward_packet(buf, len, addr->sin_addr.s_addr, addr->sin_port); return; }
+		processipcp(t, s, p, l);
+	}
+	else if (prot == PPPCCP)
+	{
+		session[s].last_packet = time_now;
+		if (!config->cluster_iam_master) { master_forward_packet(buf, len, addr->sin_addr.s_addr, addr->sin_port); return; }
+		processccp(t, s, p, l);
+	}
+	else if (prot == PPPIP)
+	{
+		if (!config->cluster_iam_master)
 		{
-			session[s].last_packet = time_now;
-			if (!config->cluster_iam_master) { master_forward_packet(buf, len, addr->sin_addr.s_addr, addr->sin_port); return; }
-			processpap(t, s, p, l);
-		}
-		else if (prot == PPPCHAP)
-		{
-			session[s].last_packet = time_now;
-			if (!config->cluster_iam_master) { master_forward_packet(buf, len, addr->sin_addr.s_addr, addr->sin_port); return; }
-			processchap(t, s, p, l);
-		}
-		else if (prot == PPPLCP)
-		{
-			session[s].last_packet = time_now;
-			if (!config->cluster_iam_master) { master_forward_packet(buf, len, addr->sin_addr.s_addr, addr->sin_port); return; }
-			processlcp(t, s, p, l);
-		}
-		else if (prot == PPPIPCP)
-		{
-			session[s].last_packet = time_now;
-			if (!config->cluster_iam_master) { master_forward_packet(buf, len, addr->sin_addr.s_addr, addr->sin_port); return; }
-			processipcp(t, s, p, l);
-		}
-		else if (prot == PPPCCP)
-		{
-			session[s].last_packet = time_now;
-			if (!config->cluster_iam_master) { master_forward_packet(buf, len, addr->sin_addr.s_addr, addr->sin_port); return; }
-			processccp(t, s, p, l);
-		}
-		else if (prot == PPPIP)
-		{
-			if (!config->cluster_iam_master)
+			// We're a slave. Should we forward this packet to the master?
+
+			// Is this a walled garden session, or something that needs it's
+			// idle time updated??
+
+			// Maintain the idle timeouts on the master. If this would
+			// significantly reset the idletimeout, run it via the master
+			// to refresh the master's idle timer.
+			// Not sure this is ideal: It may re-order packets.
+
+			if (session[s].walled_garden || (session[s].last_packet + (ECHO_TIMEOUT/2)) < time_now)
 			{
-				// We're a slave. Should we forward this packet to the master?
-
-				// Is this a walled garden session, or something that needs it's
-				// idle time updated??
-
-				// Maintain the idle timeouts on the master. If this would
-				// significantly reset the idletimeout, run it via the master
-				// to refresh the master's idle timer.
-				// Not sure this is ideal: It may re-order packets.
-
-				if (session[s].walled_garden || (session[s].last_packet + (ECHO_TIMEOUT/2)) < time_now)
-				{
-					master_forward_packet(buf, len, addr->sin_addr.s_addr, addr->sin_port);
-					session[s].last_packet = time_now;
-					return;
-				}
-				// fall through to processipin.
-			} else
+				master_forward_packet(buf, len, addr->sin_addr.s_addr, addr->sin_port);
 				session[s].last_packet = time_now;
-			processipin(t, s, p, l);
-		}
-		else
-		{
-			STAT(tunnel_rx_errors);
-			log(1, ntohl(addr->sin_addr.s_addr), s, t, "Unknown PPP protocol %04X\n", prot);
-		}
+				return;
+			}
+			// fall through to processipin.
+		} else
+			session[s].last_packet = time_now;
+		processipin(t, s, p, l);
+	}
+	else
+	{
+		STAT(tunnel_rx_errors);
+		log(1, ntohl(addr->sin_addr.s_addr), s, t, "Unknown PPP protocol %04X\n", prot);
 	}
 }
 
@@ -2076,19 +2129,23 @@ void processtun(u8 *buf, int len)
 	// Else discard.
 }
 
-// Read and process packet on tap
+// Read and process packet on pcap socket
 // This will be packets from a PPPoE user
-void processtap(u8 *buf, int len)
+void processpcap(u8 *buf, int len)
 {
 	u16 vlan = 0;
 	u16 type = 0;
-	char *p;
+	sessionidt s = 0;
+	tunnelidt t = 0;
+	u8 code;
+	u16 l;
+	u8 *p, *data = NULL;
 
-	log_hex(5, "Receive TAP Data", buf, len);
+	log_hex(5, "Receive Ethernet Data", buf, len);
 	STAT(tap_rx_packets);
 	INC_STAT(tap_rx_bytes, len);
 
-	CSTAT(call_processtap);
+	CSTAT(call_processpcap);
 
 	eth_rx_pkt++;
 	eth_rx += len;
@@ -2099,82 +2156,90 @@ void processtap(u8 *buf, int len)
 		return;
 	}
 
-	buf += 4;
-	len -= 4;
-
 	p = buf + 14;
 	type = ntohs(*(u16 *)(buf + 12));
 	if (type == ETH_P_8021Q)
 	{
-		vlan = ntohs(*(u16 *)(p + 14) & 0xFFF);
-		type = ntohs(*(u16 *)(p + 16));
+		vlan = ntohs(*(u16 *)(buf + 14) & htons(0xFFF));
+		type = ntohs(*(u16 *)(buf + 16));
 		p += 4;
+		log(1, 0, 0, 0, "802.1Q encapsulated (vlan %d)..\n", vlan);
 	}
+
+	if (type != ETH_P_PPP_DISC && type != ETH_P_PPP_SES)
+	{
+		log(1, 0, 0, 0, "Ignoring ethernet type %04X\n", type);
+		return;
+	}
+
+	// It's a PPPoE packet
+	if (*(u8 *)(p) != 0x11)
+	{
+		log(3, 0, 0, 0, "Unknown PPPoE discovery version / type %02x\n", *(u8 *)(p));
+		return;
+	}
+	code = *(u8 *)(p + 1);
+	s = ntohs(*(u16 *)(p + 2));
+	l = ntohs(*(u16 *)(p + 4));
+	data = p + 6;
+
+	if (vlan)
+		t = vlan_to_tunnel(vlan);
+	else
+		t = vlan_to_tunnel(1);
+
+	if (s && t && session[s].tunnel != t)
+	{
+		log(2, 0, s, t, "PPPoE Packet claiming to be from session %d, on tunnel %d, but should be tunnel %d\n",
+			s, t, session[s].tunnel);
+		return;
+	}
+
+	if (s && !memcmp(&session[s].client_mac, buf, 6))
+	{
+		log(2, 0, s, t, "Ignoring PAD packet claiming to be session %d, but wrong mac address\n", s);
+		return;
+	}
+
+	tunnel[t].last = time_now;
 
 	if (type == ETH_P_PPP_DISC)
 	{
-		if (!config->cluster_iam_master)
-		{
-			master_forward_pppoe_packet(buf, len);
-			return;
-		}
-
-		u8 code;
-		u16 l;
-		sessionidt s = 0;
-		tunnelidt t = 0;
-		char *data = NULL;
 		char *service_name = NULL;
-		u8 response[1500] = {0};
 		u8 *rp = NULL, *ud = NULL;
 		u16 rs = 0;
+		u8 response[1500] = {0};
 
-		// It's a PPPoE Discovery Packet
-		if (*(u8 *)(p) != 0x11)
-		{
-			log(3, 0, 0, 0, "Unknown PPPoE discovery version / type %02x\n", *(u8 *)(p));
-			return;
-		}
-		code = *(u8 *)(p + 1);
-		s = *(u16 *)(p + 2);
-		l = *(u16 *)(p + 4);
-		data = p + 6;
-
-		if (s && !memcmp(&session[s].client_mac, buf, 6))
-		{
-			log(2, 0, 0, 0, "Ignoring PAD packet claiming to be session %d, but wrong mac address\n", s);
-			return;
-		}
-
-		memcpy(response, &config->mac_address, 6); // Source
-		memcpy((response + 6), buf, 6);
 		if (vlan)
 		{
-			*(u16 *)(response + 12) = htonl(ETH_P_8021Q);
-			*(u16 *)(response + 14) = htons(vlan & 0xFFF);		// VLAN ID
+			log(4, 0, s, t, "It's a vlan packet (vlan %d)\n", vlan & 0xFFF);
+			*(u16 *)(response + 12) = htons(ETH_P_8021Q);
+			*(u16 *)(response + 14) = htons(vlan) & htons(0xFFF);		// VLAN ID
 			*(u16 *)(response + 16) = htons(ETH_P_PPP_DISC);
 			*(u8 *)(response + 18) = 0x11;				// PPPoE ver 1 type 1
 			*(u8 *)(response + 19) = 0;				// code
 			rp = (response + 19);
 			ud = (response + 24);
-			t = vlan_to_tunnel(vlan);
 		}
 		else
 		{
+			log(4, 0, s, t, "It's not a vlan packet\n");
+			*(u16 *)(response + 12) = htons(ETH_P_PPP_DISC);
 			*(u8 *)(response + 14) = 0x11;				// PPPoE ver 1 type 1
 			*(u8 *)(response + 15) = 0;				// code
 			rp = (response + 15);
 			ud = (response + 20);					// data starts here
-			t = 1;
 		}
 
+		memcpy(response + 6, &config->mac_address, 6); // Source
+		memcpy(response, buf + 6, 6);
 		for (; l >= 4; )
 		{
 			u16 tag_type = ntohs(*(u16 *)(data));
 			u16 tag_length = ntohs(*(u16 *)(data + 2));
 			if (tag_length > (l - 4))
 			{
-				log(3, 0, 0, 0, "PAD packet contains tag %x longer than available packet data (%u)\n",
+				log(3, 0, s, t, "PAD packet contains tag %x longer than available packet data (%u)\n",
 						tag_type, tag_length);
 				return;
 			}
@@ -2183,11 +2248,13 @@ void processtap(u8 *buf, int len)
 				case 0x0000:
 					// End of list
 					l = 0;
+					log(3, 0, s, t, "	EOL\n");
 					break;
 
 				case 0x0101:
 					// Service-Name
 					if (tag_length) service_name = strndup(data + 4, tag_length);
+					log(3, 0, s, t, "	Service-Name: %s\n", service_name);
 					*(u16 *)(ud) = htons(tag_type);
 					*(u16 *)(ud + 2) = htons(tag_length);
 					memcpy(ud + 4, data + 4, tag_length);
@@ -2197,7 +2264,7 @@ void processtap(u8 *buf, int len)
 				case 0x0102:
 					// AC-Name
 					if (tag_length)
-						log(3, 0, 0, 0, "PAD packet contains AC-Name.. ignoring\n");
+						log(3, 0, s, t, "PAD packet contains AC-Name.. ignoring\n");
 					break;
 
 				case 0x0104:
@@ -2206,6 +2273,7 @@ void processtap(u8 *buf, int len)
 					*(u16 *)(ud + 2) = htons(tag_length);
 					memcpy(ud + 4, data + 4, tag_length);
 					ud += 4 + tag_length;
+					log(3, 0, s, t, "	AC-Cookie\n");
 					break;
 
 				case 0x0103:
@@ -2214,6 +2282,7 @@ void processtap(u8 *buf, int len)
 					*(u16 *)(ud + 2) = htons(tag_length);
 					memcpy(ud + 4, data + 4, tag_length);
 					ud += 4 + tag_length;
+					log(3, 0, s, t, "	Host-Uniq\n");
 					break;
 
 				case 0x0110:
@@ -2222,6 +2291,7 @@ void processtap(u8 *buf, int len)
 					*(u16 *)(ud + 2) = htons(tag_length);
 					memcpy(ud + 4, data + 4, tag_length);
 					ud += 4 + tag_length;
+					log(3, 0, s, t, "	Relay-Session-Id\n");
 					break;
 
 				case 0x0201:
@@ -2229,12 +2299,12 @@ void processtap(u8 *buf, int len)
 					if (tag_length)
 					{
 						char *err = strndup(data + 4, tag_length);
-						log(3, 0, 0, 0, "PAD packet contains Service-Name-Error: %s\n", err);
+						log(3, 0, s, t, "PAD packet contains Service-Name-Error: %s\n", err);
 						free(err);
 					}
 					else
 					{
-						log(3, 0, 0, 0, "PAD packet contains Service-Name-Error\n");
+						log(3, 0, s, t, "PAD packet contains Service-Name-Error\n");
 					}
 					return;
 
@@ -2243,12 +2313,12 @@ void processtap(u8 *buf, int len)
 					if (tag_length)
 					{
 						char *err = strndup(data + 4, tag_length);
-						log(3, 0, 0, 0, "PAD packet contains AC-System-Error: %s\n", err);
+						log(3, 0, s, t, "PAD packet contains AC-System-Error: %s\n", err);
 						free(err);
 					}
 					else
 					{
-						log(3, 0, 0, 0, "PAD packet contains AC-System-Error\n");
+						log(3, 0, s, t, "PAD packet contains AC-System-Error\n");
 					}
 					return;
 
@@ -2257,12 +2327,12 @@ void processtap(u8 *buf, int len)
 					if (tag_length)
 					{
 						char *err = strndup(data + 4, tag_length);
-						log(3, 0, 0, 0, "PAD packet contains Generic-Error: %s\n", err);
+						log(3, 0, s, t, "PAD packet contains Generic-Error: %s\n", err);
 						free(err);
 					}
 					else
 					{
-						log(3, 0, 0, 0, "PAD packet contains Generic-Error\n");
+						log(3, 0, s, t, "PAD packet contains Generic-Error\n");
 					}
 					return;
 
@@ -2272,7 +2342,7 @@ void processtap(u8 *buf, int len)
 					break;
 
 				default:
-					log(3, 0, 0, 0, "PAD packet contains unknown tag type %x of length %u\n",
+					log(3, 0, s, t, "PAD packet contains unknown tag type %x of length %u\n",
 							tag_type, tag_length);
 					break;
 			}
@@ -2280,23 +2350,34 @@ void processtap(u8 *buf, int len)
 			l -= (tag_length + 4);
 		}
 
-		// Add AC-Name to all responses
+		// Add AC-Name
 		*(u16 *)(ud) = htons(0x102);
 		*(u16 *)(ud + 2) = htons(strlen(hostname));
 		memcpy(ud + 4, hostname, strlen(hostname));
 		ud += 4 + strlen(hostname);
 
+		log(3, 0, s, t, "	Code: %d\n", code);
 		switch (code)
 		{
 			case 0x09:
 				// PPPoE Active Discovery Initiation (PADI)
-				if ((service_name && strcmp(service_name, "service") == 0) || !service_name)
+				if ((service_name && strcmp(service_name, "OptusNet") == 0) || !service_name)
 				{
+					log(3, 0, s, t, "	PADI - Sending PADO\n");
 					*rp = 0x07; // PADO
+
+					if (!service_name || !*service_name)
+					{
+						log(3, 0, s, t, "	Adding in service name\n");
+						*(u16 *)(ud) = htons(0x0101);
+						*(u16 *)(ud + 2) = htons(strlen("OptusNet"));
+						memcpy(ud + 4, "OptusNet", strlen("OptusNet"));
+						ud += 4 + strlen("OptusNet");
+					}
 				}
 				else
 				{
-					log(3, 0, 0, 0, "Ignoring PADI request for service \"%s\"\n", service_name);
+					log(3, 0, s, t, "Ignoring PADI request for service \"%s\"\n", service_name);
 					free(service_name);
 					return;
 				}
@@ -2304,18 +2385,28 @@ void processtap(u8 *buf, int len)
 
 			case 0x07:
 				// PPPoE Active Discovery Offer (PADO)
-				log(3, 0, 0, 0, "Ignoring PADO\n");
+				log(3, 0, s, t, "Ignoring PADO\n");
 				break;
 
 			case 0x19:
 				// PPPoE Active Discovery Request (PADR)
 
-				// Create a new session in tunnel 1 (reserved for PPPoE)
-				log(3, 0, 0, 0, "Creating new PPPoE session for pseudo-tunnel %d\n", t);
+				if (!config->cluster_iam_master)
+				{
+					master_forward_pppoe_packet(buf, len);
+					return;
+				}
+
+				// Create a new session
+				log(3, 0, s, t, "Creating new PPPoE session for pseudo-tunnel %d\n", t);
 				*rp = 0x65; // PADS
 				if (t && (s = new_session(t)))
 				{
-					rs = htons(s);
+					rs = s;
+					session[s].vlan = vlan;
+					memcpy(&session[s].client_mac, buf + 6, 6);
+					session[s].magic = rand();
+					session[s].flags |= SESSIONPPPOE;
 				}
 				else
 				{
@@ -2332,31 +2423,44 @@ void processtap(u8 *buf, int len)
 
 			case 0x65:
 				// PPPoE Active Discovery Session-confirmation (PADS)
-				log(3, 0, 0, 0, "Ignoring PADS\n");
+				log(3, 0, s, t, "Ignoring PADS\n");
 				break;
 
 			case 0xA7:
 				// PPPoE Active Discovery Termination (PADT)
 				// FIXME shutdown the session
+
+				if (!config->cluster_iam_master)
+				{
+					master_forward_pppoe_packet(buf, len);
+					return;
+				}
+
+				log(3, 0, s, t, "PADT.. shut down the session\n");
+				sessionkill(s, "Remote end closed PPPoE connection");
 				break;
 		}
 		if (*rp)
 		{
 			// Send a PAD response
+			log(3, 0, s, t, "	Sending response type %d on vlan %d (%X)\n", *rp, vlan, htons(vlan & 0xFFF));
 			*(u16 *)(rp + 1) = htons(rs);
-			*(u16 *)(rp + 3) = htons(ud - rp + 6);
-			write(tapfd, response, ud - response);
+			*(u16 *)(rp + 3) = htons(ud - rp - 5);
+			write(pcapfd, response, ud - response);
+			if (code == 0x19)
+				initlcp(s, t);
 		}
 		if (service_name) free(service_name);
 	}
 	else if (type == ETH_P_PPP_SES)
 	{
 		// It's a PPPoE Session packet
-		// FIXME process PPP here
+		struct sockaddr_in addr = {0};
+		processppp(s, t, buf, len, data, len - (data - buf), &addr);
 	}
 	else
 	{
-		log(5, 0, 0, 0, "Unknown ethernet protocol %04X on tap\n", type);
+		log(5, 0, s, t, "Unknown ethernet protocol %04X on tap\n", type);
 		return;
 	}
 }
@@ -2399,7 +2503,7 @@ int regular_cleanups(void)
 			continue;
 		}
 		// check for message resend
-		if (tunnel[t].retry && tunnel[t].controlc)
+		if (tunnel[t].retry && tunnel[t].controlc && !tunnel[t].vlan)
 		{
 			// resend pending messages as timeout on reply
 			if (tunnel[t].retry <= TIME)
@@ -2418,7 +2522,7 @@ int regular_cleanups(void)
 			}
 		}
 		// Send hello
-		if (tunnel[t].state == TUNNELOPEN && tunnel[t].lastrec < TIME + 600)
+		if (tunnel[t].state == TUNNELOPEN && tunnel[t].lastrec < TIME + 600 && !tunnel[t].vlan)
 		{
 			controlt *c = controlnew(6); // sending HELLO
 			controladd(c, t, 0); // send the message
@@ -2491,7 +2595,7 @@ int regular_cleanups(void)
 
 			log(4, session[s].ip, s, session[s].tunnel, "No data in %d seconds, sending LCP ECHO\n",
 					(int)(time_now - session[s].last_packet));
-			tunnelsend(b, 24, session[s].tunnel); // send it
+			returnpacket(b, 24, s, session[s].tunnel); // send it
 			if (++count >= MAX_ACTIONS) break;
 		}
 
@@ -2579,6 +2683,9 @@ int still_busy(void)
 		if (!tunnel[i].controlc)
 			continue;
 
+		if (tunnel[i].vlan)
+			continue;
+
 		if (last_talked != TIME)
 		{
 			log(2,0,0,0, "Tunnel %d still has un-acked control messages.\n", i);
@@ -2628,13 +2735,13 @@ void mainloop(void)
 	FD_ZERO(&cr);
 	FD_SET(udpfd, &cr);
 	FD_SET(tunfd, &cr);
-	if (tapfd) FD_SET(tapfd, &cr);
+	if (pcapfd) FD_SET(pcapfd, &cr);
 	FD_SET(controlfd, &cr);
 	FD_SET(clifd, &cr);
 	if (cluster_sockfd) FD_SET(cluster_sockfd, &cr);
 	cn = udpfd;
 	if (cn < tunfd) cn = tunfd;
-	if (tapfd && cn < tapfd) cn = tapfd;
+	if (pcapfd && cn < pcapfd) cn = pcapfd;
 	if (cn < controlfd) cn = controlfd;
 	if (cn < clifd) cn = clifd;
 	if (cn < cluster_sockfd) cn = cluster_sockfd;
@@ -2726,13 +2833,13 @@ void mainloop(void)
 						break;
 				}
 			}
-			if (tapfd && FD_ISSET(tapfd, &r))
+			if (pcapfd && FD_ISSET(pcapfd, &r))
 			{
 				int c, n;
 				for (c = 0; c < config->multi_read_count; c++)
 				{
-					if ((n = read(tapfd, buf, sizeof(buf))) > 0)
-						processtap(buf, n);
+					if ((n = read(pcapfd, buf, sizeof(buf))) > 0)
+						processpcap(buf, n);
 					else
 						break;
 				}
@@ -3290,9 +3397,10 @@ int main(int argc, char *argv[])
 	_program_name = strdup(argv[0]);
 
 	time(&basetime);             // start clock
+	srand(basetime);
 
 	// scan args
-	while ((o = getopt(argc, argv, "vc:h:a:i:?")) >= 0)
+	while ((o = getopt(argc, argv, "vc:h:i:?")) >= 0)
 	{
 		switch (o)
 		{
@@ -3319,7 +3427,6 @@ int main(int argc, char *argv[])
 				       "\t-d\t\tDetach from terminal\n"
 				       "\t-c <file>\tConfig file\n"
 				       "\t-h <hostname>\tForce hostname\n"
-				       "\t-a <address>\tUse specific address\n"
 				       "\t-i <file>\tIP pool file\n"
 				       "\t-v\t\tDebug\n");
 
@@ -3402,11 +3509,14 @@ int main(int argc, char *argv[])
 
 	inittun();
 	log(1, 0, 0, 0, "Set up tun on interface %s\n", config->tundevice);
-	if (config->mac_address.ether_addr_octet[0] + config->mac_address.ether_addr_octet[1]
-		+ config->mac_address.ether_addr_octet[2] + config->mac_address.ether_addr_octet[3]
-		+ config->mac_address.ether_addr_octet[4] + config->mac_address.ether_addr_octet[5])
-		inittap();
-	log(1, 0, 0, 0, "Set up tap on interface %s\n", config->tapdevice);
+	if (*config->pppoe_interface)
+	{
+		if (config->mac_address.ether_addr_octet[0] + config->mac_address.ether_addr_octet[1]
+			+ config->mac_address.ether_addr_octet[2] + config->mac_address.ether_addr_octet[3]
+			+ config->mac_address.ether_addr_octet[4] + config->mac_address.ether_addr_octet[5])
+			initpcap();
+		log(1, 0, 0, 0, "Set up pcap on interface %s\n", config->pppoe_interface);
+	}
 
 	initudp();
 	initrad();
@@ -3918,7 +4028,6 @@ int sessionsetup(tunnelidt t, sessionidt s)
 
 	CSTAT(call_sessionsetup);
 
-
 	log(3, session[s].ip, s, t, "Doing session setup for session\n");
 
 	if (!session[s].ip || session[s].ip == 0xFFFFFFFE)
@@ -3928,7 +4037,11 @@ int sessionsetup(tunnelidt t, sessionidt s)
 			log(3, 0, s, t, "   No IP allocated. Assigned %s from pool\n",
 					inet_toa(htonl(session[s].ip)));
 		else
+		{
 			log(0, 0, s, t, "   No IP allocated. The IP address pool is FULL!\n");
+			sessionshutdown(s, "No IP addresses available");
+			return 0;
+		}
 	}
 
 
@@ -4557,6 +4670,7 @@ tunnelidt vlan_to_tunnel(u16 vlan)
 		log(1, 0, 0, t, "New pseudo-tunnel created for PPPoE VLAN %u\n", vlan);
 		tunnel[t].vlan = vlan;
 		tunnel[t].state = TUNNELOPEN;
+		snprintf(tunnel[t].hostname, sizeof(tunnel[t].hostname), "PPPoE VLAN %d", vlan);
 		STAT(tunnel_created);
 		vlan_tunnel_map[vlan] = t;
 	}

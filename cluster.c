@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.11.2.2 2004-09-23 06:15:38 fred_nerk Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.11.2.3 2004-10-05 04:56:25 fred_nerk Exp $";
 
 #include <stdio.h>
 #include <sys/file.h>
@@ -1360,11 +1360,12 @@ int processcluster(char * data, int size, u32 addr)
 			return -1;
 		}
 		log(4,0,0,0, "Got a forwarded PPPoE packet\n");
-		processtap(p, s);
+		processpcap(p, s);
 		return 0;
 
 	case C_THROTTLE: {	// Receive a forwarded packet from a slave.
-		if (!config->cluster_iam_master) {
+		if (!config->cluster_iam_master)
+		{
 			log(0,0,0,0, "I'm not the master, but I got a C_THROTTLE from %s?\n", inet_toa(addr));
 			return -1;
 		}
@@ -1374,7 +1375,8 @@ int processcluster(char * data, int size, u32 addr)
 	}
 	case C_GARDEN:
 		// Receive a walled garden packet from a slave.
-		if (!config->cluster_iam_master) {
+		if (!config->cluster_iam_master)
+		{
 			log(0,0,0,0, "I'm not the master, but I got a C_GARDEN from %s?\n", inet_toa(addr));
 			return -1;
 		}
@@ -1386,16 +1388,19 @@ int processcluster(char * data, int size, u32 addr)
 		return cluster_handle_bytes(p, s);
 
 	case C_KILL:	// The master asked us to die!? (usually because we're too out of date).
-		if (config->cluster_iam_master) {
+		if (config->cluster_iam_master)
+		{
 			log(0,0,0,0, "_I_ am master, but I received a C_KILL from %s! (Seq# %d)\n", inet_toa(addr), more);
 			return -1;
 		}
-		if (more != config->cluster_seq_number) {
+		if (more != config->cluster_seq_number)
+		{
 			log(0,0,0,0, "The master asked us to die but the seq number didn't match!?\n");
 			return -1;
 		}
 
-		if (addr != config->cluster_master_address) {
+		if (addr != config->cluster_master_address)
+		{
 			log(0,0,0,0, "Received a C_KILL from %s which doesn't match config->cluster_master_address (%x)\n",
 				inet_toa(addr), config->cluster_master_address);
 			// We can only warn about it. The master might really have switched!

@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.16.2.2 2004-09-23 06:15:38 fred_nerk Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.16.2.3 2004-10-05 04:56:25 fred_nerk Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -396,27 +396,34 @@ int cmd_show_session(struct cli_def *cli, char *command, char **argv, int argc)
 				continue;
 			}
 			cli_print(cli, "\r\nSession %d:", s);
-			cli_print(cli, "		User:				%s", session[s].user[0] ? session[s].user : "none");
-			cli_print(cli, "		Calling Num:		%s", session[s].calling);
-			cli_print(cli, "		Called Num:		%s", session[s].called);
-			cli_print(cli, "		Tunnel ID:		%d", session[s].tunnel);
-			cli_print(cli, "		IP address:		%s", inet_toa(htonl(session[s].ip)));
-			cli_print(cli, "		Unique SID:		%lu", session[s].unique_id);
-			cli_print(cli, "		Idle time:		%u seconds", abs(time_now - session[s].last_packet));
-			cli_print(cli, "		Next Recv:		%u", session[s].nr);
-			cli_print(cli, "		Next Send:		%u", session[s].ns);
-			cli_print(cli, "		Bytes In/Out:		%lu/%lu", (unsigned long)session[s].total_cout, (unsigned long)session[s].total_cin);
-			cli_print(cli, "		Pkts In/Out:		%lu/%lu", (unsigned long)session[s].pout, (unsigned long)session[s].pin);
-			cli_print(cli, "		MRU:				%d", session[s].mru);
-			cli_print(cli, "		Radius Session:		%u", session[s].radius);
-			cli_print(cli, "		Rx Speed:		%lu", session[s].rx_connect_speed);
-			cli_print(cli, "		Tx Speed:		%lu", session[s].tx_connect_speed);
-			if (session[s].snoop_ip && session[s].snoop_port)
-				cli_print(cli, "		Intercepted:	%s:%d", inet_toa(session[s].snoop_ip), session[s] .snoop_port);
+			cli_print(cli, "\tUser:			%s", session[s].user[0] ? session[s].user : "none");
+			if (tunnel[session[s].tunnel].vlan)
+			{
+				cli_print(cli, "\tPPPoE MAC:		%s", ether_ntoa((struct ether_addr *)&session[s].client_mac));
+			}
 			else
-				cli_print(cli, "		Intercepted:	no");
-			cli_print(cli, "		Throttled:		%s", session[s].throttle ? "YES" : "no");
-			cli_print(cli, "		Walled Garden:		%s", session[s].walled_garden ? "YES" : "no");
+			{
+				cli_print(cli, "\tCalling Num:		%s", session[s].calling);
+				cli_print(cli, "\tCalled Num:		%s", session[s].called);
+			}
+			cli_print(cli, "\tTunnel ID:		%d", session[s].tunnel);
+			cli_print(cli, "\tIP address:		%s", inet_toa(htonl(session[s].ip)));
+			cli_print(cli, "\tUnique SID:		%lu", session[s].unique_id);
+			cli_print(cli, "\tIdle time:		%u seconds", abs(time_now - session[s].last_packet));
+			cli_print(cli, "\tNext Recv:		%u", session[s].nr);
+			cli_print(cli, "\tNext Send:		%u", session[s].ns);
+			cli_print(cli, "\tBytes In/Out:		%lu/%lu", (unsigned long)session[s].total_cout, (unsigned long)session[s].total_cin);
+			cli_print(cli, "\tPkts In/Out:		%lu/%lu", (unsigned long)session[s].pout, (unsigned long)session[s].pin);
+			cli_print(cli, "\tMRU:			%d", session[s].mru);
+			cli_print(cli, "\tRadius Session:		%u", session[s].radius);
+			cli_print(cli, "\tRx Speed:		%lu", session[s].rx_connect_speed);
+			cli_print(cli, "\tTx Speed:		%lu", session[s].tx_connect_speed);
+			if (session[s].snoop_ip && session[s].snoop_port)
+				cli_print(cli, "\tIntercepted:		%s:%d", inet_toa(session[s].snoop_ip), session[s] .snoop_port);
+			else
+				cli_print(cli, "\tIntercepted:		no");
+			cli_print(cli, "\tThrottled:		%s", session[s].throttle ? "YES" : "no");
+			cli_print(cli, "\tWalled Garden:		%s", session[s].walled_garden ? "YES" : "no");
 			b_in = session[s].tbf_in;
 			b_out = session[s].tbf_out;
 			if (b_in || b_out)
@@ -541,20 +548,27 @@ int cmd_show_tunnels(struct cli_def *cli, char *command, char **argv, int argc)
 					continue;
 				}
 				cli_print(cli, "\r\nTunnel %d:", t);
-				cli_print(cli, "		State:				%s", states[tunnel[t].state]);
-				cli_print(cli, "		Hostname:		%s", tunnel[t].hostname[0] ? tunnel[t].hostname : "(none)");
-				cli_print(cli, "		Remote IP:		%s", inet_toa(htonl(tunnel[t].ip)));
-				cli_print(cli, "		Remote Port:		%d", tunnel[t].port);
-				cli_print(cli, "		Rx Window:		%u", tunnel[t].window);
-				cli_print(cli, "		Next Recv:		%u", tunnel[t].nr);
-				cli_print(cli, "		Next Send:		%u", tunnel[t].ns);
-				cli_print(cli, "		Queue Len:		%u", tunnel[t].controlc);
-				cli_print(cli, "		Last Packet Age:%u", (unsigned)(time_now - tunnel[t].last));
+				cli_print(cli, "\tState:			%s", states[tunnel[t].state]);
+				cli_print(cli, "\tHostname:		%s", tunnel[t].hostname[0] ? tunnel[t].hostname : "(none)");
+				if (tunnel[t].vlan)
+				{
+					cli_print(cli, "\tVLAN:			%d", tunnel[t].vlan);
+				}
+				else
+				{
+					cli_print(cli, "\tRemote IP:		%s", inet_toa(htonl(tunnel[t].ip)));
+					cli_print(cli, "\tRemote Port:		%d", tunnel[t].port);
+				}
+				cli_print(cli, "\tRx Window:		%u", tunnel[t].window);
+				cli_print(cli, "\tNext Recv:		%u", tunnel[t].nr);
+				cli_print(cli, "\tNext Send:		%u", tunnel[t].ns);
+				cli_print(cli, "\tQueue Len:		%u", tunnel[t].controlc);
+				cli_print(cli, "\tLast Packet Age:	%u", (unsigned)(time_now - tunnel[t].last));
 
 				for (x = 0; x < MAXSESSION; x++)
 						if (session[x].tunnel == t && session[x].opened && !session[x].die)
 								sprintf(s, "%s%u ", s, x);
-				cli_print(cli, "		Sessions:		%s", s);
+				cli_print(cli, "\tSessions:		%s", s);
 			}
 			return CLI_OK;
 		}
@@ -570,7 +584,7 @@ int cmd_show_tunnels(struct cli_def *cli, char *command, char **argv, int argc)
 	for (i = 1; i < MAXTUNNEL; i++)
 	{
 		int sessions = 0;
-		if (!show_all && (!tunnel[i].ip || tunnel[i].die || !tunnel[i].hostname[0])) continue;
+		if (!show_all && ((!tunnel[i].ip && !tunnel[i].vlan) || tunnel[i].die || !tunnel[i].hostname[0])) continue;
 
 		for (x = 0; x < MAXSESSION; x++) if (session[x].tunnel == i && session[x].opened && !session[x].die) sessions++;
 		cli_print(cli, "%4d %20s %20s %6s %6d",
@@ -854,7 +868,7 @@ int cmd_write_memory(struct cli_def *cli, char *command, char **argv, int argc)
 	}
 	else
 	{
-		cli_print(cli, "Error writing configuration: %s", strerror(errno));
+		cli_print(cli, "Error writing configuration file %s: %s", config->config_file, strerror(errno));
 	}
 	return CLI_OK;
 }

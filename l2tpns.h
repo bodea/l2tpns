@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.18.2.2 2004-09-23 06:15:38 fred_nerk Exp $
+// $Id: l2tpns.h,v 1.18.2.3 2004-10-05 04:56:26 fred_nerk Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -16,7 +16,7 @@
 #include <sys/types.h>
 #include <libcli.h>
 
-#define VERSION	"2.0.1"
+#define VERSION	"2.0.2"
 
 // Limits
 #define MAXTUNNEL	500		// could be up to 65535
@@ -343,7 +343,7 @@ struct Tstats
     unsigned long	recv_forward;
 #ifdef STATISTICS
     unsigned long	call_processtun;
-    unsigned long	call_processtap;
+    unsigned long	call_processpcap;
     unsigned long	call_processipout;
     unsigned long	call_processudp;
     unsigned long	call_sessionbyip;
@@ -409,7 +409,6 @@ struct configt
 	int		multi_read_count;		// amount of packets to read per fd in processing loop
 
 	char		tundevice[10];			// tun device name
-	char		tapdevice[10];			// tap device name
 	char		log_filename[128];
 	char		l2tpsecret[64];
 
@@ -464,6 +463,7 @@ struct configt
 #endif
 	char		hostname[256];			// our hostname - set to gethostname() by default
 	struct ether_addr mac_address;			// MAC address for PPPoE
+	char		pppoe_interface[16];		// Interface to use for PPPoE
 };
 
 struct config_descriptt
@@ -533,7 +533,7 @@ void controlb(controlt * c, u16 avp, char *val, unsigned int len, u8 m);
 controlt *controlnew(u16 mtype);
 void controlnull(tunnelidt t);
 void controladd(controlt * c, tunnelidt t, sessionidt s);
-void tunnelsend(u8 * buf, u16 l, tunnelidt t);
+void returnpacket(u8 *buf, u16 l, sessionidt s, tunnelidt t);
 void tunnelkill(tunnelidt t, char *reason);
 void tunnelshutdown(tunnelidt t, char *reason);
 void sendipcp(tunnelidt t, sessionidt s);
@@ -586,7 +586,8 @@ extern tunnelt *tunnel;
 extern sessiont *session;
 extern sessioncountt *sess_count;
 extern ippoolt *ip_address_pool;
-void processtap(u8 *buf, int len);
+void processpcap(u8 *buf, int len);
+void processppp(sessionidt s, tunnelidt t, u8 *buf, int len, u8 *p, int l, struct sockaddr_in *addr);
 #define sessionfree (session[0].next)
 
 #define log_backtrace(count, max) \

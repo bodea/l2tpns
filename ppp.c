@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.15.2.1 2004-09-23 06:15:38 fred_nerk Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.15.2.2 2004-10-05 04:56:29 fred_nerk Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -92,7 +92,7 @@ void processpap(tunnelidt t, sessionidt s, u8 * p, u16 l)
 			log(1, 0, s, t, "No radius session available to authenticate session...\n");
 		}
 		log(3, 0, s, t, "Fallback response to PAP (%s)\n", (session[s].ip) ? "ACK" : "NAK");
-		tunnelsend(b, 5 + (p - b), t); // send it
+		returnpacket(b, 5 + (p - b), s, t); // send it
 	}
 	else
 	{
@@ -261,8 +261,8 @@ void dumplcp(u8 *p, int l)
 					{
 						int proto = ntohs(*(u16 *)(o + 2));
 						log(4, 0, 0, 0, "   %s 0x%x (%s)\n", lcp_types[type], proto,
-							proto == 0xC223 ? "CHAP" :
-							proto == 0xC023 ? "PAP"  : "UNKNOWN");
+							proto == PPPCHAP ? "CHAP" :
+							proto == PPPPAP ? "PAP"  : "UNKNOWN");
 					}
 					else
 						log(4, 0, 0, 0, "   %s odd length %d\n", lcp_types[type], length);
@@ -344,6 +344,25 @@ void processlcp(tunnelidt t, sessionidt s, u8 * p, u16 l)
 			{
 				case 1: // Maximum-Receive-Unit
 					session[s].mru = ntohs(*(u16 *)(o + 2));
+					// FIXME set MRU correctly
+					if (session[s].mru > 1480)
+					{
+						log(2, session[s].ip, s, t, "    Requesting MRU of 1480\n");
+
+						if (!q)
+						{
+							q = makeppp(b, sizeof(b), p, l, t, s, PPPLCP);
+							if (!q) {
+								log(2, session[s].ip, s, t, " Failed to send packet.\n");
+								break;
+							}
+							*q++ = ConfigNak;
+						}
+						*(u8 *)(q + 0) = 1;
+						*(u8 *)(q + 1) = 4;
+						*(u16 *)(q += 2) = htons(1480);	 // NAK -> 1480
+						q += 4;
+					}
 					break;
 				case 2: // asyncmap
 					log_hex(2, "PPP LCP Packet", p, l);
@@ -352,7 +371,7 @@ void processlcp(tunnelidt t, sessionidt s, u8 * p, u16 l)
 				case 3: // Authentication-Protocol
 					{
 						int proto = ntohs(*(u16 *)(o + 2));
-						if (proto == 0xC223)
+						if (proto == PPPCHAP)
 						{
 							log(2, session[s].ip, s, t, "    Remote end is trying to do CHAP. Rejecting it.\n");
 
@@ -366,7 +385,7 @@ void processlcp(tunnelidt t, sessionidt s, u8 * p, u16 l)
 								*q++ = ConfigNak;
 							}
 							memcpy(q, o, length);
-							*(u16 *)(q += 2) = htons(0xC023); // NAK -> Use PAP instead
+							*(u16 *)(q += 2) = htons(PPPPAP); // NAK -> Use PAP instead
 							q += length;
 						}
 						break;
@@ -390,7 +409,7 @@ void processlcp(tunnelidt t, sessionidt s, u8 * p, u16 l)
 					*(u16 *)(p + 2) = htons(length + 4);
 					*p = ConfigRej;
 					q = makeppp(b,sizeof(b), p, length + 4, t, s, PPPLCP);
-					tunnelsend(b, 12 + length + 4, t);
+					returnpacket(b, 12 + length + 4, s, t);
 					return;
 					}
 
@@ -401,7 +420,7 @@ void processlcp(tunnelidt t, sessionidt s, u8 * p, u16 l)
 					*(u16 *)(p + 2) = htons(length + 4);
 					*p = ConfigRej;
 					q = makeppp(b,sizeof(b), p, length + 4, t, s, PPPLCP);
-					tunnelsend(b, 12 + length + 4, t);
+					returnpacket(b, 12 + length + 4, s, t);
 					return;
 			}
 			x -= length;
@@ -413,7 +432,11 @@ void processlcp(tunnelidt t, sessionidt s, u8 * p, u16 l)
 			// Send back a ConfigAck
 			log(3, session[s].ip, s, t, "ConfigReq accepted, sending as Ack\n");
 			// for win2k L2TP clients and LCP renegotiation of alive session
-			if (magicno || l == 4 || (session[s].mru && l == 8)) initlcp(t, s);
+			if (magicno || l == 4 || (session[s].mru && l == 8))
+			{
+				log(3, session[s].ip, s, t, "Client requested magic number, sending LCP ConfigReq\n");
+				initlcp(t, s);
+			}
 			q = makeppp(b, sizeof(b), p, l, t, s, PPPLCP);
 			if (!q)
 			{
@@ -421,13 +444,13 @@ void processlcp(tunnelidt t, sessionidt s, u8 * p, u16 l)
 				return;
 			}
 			*q = ConfigAck;
-			tunnelsend(b, l + (q - b), t);
+			returnpacket(b, l + (q - b), s, t);
 		}
 		else
 		{
 			// Already built a ConfigNak... send it
 			log(3, session[s].ip, s, t, "Sending ConfigNak\n");
-			tunnelsend(b, l + (q - b), t);
+			returnpacket(b, l + (q - b), s, t);
 		}
 
 		if (!(session[s].flags & SESSIONLCPACK))
@@ -449,7 +472,7 @@ void processlcp(tunnelidt t, sessionidt s, u8 * p, u16 l)
 		}
 		log(3, session[s].ip, s, t, "LCP: Received TerminateReq. Sending TerminateAck\n");
 		sessionshutdown(s, "Remote end closed connection.");
-		tunnelsend(b, l + (q - b), t); // send it
+		returnpacket(b, l + (q - b), s, t); // send it
 	}
 	else if (*p == TerminateAck)
 	{
@@ -465,7 +488,7 @@ void processlcp(tunnelidt t, sessionidt s, u8 * p, u16 l)
 			return;
 		}
 		log(5, session[s].ip, s, t, "LCP: Received EchoReq. Sending EchoReply\n");
-		tunnelsend(b, l + (q - b), t); // send it
+		returnpacket(b, l + (q - b), s, t); // send it
 	}
 	else if (*p == EchoReply)
 	{
@@ -486,7 +509,7 @@ void processlcp(tunnelidt t, sessionidt s, u8 * p, u16 l)
 			return;
 		}
 		log_hex(5, "LCPIdentRej", q, l + 4);
-		tunnelsend(b, 12 + 4 + l, t);
+		returnpacket(b, 12 + 4 + l, s, t);
 	}
 	else
 	{
@@ -582,7 +605,7 @@ void processipcp(tunnelidt t, sessionidt s, u8 * p, u16 l)
 			}
 			*(u16 *) (q + 2) = htons(n);
 			log(4, session[s].ip, s, t, "Sending ConfigRej\n");
-			tunnelsend(b, n + (q - b), t); // send it
+			returnpacket(b, n + (q - b), s, t); // send it
 		}
 		else
 		{
@@ -625,12 +648,12 @@ void processipcp(tunnelidt t, sessionidt s, u8 * p, u16 l)
 				log(2, 0, s, t, " Failed to send IPCP packet.\n");
 				return;
 			}
-			tunnelsend(b, l + (q - b), t); // send it
+			returnpacket(b, l + (q - b), s, t); // send it
 		}
 	}
 }
 
-// process IP packet received
+// process IP packet received from user
 //
 // This MUST be called with at least 4 byte behind 'p'.
 // (i.e. this routine writes to p[-4]).
@@ -695,7 +718,6 @@ void processipin(tunnelidt t, sessionidt s, u8 * p, u16 l)
 		log(0, 0, s, t, "Error writing %d bytes to TUN device: %s (tunfd=%d, p=%p)\n",
 			l, strerror(errno), tunfd, p);
 	}
-
 }
 
 //
@@ -755,10 +777,10 @@ void processccp(tunnelidt t, sessionidt s, u8 * p, u16 l)
 			*p = TerminateAck;		// close
 		if (!(q = makeppp(b, sizeof(b), p, l, t, s, PPPCCP)))
 		{
-			log(1,0,0,0, "Failed to send CCP packet.\n");	
+			log(1,0,0,0, "Failed to send CCP packet.\n");
 			return;
 		}
-		tunnelsend(b, l + (q - b), t); // send it
+		returnpacket(b, l + (q - b), s, t); // send it
 	}
 }
 
@@ -807,7 +829,7 @@ void sendchap(tunnelidt t, sessionidt s)
 	memcpy(q + 5, radius[r].auth, 16);	// challenge
 	strcpy(q + 21, hostname);		// our name
 	*(u16 *) (q + 2) = htons(strlen(hostname) + 21); // length
-	tunnelsend(b, strlen(hostname) + 21 + (q - b), t); // send it
+	returnpacket(b, strlen(hostname) + 21 + (q - b), s, t); // send it
 }
 
 // fill in a L2TP message with a PPP frame,
@@ -877,14 +899,17 @@ void initlcp(tunnelidt t, sessionidt s)
 	log(4, 0, s, t, "Sending LCP ConfigReq for PAP\n");
 	*q = ConfigReq;
 	*(u8 *)(q + 1) = (time_now % 255) + 1; // ID
-	*(u16 *)(q + 2) = htons(14); // Length
+	*(u16 *)(q + 2) = htons(18); // Length
 	*(u8 *)(q + 4) = 5;
 	*(u8 *)(q + 5) = 6;
 	*(u32 *)(q + 6) = htonl(session[s].magic);
 	*(u8 *)(q + 10) = 3;
 	*(u8 *)(q + 11) = 4;
-	*(u16 *)(q + 12) = htons(0xC023); // PAP
-	tunnelsend(b, 12 + 14, t);
+	*(u16 *)(q + 12) = htons(PPPPAP); // PAP
+	*(u8 *)(q + 14) = 1; // MRU
+	*(u8 *)(q + 15) = 4;
+	*(u16 *)(q += 16) = htons(1480);
+	returnpacket(b, 12 + 18, s, t);
 }
 
 // Send CCP reply
@@ -897,6 +922,6 @@ void sendccp(tunnelidt t, sessionidt s)
 	*(u8 *)(q + 1) = (time_now % 255) + 1; // ID
 	*(u16 *)(q + 2) = htons(4); // Length
 	log_hex(5, "PPPCCP", q, 4);
-	tunnelsend(b, (q - b) + 4 , t);
+	returnpacket(b, (q - b) + 4 , s, t);
 }
 

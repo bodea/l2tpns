@@ -1,6 +1,6 @@
 // L2TPNS Radius Stuff
 
-char const *cvs_id_radius = "$Id: radius.c,v 1.10 2004-09-02 04:18:07 fred_nerk Exp $";
+char const *cvs_id_radius = "$Id: radius.c,v 1.10.2.1 2004-10-05 04:56:29 fred_nerk Exp $";
 
 #include <time.h>
 #include <stdio.h>
@@ -440,7 +440,7 @@ void processrad(u8 *buf, int len, char socket_index)
 				*p = (*buf == 2) ? 3 : 4;     // ack/nak
 				p[1] = radius[r].id;
 				*(u16 *) (p + 2) = ntohs(4); // no message
-				tunnelsend(b, (p - b) + 4, t); // send it
+				returnpacket(b, (p - b) + 4, s, t); // send it
 			}
 			else
 			{
@@ -462,7 +462,7 @@ void processrad(u8 *buf, int len, char socket_index)
 				p[1] = radius[r].id;
 				*(u16 *) (p + 2) = ntohs(5);
 				p[4] = 0; // no message
-				tunnelsend(b, (p - b) + 5, t); // send it
+				returnpacket(b, (p - b) + 5, s, t); // send it
 			}
 
 			if (*buf == 2)
