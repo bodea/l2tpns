@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.49.2.2 2005-01-10 07:08:14 bodea Exp $
+// $Id: l2tpns.h,v 1.49.2.3 2005-01-13 07:58:54 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -219,7 +219,7 @@ typedef struct
 	clockt last_packet_out;
 	uint32_t packets_out;
 	uint32_t packets_dropped;
-} sessioncountt;
+} sessionlocalt;
 
 #define	SESSIONPFC	1	// PFC negotiated flags
 #define	SESSIONACFC	2	// ACFC negotiated flags
@@ -619,7 +619,7 @@ void host_unreachable(in_addr_t destination, uint16_t id, in_addr_t source, char
 
 extern tunnelt *tunnel;
 extern sessiont *session;
-extern sessioncountt *sess_count;
+extern sessionlocalt *sess_local;
 extern ippoolt *ip_address_pool;
 #define sessionfree (session[0].next)
 

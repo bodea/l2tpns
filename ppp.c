@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.40 2005-01-05 13:50:30 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.39.2.1 2005-01-13 07:58:54 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -32,7 +32,7 @@ void processpap(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 	char pass[129];
 	uint16_t hl;
 
-	CSTAT(processpap);
+	CSTAT(call_processpap);
 
 	LOG_HEX(5, "PAP", p, l);
 	if (l < 4)
@@ -132,7 +132,7 @@ void processchap(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 	uint16_t r;
 	uint16_t hl;
 
-	CSTAT(processchap);
+	CSTAT(call_processchap);
 
 	LOG_HEX(5, "CHAP", p, l);
 	r = session[s].radius;
@@ -224,13 +224,29 @@ void processchap(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 	radiussend(r, RADIUSAUTH);
 }
 
+static char *ppp_lcp_types[] = {
+	NULL,
+	"ConfigReq",
+	"ConfigAck",
+	"ConfigNak",
+	"ConfigRej",
+	"TerminateReq",
+	"TerminateAck",
+	"CodeRej",
+	"ProtocolRej",
+	"EchoReq",
+	"EchoReply",
+	"DiscardRequest",
+	"IdentRequest",
+};
+
 static void dumplcp(uint8_t *p, int l)
 {
 	int x = l - 4;
 	uint8_t *o = (p + 4);
 
 	LOG_HEX(5, "PPP LCP Packet", p, l);
-	LOG(4, 0, 0, "PPP LCP Packet type %d (%s len %d)\n", *p, ppp_lcp_type((int)*p), ntohs( ((uint16_t *) p)[1]) );
+	LOG(4, 0, 0, "PPP LCP Packet type %d (%s len %d)\n", *p, ppp_lcp_types[(int)*p], ntohs( ((uint16_t *) p)[1]) );
 	LOG(4, 0, 0, "Length: %d\n", l);
 	if (*p != ConfigReq && *p != ConfigRej && *p != ConfigAck)
 		return;
@@ -255,48 +271,48 @@ static void dumplcp(uint8_t *p, int l)
 		{
 			case 1: // Maximum-Receive-Unit
 				if (length == 4)
-					LOG(4, 0, 0, "    %s %d\n", lcp_type(type), ntohs(*(uint16_t *)(o + 2)));
+					LOG(4, 0, 0, "    %s %d\n", lcp_types[type], ntohs(*(uint16_t *)(o + 2)));
 				else
-					LOG(4, 0, 0, "    %s odd length %d\n", lcp_type(type), length);
+					LOG(4, 0, 0, "    %s odd length %d\n", lcp_types[type], length);
 				break;
 			case 2: // Async-Control-Character-Map
 				if (length == 6)
 				{
 					uint32_t asyncmap = ntohl(*(uint32_t *)(o + 2));
-					LOG(4, 0, 0, "    %s %x\n", lcp_type(type), asyncmap);
+					LOG(4, 0, 0, "    %s %x\n", lcp_types[type], asyncmap);
 				}
 				else
-					LOG(4, 0, 0, "   %s odd length %d\n", lcp_type(type), length);
+					LOG(4, 0, 0, "   %s odd length %d\n", lcp_types[type], length);
 				break;
 			case 3: // Authentication-Protocol
 				if (length == 4)
 				{
 					int proto = ntohs(*(uint16_t *)(o + 2));
-					LOG(4, 0, 0, "   %s 0x%x (%s)\n", lcp_type(type), proto,
+					LOG(4, 0, 0, "   %s 0x%x (%s)\n", lcp_types[type], proto,
 						proto == PPPCHAP ? "CHAP" :
 						proto == PPPPAP  ? "PAP"  : "UNKNOWN");
 				}
 				else
-					LOG(4, 0, 0, "   %s odd length %d\n", lcp_type(type), length);
+					LOG(4, 0, 0, "   %s odd length %d\n", lcp_types[type], length);
 				break;
 			case 4: // Quality-Protocol
 				{
 					uint32_t qp = ntohl(*(uint32_t *)(o + 2));
-					LOG(4, 0, 0, "    %s %x\n", lcp_type(type), qp);
+					LOG(4, 0, 0, "    %s %x\n", lcp_types[type], qp);
 				}
 				break;
 			case 5: // Magic-Number
 				if (length == 6)
 				{
 					uint32_t magicno = ntohl(*(uint32_t *)(o + 2));
-					LOG(4, 0, 0, "    %s %x\n", lcp_type(type), magicno);
+					LOG(4, 0, 0, "    %s %x\n", lcp_types[type], magicno);
 				}
 				else
-					LOG(4, 0, 0, "   %s odd length %d\n", lcp_type(type), length);
+					LOG(4, 0, 0, "   %s odd length %d\n", lcp_types[type], length);
 				break;
 			case 7: // Protocol-Field-Compression
 			case 8: // Address-And-Control-Field-Compression
-				LOG(4, 0, 0, "    %s\n", lcp_type(type));
+				LOG(4, 0, 0, "    %s\n", lcp_types[type]);
 				break;
 			default:
 				LOG(2, 0, 0, "    Unknown PPP LCP Option type %d\n", type);
@@ -315,7 +331,7 @@ void processlcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 	uint32_t magicno = 0;
 	uint16_t hl;
 
-	CSTAT(processlcp);
+	CSTAT(call_processlcp);
 
 	LOG_HEX(5, "LCP", p, l);
 	if (l < 4)
@@ -467,7 +483,7 @@ void processlcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 			*q = ConfigAck;
 		}
 
-		LOG(3, s, t, "Sending %s\n", ppp_lcp_type(*response));
+		LOG(3, s, t, "Sending %s\n", ppp_lcp_types[*response]);
 		tunnelsend(b, l + (q - b), t);
 
 		if (!(session[s].flags & SF_LCP_ACKED))
@@ -551,7 +567,7 @@ void processipcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 {
 	uint16_t hl;
 
-	CSTAT(processipcp);
+	CSTAT(call_processipcp);
 
 	LOG_HEX(5, "IPCP", p, l);
 	if (l < 5)
@@ -693,7 +709,7 @@ void processipin(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 {
 	in_addr_t ip;
 
-	CSTAT(processipin);
+	CSTAT(call_processipin);
 
 	LOG_HEX(5, "IP", p, l);
 
@@ -750,7 +766,7 @@ void processipin(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 
 	session[s].cin += l - 4;
 	session[s].total_cin += l - 4;
-	sess_count[s].cin += l - 4;
+	sess_local[s].cin += l - 4;
 
 	session[s].pin++;
 	eth_tx += l - 4;
@@ -785,7 +801,7 @@ void send_ipin(sessionidt s, uint8_t *buf, int len)
 	// Increment packet counters
 	session[s].cin += len - 4;
 	session[s].total_cin += len - 4;
-	sess_count[s].cin += len - 4;
+	sess_local[s].cin += len - 4;
 
 	session[s].pin++;
 	eth_tx += len - 4;
@@ -801,7 +817,7 @@ void processccp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 	uint8_t b[MAXCONTROL];
 	uint8_t *q;
 
-	CSTAT(processccp);
+	CSTAT(call_processccp);
 
 	LOG_HEX(5, "CCP", p, l);
 	switch (l > 1 ? *p : 0)
@@ -853,24 +869,25 @@ void sendchap(tunnelidt t, sessionidt s)
 	uint16_t r = session[s].radius;
 	uint8_t *q;
 
-	CSTAT(sendchap);
+	CSTAT(call_sendchap);
 
 	if (!r)
 	{
 		LOG(1, s, t, "No RADIUS to send challenge\n");
 		STAT(tunnel_tx_errors);
-		return;
+		return ;
 	}
-
 	LOG(1, s, t, "Send CHAP challenge\n");
-
-	// new challenge
-	random_data(radius[r].auth, sizeof(radius[r].auth));
+	{
+		// new challenge
+		int n;
+		for (n = 0; n < 15; n++)
+			radius[r].auth[n] = rand();
+	}
 	radius[r].chap = 1;		// CHAP not PAP
 	radius[r].id++;
 	if (radius[r].state != RADIUSCHAP)
 		radius[r].try = 0;
-
 	radius[r].state = RADIUSCHAP;
 	radius[r].retry = backoff(radius[r].try++);
 	if (radius[r].try > 5)

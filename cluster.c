@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.26.2.1 2005-01-06 01:39:23 bodea Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.26.2.2 2005-01-13 07:58:54 bodea Exp $";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -405,18 +405,18 @@ void master_update_counts(void)
 		if ( walk_session_number > config->cluster_highest_sessionid)
 			walk_session_number = 1;
 
-		if (!sess_count[walk_session_number].cin && !sess_count[walk_session_number].cout)
+		if (!sess_local[walk_session_number].cin && !sess_local[walk_session_number].cout)
 			continue; // Unused. Skip it.
 
 		b[c].sid = walk_session_number;
-		b[c].in = sess_count[walk_session_number].cin;
-		b[c].out = sess_count[walk_session_number].cout;
+		b[c].in = sess_local[walk_session_number].cin;
+		b[c].out = sess_local[walk_session_number].cout;
 
 		if (++c > MAX_B_RECS)	// Send a max of 400 elements in a packet.
 			break;
 
 			// Reset counters.
-		sess_count[walk_session_number].cin = sess_count[walk_session_number].cout = 0;
+		sess_local[walk_session_number].cin = sess_local[walk_session_number].cout = 0;
 	}
 
 	if (!c)		// Didn't find any that changes. Get out of here!
@@ -580,12 +580,12 @@ void cluster_check_master(void)
 		session[i].last_packet = time_now;
 
 			// Accumulate un-sent byte counters.
-		session[i].cin += sess_count[i].cin;
-		session[i].cout += sess_count[i].cout;
-		session[i].total_cin += sess_count[i].cin;
-		session[i].total_cout += sess_count[i].cout;
+		session[i].cin += sess_local[i].cin;
+		session[i].cout += sess_local[i].cout;
+		session[i].total_cin += sess_local[i].cin;
+		session[i].total_cout += sess_local[i].cout;
 
-		sess_count[i].cin = sess_count[i].cout = 0;
+		sess_local[i].cin = sess_local[i].cout = 0;
 
 		session[i].radius = 0;	// Reset authentication as the radius blocks aren't up to date.
 

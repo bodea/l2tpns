@@ -1,6 +1,10 @@
-* Mon Jan 10 2005 Brendan O'Dea <bod@optusnet.com.au> 2.0.15
+* Thu Jan 13 2005 Brendan O'Dea <bod@optusnet.com.au> 2.0.15
 - More DoS prevention:  add packet_limit option to apply a hard limit
   to downstream packets per session.
+- Fix "clear counters".
+- Log "Accepted connection to CLI" at 4 when connection is from localhost
+  to reduce noise in logs.
+- Show time since last counter reset in "show counters".
 
 * Mon Dec 20 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.14
 - Throttle outgoing LASTSEEN packets to at most one per second for a

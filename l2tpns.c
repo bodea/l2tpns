@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.73.2.2 2005-01-10 07:44:49 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.73.2.3 2005-01-13 07:58:54 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -148,7 +148,7 @@ static sessionidt shut_acct_n = 0;
 
 tunnelt *tunnel = NULL;			// Array of tunnel structures.
 sessiont *session = NULL;		// Array of session structures.
-sessioncountt *sess_count = NULL;	// Array of partial per-session traffic counters.
+sessionlocalt *sess_local = NULL;	// Array of local per-session counters.
 radiust *radius = NULL;			// Array of radius structures.
 ippoolt *ip_address_pool = NULL;	// Array of dynamic IP addresses.
 ip_filtert *ip_filters = NULL;	// Array of named filters.
@@ -769,7 +769,7 @@ static void processipout(uint8_t * buf, int len)
 	// DoS prevention: enforce a maximum number of packets per 0.1s for a session
 	if (config->max_packets > 0)
 	{
-		if (sess_count[s].last_packet_out == TIME)
+		if (sess_local[s].last_packet_out == TIME)
 		{
 			int max = config->max_packets;
 
@@ -782,24 +782,26 @@ static void processipout(uint8_t * buf, int len)
 			if (!config->cluster_iam_master && sp->throttle_out && sp->throttle_out < max)
 				max = sp->throttle_out;
 
-			if (++sess_count[s].packets_out > max)
+			if (++sess_local[s].packets_out > max)
 			{
-				sess_count[s].packets_dropped++;
+				sess_local[s].packets_dropped++;
 				return;
 			}
 		}
 		else
 		{
-			if (sess_count[s].packets_dropped)
+			if (sess_local[s].packets_dropped)
 			{
-				INC_STAT(tun_rx_dropped, sess_count[s].packets_dropped);
-				LOG(2, s, t, "Possible DoS attack on %s (%s); dropped %u packets.\n",
-					fmtaddr(ip, 0), sp->user, sess_count[s].packets_dropped);
+				INC_STAT(tun_rx_dropped, sess_local[s].packets_dropped);
+				LOG(3, s, t, "Dropped %u/%u packets to %s for %suser %s\n",
+					sess_local[s].packets_out, sess_local[s].packets_dropped,
+					fmtaddr(ip, 0), sp->throttle_out ? "throttled " : "",
+					sp->user);
 			}
 
-			sess_count[s].last_packet_out = TIME;
-			sess_count[s].packets_out = 1;
-			sess_count[s].packets_dropped = 0;
+			sess_local[s].last_packet_out = TIME;
+			sess_local[s].packets_out = 1;
+			sess_local[s].packets_dropped = 0;
 		}
 	}
 
@@ -840,7 +842,7 @@ static void processipout(uint8_t * buf, int len)
 	sp->total_cout += len; // byte count
 	sp->pout++;
 	udp_tx += len;
-	sess_count[s].cout += len;	// To send to master..
+	sess_local[s].cout += len;	// To send to master..
 }
 
 //
@@ -890,7 +892,7 @@ static void send_ipout(sessionidt s, uint8_t *buf, int len)
 	sp->total_cout += len; // byte count
 	sp->pout++;
 	udp_tx += len;
-	sess_count[s].cout += len;	// To send to master..
+	sess_local[s].cout += len;	// To send to master..
 }
 
 // add an AVP (16 bit)
@@ -2675,9 +2677,9 @@ static void initdata(int optdebug, char *optconfig)
 		exit(1);
 	}
 
-	if (!(sess_count = shared_malloc(sizeof(sessioncountt) * MAXSESSION)))
+	if (!(sess_local = shared_malloc(sizeof(sessionlocalt) * MAXSESSION)))
 	{
-		LOG(0, 0, 0, "Error doing malloc for sessions_count: %s\n", strerror(errno));
+		LOG(0, 0, 0, "Error doing malloc for sess_local: %s\n", strerror(errno));
 		exit(1);
 	}
 
