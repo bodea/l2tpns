@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.10 2004-08-02 05:40:21 fred_nerk Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.11 2004-08-02 06:06:28 fred_nerk Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -614,7 +614,7 @@ void processipcp(tunnelidt t, sessionidt s, u8 * p, u16 l)
 				*(u32 *) (i + 2) = htonl(session[s].ip);
 				*p = ConfigNak;
 				log(4, session[s].ip, s, t, " No, a ConfigNak, client is requesting IP - sending %s\n",
-						inet_toa(session[s].ip));
+						inet_toa(htonl(session[s].ip)));
 			}
 			if (!(q = makeppp(b, sizeof(b), p, l, t, s, PPPIPCP)))
 			{

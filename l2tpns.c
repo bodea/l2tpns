@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.20 2004-08-02 05:40:21 fred_nerk Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.21 2004-08-02 06:06:28 fred_nerk Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -2079,7 +2079,6 @@ int regular_cleanups(void)
 					(int)(time_now - session[s].last_packet));
 			tunnelsend(b, 24, session[s].tunnel); // send it
 			if (++count >= MAX_ACTIONS) break;
-			continue;
 		}
 
 		// Check for actions requested from the CLI
@@ -2131,7 +2130,6 @@ int regular_cleanups(void)
 				cluster_send_session(s);
 
 			if (++count >= MAX_ACTIONS) break;
-			continue;
 		}
 	}
 

@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.9 2004-07-11 07:57:35 bodea Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.10 2004-08-02 06:06:28 fred_nerk Exp $";
 
 #include <stdio.h>
 #include <sys/file.h>
@@ -77,65 +77,68 @@ int rle_compress(u8 ** src_p, int ssize, u8 *dst, int dsize);
 //
 int cluster_init()
 {
-    struct sockaddr_in addr;
-    struct sockaddr_in interface_addr;
-    struct ip_mreq mreq;
-    struct ifreq   ifr;
-    int opt = 0;
+	struct sockaddr_in addr;
+	struct sockaddr_in interface_addr;
+	struct ip_mreq mreq;
+	struct ifreq   ifr;
+	int opt = 0;
 
-    config->cluster_undefined_sessions = MAXSESSION-1;
-    config->cluster_undefined_tunnels = MAXTUNNEL-1;
+	config->cluster_undefined_sessions = MAXSESSION-1;
+	config->cluster_undefined_tunnels = MAXTUNNEL-1;
 
-    if (!config->cluster_address)
-	return 0;
-    if (!*config->cluster_interface)
-	return 0;
+	if (!config->cluster_address)
+		return 0;
+	if (!*config->cluster_interface)
+		return 0;
 
-    cluster_sockfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+	cluster_sockfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(CLUSTERPORT);
-    addr.sin_addr.s_addr = INADDR_ANY;
-    setsockopt(cluster_sockfd, SOL_SOCKET, SO_REUSEADDR, &addr, sizeof(addr));
+	memset(&addr, 0, sizeof(addr));
+	addr.sin_family = AF_INET;
+	addr.sin_port = htons(CLUSTERPORT);
+	addr.sin_addr.s_addr = INADDR_ANY;
+	setsockopt(cluster_sockfd, SOL_SOCKET, SO_REUSEADDR, &addr, sizeof(addr));
 
-    if (bind(cluster_sockfd, (void *) &addr, sizeof(addr)) < 0)
-    {
-	log(0, 0, 0, 0, "Failed to bind cluster socket: %s\n", strerror(errno));
-	return -1;
-    }
+	if (bind(cluster_sockfd, (void *) &addr, sizeof(addr)) < 0)
+	{
+		log(0, 0, 0, 0, "Failed to bind cluster socket: %s\n", strerror(errno));
+		return -1;
+	}
 
-    strcpy(ifr.ifr_name, config->cluster_interface);
-    if (ioctl(cluster_sockfd, SIOCGIFADDR, &ifr) < 0) {
-	log(0, 0, 0, 0, "Failed to get interface address for (%s): %s\n", config->cluster_interface, strerror(errno));
-	return -1;
-    }
+	strcpy(ifr.ifr_name, config->cluster_interface);
+	if (ioctl(cluster_sockfd, SIOCGIFADDR, &ifr) < 0)
+	{
+		log(0, 0, 0, 0, "Failed to get interface address for (%s): %s\n", config->cluster_interface, strerror(errno));
+		return -1;
+	}
 
-    memcpy(&interface_addr, &ifr.ifr_addr, sizeof(interface_addr) );
-    my_address = interface_addr.sin_addr.s_addr;
+	memcpy(&interface_addr, &ifr.ifr_addr, sizeof(interface_addr));
+	my_address = interface_addr.sin_addr.s_addr;
 
-		// Join multicast group.
-    mreq.imr_multiaddr.s_addr = config->cluster_address;
-    mreq.imr_interface = interface_addr.sin_addr;
+				// Join multicast group.
+	mreq.imr_multiaddr.s_addr = config->cluster_address;
+	mreq.imr_interface = interface_addr.sin_addr;
 
 
-    opt = 0;	// Turn off multicast loopback.
-    setsockopt(cluster_sockfd, IPPROTO_IP, IP_MULTICAST_LOOP, &opt, sizeof(opt));
+	opt = 0;		// Turn off multicast loopback.
+	setsockopt(cluster_sockfd, IPPROTO_IP, IP_MULTICAST_LOOP, &opt, sizeof(opt));
 
-    if (setsockopt(cluster_sockfd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
-	log(0, 0, 0, 0, "Failed to setsockopt (join mcast group): %s\n", strerror(errno));
-	return -1;
-    }
+	if (setsockopt(cluster_sockfd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0)
+	{
+		log(0, 0, 0, 0, "Failed to setsockopt (join mcast group): %s\n", strerror(errno));
+		return -1;
+	}
 
-    if (setsockopt (cluster_sockfd, IPPROTO_IP, IP_MULTICAST_IF, &interface_addr, sizeof(interface_addr)) < 0) {
-	log(0, 0, 0, 0, "Failed to setsockopt (set mcast interface): %s\n", strerror(errno));
-	return -1;
-    }
+	if (setsockopt (cluster_sockfd, IPPROTO_IP, IP_MULTICAST_IF, &interface_addr, sizeof(interface_addr)) < 0)
+	{
+		log(0, 0, 0, 0, "Failed to setsockopt (set mcast interface): %s\n", strerror(errno));
+		return -1;
+	}
 
-    config->cluster_last_hb = TIME;
-    config->cluster_seq_number = -1;
+	config->cluster_last_hb = TIME;
+	config->cluster_seq_number = -1;
 
-    return cluster_sockfd;
+	return cluster_sockfd;
 }
 
 
@@ -146,24 +149,24 @@ int cluster_init()
 
 int cluster_send_data(void *data, int datalen)
 {
-    struct sockaddr_in addr = {0};
+	struct sockaddr_in addr = {0};
 
-    if (!cluster_sockfd) return -1;
-    if (!config->cluster_address) return 0;
+	if (!cluster_sockfd) return -1;
+	if (!config->cluster_address) return 0;
 
-    addr.sin_addr.s_addr = config->cluster_address;
-    addr.sin_port = htons(CLUSTERPORT);
-    addr.sin_family = AF_INET;
+	addr.sin_addr.s_addr = config->cluster_address;
+	addr.sin_port = htons(CLUSTERPORT);
+	addr.sin_family = AF_INET;
 
-    log(5,0,0,0, "Cluster send data: %d bytes\n", datalen);
+	log(5,0,0,0, "Cluster send data: %d bytes\n", datalen);
 
-    if (sendto(cluster_sockfd, data, datalen, MSG_NOSIGNAL, (void *) &addr, sizeof(addr)) < 0)
-    {
-	log(0, 0, 0, 0, "sendto: %s\n", strerror(errno));
-	return -1;
-    }
+	if (sendto(cluster_sockfd, data, datalen, MSG_NOSIGNAL, (void *) &addr, sizeof(addr)) < 0)
+	{
+		log(0, 0, 0, 0, "sendto: %s\n", strerror(errno));
+		return -1;
+	}
 
-    return 0;
+	return 0;
 }
 
 //
@@ -212,27 +215,27 @@ void cluster_uptodate(void)
 //
 int peer_send_data(u32 peer, char * data, int size)
 {
-    struct sockaddr_in addr = {0};
+	struct sockaddr_in addr = {0};
 
-    if (!cluster_sockfd) return -1;
-    if (!config->cluster_address) return 0;
+	if (!cluster_sockfd) return -1;
+	if (!config->cluster_address) return 0;
 
-    if (!peer)	// Odd??
+	if (!peer)	// Odd??
 	return -1;
 
-    addr.sin_addr.s_addr = peer;
-    addr.sin_port = htons(CLUSTERPORT);
-    addr.sin_family = AF_INET;
+	addr.sin_addr.s_addr = peer;
+	addr.sin_port = htons(CLUSTERPORT);
+	addr.sin_family = AF_INET;
 
-    log_hex(5, "Peer send", data, size);
+	log_hex(5, "Peer send", data, size);
 
-    if (sendto(cluster_sockfd, data, size, MSG_NOSIGNAL, (void *) &addr, sizeof(addr)) < 0)
-    {
-	log(0, 0, 0, 0, "sendto: %s\n", strerror(errno));
-	return -1;
-    }
+	if (sendto(cluster_sockfd, data, size, MSG_NOSIGNAL, (void *) &addr, sizeof(addr)) < 0)
+	{
+		log(0, 0, 0, 0, "sendto: %s\n", strerror(errno));
+		return -1;
+	}
 
-    return 0;
+	return 0;
 }
 
 //
@@ -328,18 +331,19 @@ int master_garden_packet(sessionidt s, char *data, int size)
 //
 static void send_heartbeat(int seq, char * data, int size)
 {
-    int i;
+	int i;
 
-    if (size > sizeof(past_hearts[0].data)) {
-	log(0,0,0,0, "Tried to heartbeat something larger than the maximum packet!\n");
-	kill(0, SIGTERM);
-	exit(1);
-    }
-    i = seq % HB_HISTORY_SIZE;
-    past_hearts[i].seq = seq;
-    past_hearts[i].size = size;
-    memcpy(&past_hearts[i].data, data, size);	// Save it.
-    cluster_send_data(data, size);
+	if (size > sizeof(past_hearts[0].data))
+	{
+		log(0,0,0,0, "Tried to heartbeat something larger than the maximum packet!\n");
+		kill(0, SIGTERM);
+		exit(1);
+	}
+	i = seq % HB_HISTORY_SIZE;
+	past_hearts[i].seq = seq;
+	past_hearts[i].size = size;
+	memcpy(&past_hearts[i].data, data, size);	// Save it.
+	cluster_send_data(data, size);
 }
 
 //
@@ -474,21 +478,21 @@ void cluster_check_master(void)
 	if (config->cluster_iam_master)
 		return;		// Only runs on the slaves...
 
-		// If the master is late (missed 2 hearbeats by a second and a
-		// hair) it may be that the switch has dropped us from the
-		// multicast group, try unicasting one probe to the master
-		// which will hopefully respond with a unicast heartbeat that
-		// will allow us to limp along until the querier next runs.
+	// If the master is late (missed 2 hearbeats by a second and a
+	// hair) it may be that the switch has dropped us from the
+	// multicast group, try unicasting one probe to the master
+	// which will hopefully respond with a unicast heartbeat that
+	// will allow us to limp along until the querier next runs.
 	if (TIME > (config->cluster_last_hb + 2 * config->cluster_hb_interval + 11))
 	{
 		if (!probed && config->cluster_master_address)
 		{
 			probed = 1;
 			log(1, 0, 0, 0, "Heartbeat from master %.1fs late, probing...\n",
-			    0.1 * (TIME - (config->cluster_last_hb + config->cluster_hb_interval)));
+				0.1 * (TIME - (config->cluster_last_hb + config->cluster_hb_interval)));
 
 			peer_send_message(config->cluster_master_address,
-			    C_LASTSEEN, config->cluster_seq_number, NULL, 0);
+				C_LASTSEEN, config->cluster_seq_number, NULL, 0);
 		}
 	} else {	// We got a recent heartbeat; reset the probe flag.
 		probed = 0;
@@ -611,7 +615,7 @@ void cluster_check_master(void)
 
 	config->cluster_undefined_sessions = 0;
 	config->cluster_undefined_tunnels = 0;
-    	config->cluster_iam_uptodate = 1; // assume all peers are up-to-date
+	config->cluster_iam_uptodate = 1; // assume all peers are up-to-date
 
 	// FIXME. We need to fix up the tunnel control message
 	// queue here! There's a number of other variables we
@@ -916,18 +920,16 @@ int cluster_add_peer(u32 peer, time_t basetime, pingt *pp, int size)
 	int i;
 	u32 clusterid;
 	pingt p;
-	
 
-		// Allow for backward compatability.
-		// Just the ping packet into a new structure to allow
-		// for the possibility that we might have received
-		// more or fewer elements than we were expecting.
+	// Allow for backward compatability.
+	// Just the ping packet into a new structure to allow
+	// for the possibility that we might have received
+	// more or fewer elements than we were expecting.
 	if (size > sizeof(p))
 		size = sizeof(p);
 
 	memset( (void*) &p, 0, sizeof(p) );
 	memcpy( (void*) &p, (void*) pp, size);
-	
 
 	clusterid = p.addr;
 	if (clusterid != config->bind_address)
@@ -949,9 +951,9 @@ int cluster_add_peer(u32 peer, time_t basetime, pingt *pp, int size)
 		break;
 	}
 
-		// Is this the master shutting down??
+	// Is this the master shutting down??
 	if (peer == config->cluster_master_address && !basetime) {
-	    	log(3,0,0,0, "Master %s shutting down...\n", inet_toa(config->cluster_master_address));
+		log(3,0,0,0, "Master %s shutting down...\n", inet_toa(config->cluster_master_address));
 		config->cluster_master_address = 0;
 		config->cluster_last_hb = 0; // Force an election.
 		cluster_check_master();
@@ -1177,17 +1179,17 @@ static int cluster_process_heartbeat(u8 * data, int size, int more, u8 * p, u32 
 		if (h->interval != config->cluster_hb_interval)
 		{
 			log(2, 0, 0, 0, "Master set ping/heartbeat interval to %u (was %u)\n",
-			    h->interval, config->cluster_hb_interval);
+				h->interval, config->cluster_hb_interval);
 
-		    	config->cluster_hb_interval = h->interval;
+			config->cluster_hb_interval = h->interval;
 		}
 
 		if (h->timeout != config->cluster_hb_timeout)
 		{
 			log(2, 0, 0, 0, "Master set heartbeat timeout to %u (was %u)\n",
-			    h->timeout, config->cluster_hb_timeout);
+				h->timeout, config->cluster_hb_timeout);
 
-		    	config->cluster_hb_timeout = h->timeout;
+			config->cluster_hb_timeout = h->timeout;
 		}
 	}
 
@@ -1400,17 +1402,17 @@ int cmd_show_cluster(struct cli_def *cli, char *command, char **argv, int argc)
 	if (CLI_HELP_REQUESTED)
 		return CLI_HELP_NO_ARGS;
 
-        cli_print(cli, "Cluster status   : %s", config->cluster_iam_master ? "Master" : "Slave" );
+	cli_print(cli, "Cluster status   : %s", config->cluster_iam_master ? "Master" : "Slave" );
 	cli_print(cli, "My address       : %s", inet_toa(my_address));
 	cli_print(cli, "VIP address      : %s", inet_toa(config->bind_address));
 	cli_print(cli, "Multicast address: %s", inet_toa(config->cluster_address));
 	cli_print(cli, "Multicast i'face : %s", config->cluster_interface);
 
-        if (!config->cluster_iam_master) {
+	if (!config->cluster_iam_master) {
 		cli_print(cli, "My master        : %s (last heartbeat %.1f seconds old)",
 			config->cluster_master_address ? inet_toa(config->cluster_master_address) : "Not defined",
 			0.1 * (TIME - config->cluster_last_hb));
-                cli_print(cli, "Uptodate         : %s", config->cluster_iam_uptodate ? "Yes" : "No");
+		cli_print(cli, "Uptodate         : %s", config->cluster_iam_uptodate ? "Yes" : "No");
 		cli_print(cli, "Next sequence number expected: %d", config->cluster_seq_number);
 		cli_print(cli, "%d sessions undefined of %d", config->cluster_undefined_sessions, config->cluster_highest_sessionid);
 		cli_print(cli, "%d tunnels undefined of %d", config->cluster_undefined_tunnels, config->cluster_highest_tunnelid);
