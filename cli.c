@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.43 2004-12-17 00:28:00 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.44 2004-12-18 01:20:05 bodea Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -98,6 +98,7 @@ static int cmd_set(struct cli_def *cli, char *command, char **argv, int argc);
 static int cmd_load_plugin(struct cli_def *cli, char *command, char **argv, int argc);
 static int cmd_remove_plugin(struct cli_def *cli, char *command, char **argv, int argc);
 static int cmd_uptime(struct cli_def *cli, char *command, char **argv, int argc);
+
 static int regular_stuff(struct cli_def *cli);
 static void parsemac(char *string, char mac[6]);
 
@@ -889,6 +890,7 @@ static char const *show_access_list_rule(int extended, ip_filter_rulet *rule);
 static int cmd_show_run(struct cli_def *cli, char *command, char **argv, int argc)
 {
 	int i;
+	char ipv6addr[INET6_ADDRSTRLEN];
 
 	if (CLI_HELP_REQUESTED)
 		return CLI_HELP_NO_ARGS;
@@ -899,25 +901,27 @@ static int cmd_show_run(struct cli_def *cli, char *command, char **argv, int arg
 	{
 		void *value = ((void *)config) + config_values[i].offset;
 		if (config_values[i].type == STRING)
-			cli_print(cli, "set %s \"%.*s\"", config_values[i].key, config_values[i].size, (char *)value);
-		else if (config_values[i].type == IP)
-			cli_print(cli, "set %s %s", config_values[i].key, fmtaddr(*(unsigned *)value, 0));
+			cli_print(cli, "set %s \"%.*s\"", config_values[i].key, config_values[i].size, (char *) value);
+		else if (config_values[i].type == IPv4)
+			cli_print(cli, "set %s %s", config_values[i].key, fmtaddr(*(in_addr_t *) value, 0));
+		else if (config_values[i].type == IPv6)
+			cli_print(cli, "set %s %s", config_values[i].key, inet_ntop(AF_INET6, value, ipv6addr, INET6_ADDRSTRLEN));
 		else if (config_values[i].type == SHORT)
-			cli_print(cli, "set %s %hu", config_values[i].key, *(short *)value);
+			cli_print(cli, "set %s %hu", config_values[i].key, *(short *) value);
 		else if (config_values[i].type == BOOL)
-			cli_print(cli, "set %s %s", config_values[i].key, (*(int *)value) ? "yes" : "no");
+			cli_print(cli, "set %s %s", config_values[i].key, (*(int *) value) ? "yes" : "no");
 		else if (config_values[i].type == INT)
-			cli_print(cli, "set %s %d", config_values[i].key, *(int *)value);
+			cli_print(cli, "set %s %d", config_values[i].key, *(int *) value);
 		else if (config_values[i].type == UNSIGNED_LONG)
-			cli_print(cli, "set %s %lu", config_values[i].key, *(unsigned long *)value);
+			cli_print(cli, "set %s %lu", config_values[i].key, *(unsigned long *) value);
 		else if (config_values[i].type == MAC)
 			cli_print(cli, "set %s %02x%02x.%02x%02x.%02x%02x", config_values[i].key,
-					*(unsigned short *)(value + 0),
-					*(unsigned short *)(value + 1),
-					*(unsigned short *)(value + 2),
-					*(unsigned short *)(value + 3),
-					*(unsigned short *)(value + 4),
-					*(unsigned short *)(value + 5));
+					*(unsigned short *) (value + 0),
+					*(unsigned short *) (value + 1),
+					*(unsigned short *) (value + 2),
+					*(unsigned short *) (value + 3),
+					*(unsigned short *) (value + 4),
+					*(unsigned short *) (value + 5));
 	}
 
 	cli_print(cli, "# Plugins");
@@ -1826,28 +1830,31 @@ static int cmd_set(struct cli_def *cli, char *command, char **argv, int argc)
 			switch (config_values[i].type)
 			{
 			case STRING:
-				strncpy((char *)value, argv[1], config_values[i].size - 1);
+				strncpy((char *) value, argv[1], config_values[i].size - 1);
 				break;
 			case INT:
-				*(int *)value = atoi(argv[1]);
+				*(int *) value = atoi(argv[1]);
 				break;
 			case UNSIGNED_LONG:
-				*(unsigned long *)value = atol(argv[1]);
+				*(unsigned long *) value = atol(argv[1]);
 				break;
 			case SHORT:
-				*(short *)value = atoi(argv[1]);
+				*(short *) value = atoi(argv[1]);
 				break;
-			case IP:
-				*(unsigned *)value = inet_addr(argv[1]);
+			case IPv4:
+				*(in_addr_t *) value = inet_addr(argv[1]);
+				break;
+			case IPv6:
+				inet_pton(AF_INET6, argv[1], value);
 				break;
 			case MAC:
 				parsemac(argv[1], (char *)value);
 				break;
 			case BOOL:
 				if (strcasecmp(argv[1], "yes") == 0 || strcasecmp(argv[1], "true") == 0 || strcasecmp(argv[1], "1") == 0)
-					*(int *)value = 1;
+					*(int *) value = 1;
 				else
-					*(int *)value = 0;
+					*(int *) value = 0;
 				break;
 			default:
 				cli_print(cli, "Unknown variable type");

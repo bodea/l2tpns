@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.73 2004-12-17 00:28:00 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.74 2004-12-18 01:20:05 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -95,17 +95,17 @@ config_descriptt config_values[] = {
 	CONFIG("log_file", log_filename, STRING),
 	CONFIG("pid_file", pid_file, STRING),
 	CONFIG("l2tp_secret", l2tpsecret, STRING),
-	CONFIG("primary_dns", default_dns1, IP),
-	CONFIG("secondary_dns", default_dns2, IP),
+	CONFIG("primary_dns", default_dns1, IPv4),
+	CONFIG("secondary_dns", default_dns2, IPv4),
 	CONFIG("save_state", save_state, BOOL),
-	CONFIG("primary_radius", radiusserver[0], IP),
-	CONFIG("secondary_radius", radiusserver[1], IP),
+	CONFIG("primary_radius", radiusserver[0], IPv4),
+	CONFIG("secondary_radius", radiusserver[1], IPv4),
 	CONFIG("primary_radius_port", radiusport[0], SHORT),
 	CONFIG("secondary_radius_port", radiusport[1], SHORT),
 	CONFIG("radius_accounting", radius_accounting, BOOL),
 	CONFIG("radius_secret", radiussecret, STRING),
-	CONFIG("bind_address", bind_address, IP),
-	CONFIG("peer_address", peer_address, IP),
+	CONFIG("bind_address", bind_address, IPv4),
+	CONFIG("peer_address", peer_address, IPv4),
 	CONFIG("send_garp", send_garp, BOOL),
 	CONFIG("throttle_speed", rl_rate, UNSIGNED_LONG),
 	CONFIG("throttle_buckets", num_tbfs, INT),
@@ -117,7 +117,7 @@ config_descriptt config_values[] = {
 	CONFIG("scheduler_fifo", scheduler_fifo, BOOL),
 	CONFIG("lock_pages", lock_pages, BOOL),
 	CONFIG("icmp_rate", icmp_rate, INT),
-	CONFIG("cluster_address", cluster_address, IP),
+	CONFIG("cluster_address", cluster_address, IPv4),
 	CONFIG("cluster_interface", cluster_interface, STRING),
 	CONFIG("cluster_hb_interval", cluster_hb_interval, INT),
 	CONFIG("cluster_hb_timeout", cluster_hb_timeout, INT),
@@ -1993,7 +1993,7 @@ static void processtun(uint8_t * buf, int len)
 		return;
 	}
 
-	if (*(uint16_t *) (buf + 2) == htons(PKTIP)) // IP
+	if (*(uint16_t *) (buf + 2) == htons(PKTIP)) // IPv4
 		processipout(buf, len);
 	// Else discard.
 }

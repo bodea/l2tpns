@@ -1,6 +1,6 @@
 Summary: A high-speed clustered L2TP LNS
 Name: l2tpns
-Version: 2.0.13
+Version: 2.1.0
 Release: 1
 Copyright: GPL
 Group: System Environment/Daemons
@@ -43,5 +43,5 @@ rm -rf %{buildroot}
 %attr(644,root,root) /usr/share/man/man[58]/*
 
 %changelog
-* Fri Dec 17 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.13-1
-- 2.0.13 release, see /usr/share/doc/l2tpns-2.0.13/Changes
+* Sat Dec 18 2004 Brendan O'Dea <bod@optusnet.com.au> 2.1.0-1
+- 2.1.0 release, see /usr/share/doc/l2tpns-2.1.0/Changes

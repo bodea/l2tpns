@@ -1,3 +1,6 @@
+* Sat Dec 18 2004 Brendan O'Dea <bod@optusnet.com.au> 2.1.0
+- Add IPv6 support from Jonathan McDowell (work in progress).
+
 * Fri Dec 17 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.13
 - Better cluster master collision resolution: keep a counter of state
   changes, propagated in the heartbeats; the master with the highest #
