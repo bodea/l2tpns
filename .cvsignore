@@ -1,7 +1,0 @@
-*.o
-l2tpns
-nsctl
-state.dump
-*.swp
-bounce
-generateload
