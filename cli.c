@@ -1,5 +1,5 @@
 // L2TPNS Command Line Interface
-// $Id: cli.c,v 1.3 2004-03-05 00:22:06 fred_nerk Exp $
+// $Id: cli.c,v 1.4 2004-05-24 04:12:02 fred_nerk Exp $
 // vim: sw=4 ts=8
 
 #include <stdio.h>
@@ -28,7 +28,8 @@ extern struct Tstats *_statistics;
 extern int cli_pid;
 struct cli_def *cli = NULL;
 int cli_quit = 0;
-extern int clifd, udpfd, tapfd, snoopfd, radfd, ifrfd, cluster_sockfd;
+extern int clifd, udpfd, tapfd, snoopfd, ifrfd, cluster_sockfd;
+extern int *radfds;
 extern sessionidt *cli_session_kill;
 extern tunnelidt *cli_tunnel_kill;
 extern tbft *filter_buckets;
@@ -39,7 +40,7 @@ extern char hostname[];
 extern struct Tringbuffer *ringbuffer;
 #endif
 
-char *rcs_id = "$Id: cli.c,v 1.3 2004-03-05 00:22:06 fred_nerk Exp $";
+char *rcs_id = "$Id: cli.c,v 1.4 2004-05-24 04:12:02 fred_nerk Exp $";
 
 char *debug_levels[] = {
     "CRIT",
@@ -75,6 +76,7 @@ int cmd_show_pool(struct cli_def *cli, char *command, char **argv, int argc);
 int cmd_show_run(struct cli_def *cli, char *command, char **argv, int argc);
 int cmd_show_banana(struct cli_def *cli, char *command, char **argv, int argc);
 int cmd_show_plugins(struct cli_def *cli, char *command, char **argv, int argc);
+int cmd_show_throttle(struct cli_def *cli, char *command, char **argv, int argc);
 int cmd_write_memory(struct cli_def *cli, char *command, char **argv, int argc);
 int cmd_clear_counters(struct cli_def *cli, char *command, char **argv, int argc);
 int cmd_drop_user(struct cli_def *cli, char *command, char **argv, int argc);
@@ -86,8 +88,6 @@ int cmd_throttle(struct cli_def *cli, char *command, char **argv, int argc);
 int cmd_no_throttle(struct cli_def *cli, char *command, char **argv, int argc);
 int cmd_debug(struct cli_def *cli, char *command, char **argv, int argc);
 int cmd_no_debug(struct cli_def *cli, char *command, char **argv, int argc);
-int cmd_watch_session(struct cli_def *cli, char *command, char **argv, int argc);
-int cmd_watch_tunnel(struct cli_def *cli, char *command, char **argv, int argc);
 int cmd_set(struct cli_def *cli, char *command, char **argv, int argc);
 int cmd_load_plugin(struct cli_def *cli, char *command, char **argv, int argc);
 int cmd_remove_plugin(struct cli_def *cli, char *command, char **argv, int argc);
@@ -107,13 +107,14 @@ void init_cli()
     c = cli_register_command(cli, NULL, "show", NULL, NULL);
     cli_register_command(cli, c, "session", cmd_show_session, "Show a list of sessions or details for a single session");
     cli_register_command(cli, c, "tunnels", cmd_show_tunnels, "Show a list of tunnels or details for a single tunnel");
-    cli_register_command(cli, c, "users", cmd_show_users, "Show a list of all connected users");
+    cli_register_command(cli, c, "users", cmd_show_users, "Show a list of all connected users or details of selected user");
     cli_register_command(cli, c, "version", cmd_show_version, "Show currently running software version");
     cli_register_command(cli, c, "banana", cmd_show_banana, "Show a banana");
     cli_register_command(cli, c, "pool", cmd_show_pool, "Show the IP address allocation pool");
     cli_register_command(cli, c, "running-config", cmd_show_run, "Show the currently running configuration");
     cli_register_command(cli, c, "radius", cmd_show_radius, "Show active radius queries");
     cli_register_command(cli, c, "plugins", cmd_show_plugins, "List all installed plugins");
+    cli_register_command(cli, c, "throttle", cmd_show_throttle, "List all token bucket filters in use");
 
 #ifdef STATISTICS
     cli_register_command(cli, c, "counters", cmd_show_counters, "Display all the internal counters and running totals");
@@ -142,12 +143,6 @@ void init_cli()
     cli_register_command(cli, c, "session", cmd_drop_session, "Disconnect a session");
 
     cli_register_command(cli, NULL, "debug", cmd_debug, "Set the level of logging that is shown on the console");
-
-    /*
-    c = cli_register_command(cli, NULL, "watch", NULL, NULL);
-    cli_register_command(cli, c, "session", cmd_watch_session, "Dump logs for a session");
-    cli_register_command(cli, c, "tunnel", cmd_watch_tunnel, "Dump logs for a tunnel");
-    */
 
     c = cli_register_command(cli, NULL, "load", NULL, NULL);
     cli_register_command(cli, c, "plugin", cmd_load_plugin, "Load a plugin");
@@ -202,13 +197,16 @@ void init_cli()
 
 void cli_do(int sockfd)
 {
+    int i;
+
     if (fork()) return;
 
     // Close sockets
     if (udpfd) close(udpfd); udpfd = 0;
     if (tapfd) close(tapfd); tapfd = 0;
     if (snoopfd) close(snoopfd); snoopfd = 0;
-    if (radfd) close(radfd); radfd = 0;
+    for (i = 0; i < config->num_radfds; i++)
+	if (radfds[i]) close(radfds[i]);
     if (ifrfd) close(ifrfd); ifrfd = 0;
     if (cluster_sockfd) close(cluster_sockfd); cluster_sockfd = 0;
     if (clifd) close(clifd); clifd = 0;
@@ -285,6 +283,7 @@ int cmd_show_session(struct cli_def *cli, char *command, char **argv, int argc)
 	    cli_print(cli, "	Next Send:	%u", session[s].ns);
 	    cli_print(cli, "	Bytes In/Out:	%lu/%lu", (unsigned long)session[s].cin, (unsigned long)session[s].total_cout);
 	    cli_print(cli, "	Pkts In/Out:	%lu/%lu", (unsigned long)session[s].pin, (unsigned long)session[s].pout);
+	    cli_print(cli, "	MRU:		%d", session[s].mru);
 	    cli_print(cli, "	Radius Session:	%u", session[s].radius);
 	    cli_print(cli, "	Rx Speed:	%lu", session[s].rx_connect_speed);
 	    cli_print(cli, "	Tx Speed:	%lu", session[s].tx_connect_speed);
@@ -413,14 +412,36 @@ int cmd_show_tunnels(struct cli_def *cli, char *command, char **argv, int argc)
 
 int cmd_show_users(struct cli_def *cli, char *command, char **argv, int argc)
 {
+    char sid[32][8];
+    char *sargv[32];
+    int sargc = 0;
     int i;
     for (i = 0; i < MAXSESSION; i++)
     {
 	if (!session[i].opened) continue;
 	if (!session[i].user[0]) continue;
-	cli_print(cli, "%s",
-		session[i].user);
+	if (argc > 0)
+	{
+	    int j;
+	    for (j = 0; j < argc && sargc < 32; j++)
+	    {
+		if (strcmp(argv[j], session[i].user) == 0)
+		{
+		    snprintf(sid[sargc], sizeof(sid[0]), "%d", i);
+		    sargv[sargc] = sid[sargc];
+		    sargc++;
+		}
+	    }
+
+	    continue;
+	}
+
+	cli_print(cli, "%s", session[i].user);
     }
+
+    if (sargc > 0)
+    	return cmd_show_session(cli, "users", sargv, sargc);
+
     return CLI_OK;
 }
 
@@ -446,7 +467,7 @@ int cmd_show_counters(struct cli_def *cli, char *command, char **argv, int argc)
     cli_print(cli, "%-10s %8lu %8lu %8lu %8lu", "TX",
 	    GET_STAT(tunnel_tx_bytes),
 	    GET_STAT(tunnel_tx_packets),
-	    GET_STAT(tunnel_rx_errors),
+	    GET_STAT(tunnel_tx_errors),
 	    GET_STAT(tunnel_retries));
     cli_print(cli, "");
 
@@ -527,9 +548,8 @@ int cmd_show_pool(struct cli_def *cli, char *command, char **argv, int argc)
 	if (!ip_address_pool[i].address) continue;
 	if (ip_address_pool[i].assigned)
 	{
-	    sessionidt s = sessionbyip(ip_address_pool[i].address);
 	    cli_print(cli, "%-15s    Y %8d %s",
-		inet_toa(ip_address_pool[i].address), s, session[s].user);
+		inet_toa(ip_address_pool[i].address), ip_address_pool[i].session, session[ip_address_pool[i].session].user);
 
 	    used++;
 	}
@@ -627,7 +647,7 @@ int cmd_show_radius(struct cli_def *cli, char *command, char **argv, int argc)
     int i, free = 0, used = 0, show_all = 0;
     time_t time_now;
 
-    cli_print(cli, "%6s%6s%9s%9s%4s", "Radius", "State", "Session", "Retry", "Try");
+    cli_print(cli, "%6s%5s%6s%9s%9s%4s", "Radius", "Sock", "State", "Session", "Retry", "Try");
 
     time(&time_now);
 
@@ -643,8 +663,9 @@ int cmd_show_radius(struct cli_def *cli, char *command, char **argv, int argc)
 
 	if (!show_all && radius[i].state == RADIUSNULL) continue;
 
-	cli_print(cli, "%6d%6s%9d%9u%4d",
-		i,
+	cli_print(cli, "%6d%5d%6s%9d%9u%4d",
+		i >> RADIUS_SHIFT,
+		i & RADIUS_MASK,
 		states[radius[i].state],
 		radius[i].session,
 		radius[i].retry,
@@ -666,6 +687,24 @@ int cmd_show_plugins(struct cli_def *cli, char *command, char **argv, int argc)
 	{
 	    cli_print(cli, "  %s", config->plugins[i]);
 	}
+    }
+    return CLI_OK;
+}
+
+int cmd_show_throttle(struct cli_def *cli, char *command, char **argv, int argc)
+{
+    int i;
+    cli_print(cli, "Token bucket filters:");
+    cli_print(cli, "%-6s %8s %-4s", "ID", "Handle", "Used");
+    for (i = 0; i < MAXSESSION; i++)
+    {
+	if (!*filter_buckets[i].handle)
+	    continue;
+
+	cli_print(cli, "%-6d %8s   %c",
+	    i,
+	    filter_buckets[i].handle,
+	    (filter_buckets[i].in_use) ? 'Y' : 'N');
     }
     return CLI_OK;
 }
@@ -939,9 +978,10 @@ int cmd_throttle(struct cli_def *cli, char *command, char **argv, int argc)
 	    cli_print(cli, "User %s is not connected", argv[i]);
 	    continue;
 	}
-	throttle_session(s, 1);
-
-	cli_print(cli, "throttling user %s", argv[i]);
+	if (!throttle_session(s, 1))
+	    cli_print(cli, "error throttling %s", argv[i]);
+	else
+	    cli_print(cli, "throttling user %s", argv[i]);
     }
     return CLI_OK;
 }
@@ -966,7 +1006,7 @@ int cmd_no_throttle(struct cli_def *cli, char *command, char **argv, int argc)
     }
 
     for (i = 0; i < argc; i++)
-	{
+    {
 	if (!(s = sessionbyuser(argv[i])))
 	{
 	    cli_print(cli, "User %s is not connected", argv[i]);
@@ -1043,46 +1083,6 @@ int cmd_no_debug(struct cli_def *cli, char *command, char **argv, int argc)
 	if (strcasecmp(argv[i], "data") == 0) debug_flags.data = 0;
 	if (strcasecmp(argv[i], "all") == 0) memset(&debug_flags, 0, sizeof(debug_flags));
     }
-
-    return CLI_OK;
-}
-
-int cmd_watch_session(struct cli_def *cli, char *command, char **argv, int argc)
-{
-    sessionidt s;
-
-    if (argc != 1)
-    {
-	cli_print(cli, "Specify a single session to debug (0 to disable)");
-	return CLI_OK;
-    }
-    s = atoi(argv[0]);
-
-    if (debug_session)
-	cli_print(cli, "No longer debugging session %d", debug_session);
-
-    if (s) cli_print(cli, "Debugging session %d.", s);
-    debug_session = s;
-
-    return CLI_OK;
-}
-
-int cmd_watch_tunnel(struct cli_def *cli, char *command, char **argv, int argc)
-{
-    tunnelidt s;
-
-    if (argc != 1)
-    {
-	cli_print(cli, "Specify a single tunnel to debug (0 to disable)");
-	return CLI_OK;
-    }
-    s = atoi(argv[0]);
-
-    if (debug_tunnel)
-	cli_print(cli, "No longer debugging tunnel %d", debug_tunnel);
-
-    if (s) cli_print(cli, "Debugging tunnel %d.", s);
-    debug_tunnel = s;
 
     return CLI_OK;
 }
