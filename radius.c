@@ -1,6 +1,6 @@
 // L2TPNS Radius Stuff
 
-char const *cvs_id_radius = "$Id: radius.c,v 1.24 2005-02-14 06:58:39 bodea Exp $";
+char const *cvs_id_radius = "$Id: radius.c,v 1.25 2005-03-10 06:16:05 bodea Exp $";
 
 #include <time.h>
 #include <stdio.h>
@@ -140,7 +140,7 @@ void radiussend(uint16_t r, uint8_t state)
 		if (s)
 		{
 			if (state == RADIUSAUTH)
-				sessionshutdown(s, "RADIUS timeout");
+				sessionshutdown(s, "RADIUS timeout", 3, 0);
 			else
 			{
 				LOG(1, s, session[s].tunnel, "RADIUS timeout, but in state %s so don't timeout session\n",

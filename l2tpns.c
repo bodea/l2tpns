@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.86 2005-03-10 05:47:24 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.87 2005-03-10 06:16:05 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -1433,7 +1433,7 @@ static void filter_session(sessionidt s, int filter_in, int filter_out)
 }
 
 // start tidy shutdown of session
-void sessionshutdown(sessionidt s, char *reason)
+void sessionshutdown(sessionidt s, char *reason, int result, int code)
 {
 	int walled_garden = session[s].walled_garden;
 
@@ -1508,9 +1508,19 @@ void sessionshutdown(sessionidt s, char *reason)
 	if (session[s].throttle_in || session[s].throttle_out) // Unthrottle if throttled.
 		throttle_session(s, 0, 0);
 
+	if (result)
 	{                            // Send CDN
 		controlt *c = controlnew(14); // sending CDN
-		control16(c, 1, 3, 1);    // result code (admin reasons - TBA make error, general error, add message
+		if (error)
+		{
+			char buf[4];
+			*(uint16_t *) buf     = htons(result);
+			*(uint16_t *) (buf+2) = htons(error);
+			controlb(c, 1, buf, 4, 1);
+		}
+		else
+			control16(c, 1, result, 1);
+
 		control16(c, 14, s, 1);   // assigned session (our end)
 		controladd(c, session[s].tunnel, s); // send the message
 	}
@@ -1546,7 +1556,7 @@ void sendipcp(tunnelidt t, sessionidt s)
 	if (radius[r].try > 10)
 	{
 		radiusclear(r, s);	// Clear radius session.
-		sessionshutdown(s, "No reply on IPCP");
+		sessionshutdown(s, "No reply on IPCP", 3, 0);
 		return;
 	}
 
@@ -1606,7 +1616,7 @@ void sessionkill(sessionidt s, char *reason)
 	}
 
 	session[s].die = TIME;
-	sessionshutdown(s, reason);  // close radius/routes, etc.
+	sessionshutdown(s, reason, 3, 0);  // close radius/routes, etc.
 	if (session[s].radius)
 		radiusclear(session[s].radius, s); // cant send clean accounting data, session is killed
 
@@ -1676,7 +1686,7 @@ static void tunnelshutdown(tunnelidt t, char *reason, int result, int error, cha
 	// close session
 	for (s = 1; s <= config->cluster_highest_sessionid ; ++s)
 		if (session[s].tunnel == t)
-			sessionshutdown(s, reason);
+			sessionshutdown(s, reason, 3, 0);
 
 	tunnel[t].state = TUNNELDIE;
 	tunnel[t].die = TIME + 700; // Clean up in 70 seconds
@@ -2341,7 +2351,7 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 					break;
 				case 14:      // CDN
 					controlnull(t); // ack
-					sessionshutdown(s, "Closed (Received CDN)");
+					sessionshutdown(s, "Closed (Received CDN)", 0, 0);
 					break;
 				case 0xFFFF:
 					LOG(1, s, t, "Missing message type\n");
@@ -2628,7 +2638,7 @@ static int regular_cleanups(void)
 		// Drop sessions who have not responded within IDLE_TIMEOUT seconds
 		if (session[s].last_packet && (time_now - session[s].last_packet >= IDLE_TIMEOUT))
 		{
-			sessionshutdown(s, "No response to LCP ECHO requests");
+			sessionshutdown(s, "No response to LCP ECHO requests", 3, 0);
 			STAT(session_timeout);
 			if (++count >= MAX_ACTIONS) break;
 			continue;
@@ -2662,7 +2672,7 @@ static int regular_cleanups(void)
 			if (a & CLI_SESS_KILL)
 			{
 				LOG(2, s, session[s].tunnel, "Dropping session by CLI\n");
-				sessionshutdown(s, "Requested by administrator");
+				sessionshutdown(s, "Requested by administrator", 3, 0);
 				a = 0; // dead, no need to check for other actions
 			}
 
@@ -4105,7 +4115,7 @@ int sessionsetup(tunnelidt t, sessionidt s)
 		if (!session[s].ip)
 		{
 			LOG(0, s, t, "   No IP allocated.  The IP address pool is FULL!\n");
-			sessionshutdown(s, "No IP addresses available");
+			sessionshutdown(s, "No IP addresses available", 2, 7);
 			return 0;
 		}
 		LOG(3, s, t, "   No IP allocated.  Assigned %s from pool\n",
