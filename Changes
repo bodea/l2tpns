@@ -1,10 +1,12 @@
-* Fri Jan 7 2005 Brendan O'Dea <bod@optusnet.com.au> 2.1.0
+* Mon Jan 10 2005 Brendan O'Dea <bod@optusnet.com.au> 2.1.0
 - Add IPv6 support from Jonathan McDowell (work in progress).
 - Add CHAP support from Jordan Hrycaj (work in progress).
 - Sanity check that cluster_send_session is not called from a child
   process.
 - Throttle outgoing LASTSEEN packets to at most one per second for a
   given seq#.
+- More DoS prevention:  add packet_limit option to apply a hard limit
+  to downstream packets per session.
 - Use bounds-checking lookup functions for string constants.
 - Add enum for RADIUS codes.
 - Make "call_" prefix implict in CSTAT() macro.

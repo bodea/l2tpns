@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.75 2005-01-07 07:18:33 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.76 2005-01-10 07:17:37 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -120,6 +120,7 @@ config_descriptt config_values[] = {
 	CONFIG("scheduler_fifo", scheduler_fifo, BOOL),
 	CONFIG("lock_pages", lock_pages, BOOL),
 	CONFIG("icmp_rate", icmp_rate, INT),
+	CONFIG("packet_limit", max_packets, INT),
 	CONFIG("cluster_address", cluster_address, IPv4),
 	CONFIG("cluster_interface", cluster_interface, STRING),
 	CONFIG("cluster_hb_interval", cluster_hb_interval, INT),
@@ -774,7 +775,7 @@ static void processipout(uint8_t * buf, int len)
 	tunnelidt t;
 	in_addr_t ip;
 
-	char * data = buf;	// Keep a copy of the originals.
+	char *data = buf;	// Keep a copy of the originals.
 	int size = len;
 
 	uint8_t b[MAXETHER + 20];
@@ -784,13 +785,13 @@ static void processipout(uint8_t * buf, int len)
 	if (len < MIN_IP_SIZE)
 	{
 		LOG(1, 0, 0, "Short IP, %d bytes\n", len);
-		STAT(tunnel_tx_errors);
+		STAT(tun_rx_errors);
 		return;
 	}
 	if (len >= MAXETHER)
 	{
 		LOG(1, 0, 0, "Oversize IP packet %d bytes\n", len);
-		STAT(tunnel_tx_errors);
+		STAT(tun_rx_errors);
 		return;
 	}
 
@@ -827,6 +828,43 @@ static void processipout(uint8_t * buf, int len)
 	}
 	t = session[s].tunnel;
 	sp = &session[s];
+
+	// DoS prevention: enforce a maximum number of packets per 0.1s for a session
+	if (config->max_packets > 0)
+	{
+		if (sess_count[s].last_packet_out == TIME)
+		{
+			int max = config->max_packets;
+
+			// All packets for throttled sessions are handled by the
+			// master, so further limit by using the throttle rate.
+			// A bit of a kludge, since throttle rate is in kbps,
+			// but should still be generous given our average DSL
+			// packet size is 200 bytes: a limit of 28kbps equates
+			// to around 180 packets per second.
+			if (!config->cluster_iam_master && sp->throttle_out && sp->throttle_out < max)
+				max = sp->throttle_out;
+
+			if (++sess_count[s].packets_out > max)
+			{
+				sess_count[s].packets_dropped++;
+				return;
+			}
+		}
+		else
+		{
+			if (sess_count[s].packets_dropped)
+			{
+				INC_STAT(tun_rx_dropped, sess_count[s].packets_dropped);
+				LOG(2, s, t, "Possible DoS attack on %s (%s); dropped %u packets.",
+					fmtaddr(ip, 0), sp->user, sess_count[s].packets_dropped);
+			}
+
+			sess_count[s].last_packet_out = TIME;
+			sess_count[s].packets_out = 1;
+			sess_count[s].packets_dropped = 0;
+		}
+	}
 
 	// run access-list if any
 	if (session[s].filter_out && !ip_filter(buf, len, session[s].filter_out - 1))

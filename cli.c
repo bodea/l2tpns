@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.45 2005-01-07 07:15:10 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.46 2005-01-10 07:17:37 bodea Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -646,23 +646,24 @@ static int cmd_show_counters(struct cli_def *cli, char *command, char **argv, in
 	if (CLI_HELP_REQUESTED)
 		return CLI_HELP_NO_ARGS;
 
-	cli_print(cli, "%-10s %-8s %-10s %-8s", "Ethernet", "Bytes", "Packets", "Errors");
-	cli_print(cli, "%-10s %8u %8u %8u", "RX",
+	cli_print(cli, "%-10s %10s %8s %8s %8s", "Ethernet", "Bytes", "Packets", "Errors", "Dropped");
+	cli_print(cli, "%-10s %10u %8u %8u %8u", "RX",
 			GET_STAT(tun_rx_bytes),
 			GET_STAT(tun_rx_packets),
-			GET_STAT(tun_rx_errors));
-	cli_print(cli, "%-10s %8u %8u %8u", "TX",
+			GET_STAT(tun_rx_errors),
+			GET_STAT(tun_rx_dropped));
+	cli_print(cli, "%-10s %10u %8u %8u", "TX",
 			GET_STAT(tun_tx_bytes),
 			GET_STAT(tun_tx_packets),
 			GET_STAT(tun_tx_errors));
 	cli_print(cli, "");
 
-	cli_print(cli, "%-10s %-8s %-10s %-8s %-8s", "Tunnel", "Bytes", "Packets", "Errors", "Retries");
-	cli_print(cli, "%-10s %8u %8u %8u", "RX",
+	cli_print(cli, "%-10s %10s %8s %8s %8s", "Tunnel", "Bytes", "Packets", "Errors", "Retries");
+	cli_print(cli, "%-10s %10u %8u %8u", "RX",
 			GET_STAT(tunnel_rx_bytes),
 			GET_STAT(tunnel_rx_packets),
 			GET_STAT(tunnel_rx_errors));
-	cli_print(cli, "%-10s %8u %8u %8u %8u", "TX",
+	cli_print(cli, "%-10s %10u %8u %8u %8u", "TX",
 			GET_STAT(tunnel_tx_bytes),
 			GET_STAT(tunnel_tx_packets),
 			GET_STAT(tunnel_tx_errors),
