@@ -1,5 +1,5 @@
 // L2TPNS Clustering Stuff
-// $Id: cluster.h,v 1.3 2004-06-23 03:52:24 fred_nerk Exp $
+// $Id: cluster.h,v 1.4 2004-07-07 09:09:53 bodea Exp $
 
 #ifndef __CLUSTER_H__
 #define __CLUSTER_H__
@@ -20,7 +20,7 @@
 #define C_CTUNNEL		13	// Compressed tunnel structure.
 #define C_GARDEN		14	// Gardened packet
 
-#define HB_VERSION		2	// Protocol version number..
+#define HB_VERSION		3	// Protocol version number..
 #define HB_MAX_SEQ		(1<<30)	// Maximum sequence number. (MUST BE A POWER OF 2!)
 #define HB_HISTORY_SIZE		64	// How many old heartbeats we remember?? (Must be a factor of HB_MAX_SEQ)
 
@@ -28,10 +28,6 @@
 #define HB_TIMEOUT		(15*2*PING_INTERVAL) // 15 seconds without heartbeat triggers an election..
 
 #define CLUSTERPORT		32792
-#define UDP			17
-#define TIMEOUT			20
-#define IL			sizeof(int)
-
 #define CLUSTER_MAX_SIZE	32	// No more than 32 machines in a cluster!
 
 #define DEFAULT_MCAST_ADDR	"239.192.13.13"		// Need an assigned number!
@@ -49,8 +45,10 @@ typedef struct {
 	u32	size_sess;	// Size of the session structure.
 
 	u32	size_tunn;	// size of the tunnel structure.
+	u32	interval;	// ping/heartbeat interval (if changed)
+	u32	timeout;	// heartbeat timeout (if changed)
 
-	char reserved[128 - 9*sizeof(u32)];	// Pad out to 128 bytes.
+	char reserved[128 - 11*sizeof(u32)];	// Pad out to 128 bytes.
 } heartt;
 
 typedef struct {		/* Used to update byte counters on the */
@@ -78,7 +76,7 @@ int master_garden_packet(sessionidt s, char * data, int size);
 void master_update_counts(void);
 
 void cluster_send_ping(time_t basetime);
-void cluster_heartbeat(int highsession, int freesession, int hightunnel);
+void cluster_heartbeat(void);
 void cluster_check_master(void);
 int show_cluster(struct cli_def *cli, char *command, char **argv, int argc);
 

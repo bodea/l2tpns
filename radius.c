@@ -1,6 +1,6 @@
 // L2TPNS Radius Stuff
 
-char const *cvs_id_radius = "$Id: radius.c,v 1.6 2004-07-02 07:31:23 bodea Exp $";
+char const *cvs_id_radius = "$Id: radius.c,v 1.7 2004-07-07 09:09:53 bodea Exp $";
 
 #include <time.h>
 #include <stdio.h>
@@ -46,7 +46,7 @@ void initrad(void)
 	for (i = 0; i < config->num_radfds; i++)
 	{
 		int flags;
-		if (!radfds[i]) radfds[i] = socket(AF_INET, SOCK_DGRAM, UDP);
+		if (!radfds[i]) radfds[i] = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 		flags = fcntl(radfds[i], F_GETFL, 0);
 		fcntl(radfds[i], F_SETFL, flags | O_NONBLOCK);
 	}
@@ -59,7 +59,7 @@ void radiusclear(u16 r, sessionidt s)
 }
 
 
-static u16 new_radius()
+static u16 get_free_radius()
 {
 	int count;
 	static u32 next_radius_id = 0;
@@ -82,13 +82,22 @@ static u16 new_radius()
 
 u16 radiusnew(sessionidt s)
 {
-	u16 r;
-	if (!(r = new_radius()))
+	u16 r = session[s].radius;
+
+	/* re-use */
+	if (r)
+	{
+		log(3, 0, s, session[s].tunnel, "Re-used radius %d\n", r);
+		return r;
+	}
+
+	if (!(r = get_free_radius()))
 	{
 		log(1, 0, s, session[s].tunnel, "No free RADIUS sessions\n");
 		STAT(radius_overflow);
 		return 0;
 	};
+
 	memset(&radius[r], 0, sizeof(radius[r]));
 	session[s].radius = r;
 	radius[r].session = s;
@@ -393,20 +402,14 @@ void processrad(u8 *buf, int len, char socket_index)
 		if (memcmp(hash, buf + 4, 16))
 		{
 			log(0, 0, s, session[s].tunnel, "   Incorrect auth on RADIUS response!! (wrong secret in radius config?)\n");
-//			radius[r].state = RADIUSWAIT;
-
 			return; // Do nothing. On timeout, it will try the next radius server.
 		}
 		if ((radius[r].state == RADIUSAUTH && *buf != 2 && *buf != 3) ||
 			((radius[r].state == RADIUSSTART || radius[r].state == RADIUSSTOP) && *buf != 5))
 		{
 			log(1, 0, s, session[s].tunnel, "   Unexpected RADIUS response %d\n", *buf);
-
 			return; // We got something we didn't expect. Let the timeouts take
 				// care off finishing the radius session if that's really correct.
-// old code. I think incorrect. --mo
-//			radius[r].state = RADIUSWAIT;
-//			break; // Finish the radius sesssion.
 		}
 		if (radius[r].state == RADIUSAUTH)
 		{

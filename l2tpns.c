@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.10 2004-07-02 07:31:23 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.11 2004-07-07 09:09:53 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -418,7 +418,7 @@ void initudp(void)
 	addr.sin_family = AF_INET;
 	addr.sin_port = htons(L2TPPORT);
 	addr.sin_addr.s_addr = config->bind_address;
-	udpfd = socket(AF_INET, SOCK_DGRAM, UDP);
+	udpfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 	setsockopt(udpfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
 	{
 		int flags = fcntl(udpfd, F_GETFL, 0);
@@ -429,7 +429,7 @@ void initudp(void)
 		log(0, 0, 0, 0, "Error in UDP bind: %s\n", strerror(errno));
 		exit(1);
 	}
-	snoopfd = socket(AF_INET, SOCK_DGRAM, UDP);
+	snoopfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 	snoop_addr.sin_family = AF_INET;
 
 	// Control
@@ -1161,14 +1161,17 @@ void sendipcp(tunnelidt t, sessionidt s)
 
 	if (!r)
 		r = radiusnew(s);
+
 	if (radius[r].state != RADIUSIPCP)
 	{
 		radius[r].state = RADIUSIPCP;
 		radius[r].try = 0;
 	}
+
 	radius[r].retry = backoff(radius[r].try++);
 	if (radius[r].try > 10)
 	{
+		radiusclear(r, s);	// Clear radius session.
 		sessionshutdown(s, "No reply on IPCP");
 		return;
 	}
@@ -1198,6 +1201,7 @@ void sessionkill(sessionidt s, char *reason)
 	sessionshutdown(s, reason);  // close radius/routes, etc.
 	if (session[s].radius)
 		radiusclear(session[s].radius, 0); // cant send clean accounting data, session is killed
+
 	log(2, 0, s, session[s].tunnel, "Kill session %d (%s): %s\n", s, session[s].user, reason);
 
 	throttle_session(s, 0);		// Force session to be un-throttle. Free'ing TBF structures.
@@ -1585,8 +1589,8 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 					// TBA - to send to RADIUS
 					break;
 				case 8:     // vendor name
-					memset(tunnel[t].vendor, 0, 128);
-					memcpy(tunnel[t].vendor, b, (n >= 127) ? 127 : n);
+					memset(tunnel[t].vendor, 0, sizeof(tunnel[t].vendor));
+					memcpy(tunnel[t].vendor, b, (n >= sizeof(tunnel[t].vendor) - 1) ? sizeof(tunnel[t].vendor) - 1 : n);
 					log(4, ntohl(addr->sin_addr.s_addr), s, t, "   Vendor name = \"%s\"\n", tunnel[t].vendor);
 					break;
 				case 9:     // assigned tunnel
@@ -1819,7 +1823,7 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 						if (!(r = radiusnew(s)))
 						{
 							log(1, ntohl(addr->sin_addr.s_addr), s, t, "No free RADIUS sessions for ICRQ\n");
-//							sessionkill(s, "no free RADIUS sesions");
+							sessionkill(s, "no free RADIUS sesions");
 							return;
 						}
 
@@ -2044,7 +2048,7 @@ int regular_cleanups(void)
 		} else
 			radius[r].retry = backoff(radius[r].try+1);	// Is this really needed? --mo
 	}
-	for (t = 1; t < config->cluster_highest_tunnelid; t++)
+	for (t = 1; t <= config->cluster_highest_tunnelid; t++)
 	{
 		// check for expired tunnels
 		if (tunnel[t].die && tunnel[t].die <= TIME)
@@ -2220,8 +2224,8 @@ void mainloop(void)
 	int cn, i;
 	u8 buf[65536];
 	struct timeval to;
-	time_t next_cluster_ping = 0;	// default 1 second pings.
-	clockt next_clean = time_now + config->cleanup_interval;
+	clockt next_cluster_ping = 0;	// send initial ping immediately
+	time_t next_clean = time_now + config->cleanup_interval;
 
 	log(4, 0, 0, 0, "Beginning of main loop. udpfd=%d, tapfd=%d, cluster_sockfd=%d, controlfd=%d\n",
 			udpfd, tapfd, cluster_sockfd, controlfd);
@@ -2355,16 +2359,17 @@ void mainloop(void)
 		}
 
 			// Runs on every machine (master and slaves).
-		if (cluster_sockfd && next_cluster_ping <= time_now)
+		if (cluster_sockfd && next_cluster_ping <= TIME)
 		{
 			// Check to see which of the cluster is still alive..
-			next_cluster_ping = time_now + 1;
 			cluster_send_ping(basetime);
-
 			cluster_check_master();
-
-			cluster_heartbeat(config->cluster_highest_sessionid, sessionfree, config->cluster_highest_tunnelid);	// Only does anything if we're a master.
+			cluster_heartbeat();		// Only does anything if we're a master.
 			master_update_counts();		// If we're a slave, send our byte counters to our master.
+			if (config->cluster_iam_master && !config->cluster_iam_uptodate)
+				next_cluster_ping = TIME + 1; // out-of-date slaves, do fast updates
+			else
+				next_cluster_ping = TIME + config->cluster_hb_interval;
 		}
 
 			// Run token bucket filtering queue..
@@ -2401,11 +2406,8 @@ void mainloop(void)
 	}
 
 		// Are we the master and shutting down??
-	if (config->cluster_iam_master) {
-
-		cluster_heartbeat(config->cluster_highest_sessionid, sessionfree,
-			config->cluster_highest_tunnelid);	// Flush any queued changes..
-	}
+	if (config->cluster_iam_master)
+		cluster_heartbeat(); // Flush any queued changes..
 
 		// Ok. Notify everyone we're shutting down. If we're
 		// the master, this will force an election.
@@ -2464,14 +2466,14 @@ void initdata(void)
 	ip_address_pool = mmap(NULL, sizeof(ippoolt) * MAXIPPOOL, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, 0, 0);
 	if (ip_address_pool == MAP_FAILED)
 	{
-		log(0, 0, 0, 0, "Error doing mmap for radius: %s\n", strerror(errno));
+		log(0, 0, 0, 0, "Error doing mmap for ip_address_pool: %s\n", strerror(errno));
 		exit(1);
 	}
 #ifdef RINGBUFFER
 	ringbuffer = mmap(NULL, sizeof(struct Tringbuffer), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, 0, 0);
 	if (ringbuffer == MAP_FAILED)
 	{
-		log(0, 0, 0, 0, "Error doing mmap for radius: %s\n", strerror(errno));
+		log(0, 0, 0, 0, "Error doing mmap for ringbuffer: %s\n", strerror(errno));
 		exit(1);
 	}
 	memset(ringbuffer, 0, sizeof(struct Tringbuffer));
@@ -2512,8 +2514,10 @@ void initdata(void)
 
 	if (!*hostname)
 	{
+		char *p;
 		// Grab my hostname unless it's been specified
 		gethostname(hostname, sizeof(hostname));
+		if ((p = strchr(hostname, '.'))) *p = 0;
 	}
 	_statistics->start_time = _statistics->last_reset = time(NULL);
 
@@ -2539,7 +2543,7 @@ int assign_ip_address(sessionidt s)
 {
 	u32 i;
 	int best = -1;
-	clockt best_time = time_now;
+	time_t best_time = time_now;
 	char *u = session[s].user;
 	char reuse = 0;
 
@@ -2881,7 +2885,7 @@ int main(int argc, char *argv[])
 				config->debug++;
 				break;
 			case 'h':
-				strncpy(hostname, optarg, 999);
+				snprintf(hostname, sizeof(hostname), "%s", optarg);
 				break;
 			case '?':
 			default:
@@ -2907,7 +2911,7 @@ int main(int argc, char *argv[])
 	initplugins();
 	initdata();
 	init_tbf();
-	init_cli();
+	init_cli(hostname);
 	read_config_file();
 
 	log(0, 0, 0, 0, "L2TPNS version " VERSION "\n");
@@ -3291,6 +3295,8 @@ static int facility_value(char *name)
 void update_config()
 {
 	int i;
+	static int timeout = 0;
+	static int interval = 0;
 
 	// Update logging
 	closelog();
@@ -3372,6 +3378,26 @@ void update_config()
 
 	if (!config->cluster_hb_timeout)
 		config->cluster_hb_timeout = HB_TIMEOUT;	// 10 missed heartbeat triggers an election.
+
+	if (interval != config->cluster_hb_interval || timeout != config->cluster_hb_timeout)
+	{
+		// Paranoia:  cluster_check_master() treats 2 x interval + 1 sec as
+		// late, ensure we're sufficiently larger than that
+		int t = 4 * config->cluster_hb_interval + 11;
+
+		if (config->cluster_hb_timeout < t)
+		{
+			log(0,0,0,0, "Heartbeat timeout %d too low, adjusting to %d\n", config->cluster_hb_timeout, t);
+			config->cluster_hb_timeout = t;
+		}
+
+		// Push timing changes to the slaves immediately if we're the master
+		if (config->cluster_iam_master)
+			cluster_heartbeat();
+
+		interval = config->cluster_hb_interval;
+		timeout = config->cluster_hb_timeout;
+	}
 
 	config->reload_config = 0;
 }
@@ -3807,7 +3833,7 @@ void become_master(void)
 	int s;
 	run_plugins(PLUGIN_BECOME_MASTER, NULL);
 
-	for (s = 0; s < config->cluster_highest_sessionid ; ++s) {
+	for (s = 1; s <= config->cluster_highest_sessionid ; ++s) {
 		if (!session[s].tunnel) // Not an in-use session.
 			continue;
 
@@ -3829,7 +3855,7 @@ int cmd_show_hist_idle(struct cli_def *cli, char *command, char **argv, int argc
 	time(&time_now);
 	for (i = 0; i < 64;++i) buckets[i] = 0;
 
-	for (s = 0; s < config->cluster_highest_sessionid ; ++s) {
+	for (s = 1; s <= config->cluster_highest_sessionid ; ++s) {
 		int idle;
 		if (!session[s].tunnel)
 			continue;
@@ -3865,7 +3891,7 @@ int cmd_show_hist_open(struct cli_def *cli, char *command, char **argv, int argc
 	time(&time_now);
 	for (i = 0; i < 64;++i) buckets[i] = 0;
 
-	for (s = 0; s < config->cluster_highest_sessionid ; ++s) {
+	for (s = 1; s <= config->cluster_highest_sessionid ; ++s) {
 		int open = 0, d;
 		if (!session[s].tunnel)
 			continue;

@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.9 2004-07-02 07:31:23 bodea Exp $
+// $Id: l2tpns.h,v 1.10 2004-07-07 09:09:53 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -60,7 +60,6 @@
 #endif
 
 #define TAPDEVICE	"/dev/net/tun"
-#define	UDP		17
 #define STATEFILE	DATADIR "/state.dump"		// State dump file
 #define CONFIGFILE	FLASHDIR "/startup-config"	// Configuration file
 #define CLIUSERS	FLASHDIR "/users"		// CLI Users file
@@ -525,7 +524,7 @@ int sessionsetup(tunnelidt t, sessionidt s);
 int cluster_send_session(int s);
 int cluster_send_tunnel(int t);
 int cluster_send_goodbye();
-void init_cli();
+void init_cli(char *hostname);
 void cli_do_file(FILE *fh);
 void cli_do(int sockfd);
 int cli_arg_help(struct cli_def *cli, int cr_ok, char *entry, ...);

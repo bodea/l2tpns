@@ -2,7 +2,7 @@
 // vim: sw=4 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.7 2004-07-02 07:30:43 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.8 2004-07-07 09:09:53 bodea Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -102,7 +102,7 @@ int cmd_remove_plugin(struct cli_def *cli, char *command, char **argv, int argc)
 int cmd_uptime(struct cli_def *cli, char *command, char **argv, int argc);
 int regular_stuff(struct cli_def *cli);
 
-void init_cli()
+void init_cli(char *hostname)
 {
     FILE *f;
     char buf[4096];
@@ -112,7 +112,10 @@ void init_cli()
     struct sockaddr_in addr;
 
     cli = cli_init();
-    cli_set_hostname(cli, "l2tpns");
+    if (hostname && *hostname)
+    	cli_set_hostname(cli, hostname);
+    else
+    	cli_set_hostname(cli, "l2tpns");
 
     c = cli_register_command(cli, NULL, "show", NULL, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
     cli_register_command(cli, c, "banana", cmd_show_banana, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Show a banana");
@@ -374,7 +377,6 @@ int cli_arg_help(struct cli_def *cli, int cr_ok, char *entry, ...)
 int cmd_show_session(struct cli_def *cli, char *command, char **argv, int argc)
 {
     int i;
-    time_t time_now;
 
     if (CLI_HELP_REQUESTED)
 	return cli_arg_help(cli, 1,
@@ -466,7 +468,6 @@ int cmd_show_session(struct cli_def *cli, char *command, char **argv, int argc)
 int cmd_show_tunnels(struct cli_def *cli, char *command, char **argv, int argc)
 {
     int i, x, show_all = 0;
-    time_t time_now;
     char *states[] = {
 	"Free",
 	"Open",
@@ -528,7 +529,7 @@ int cmd_show_tunnels(struct cli_def *cli, char *command, char **argv, int argc)
     }
 
     // Show tunnel summary
-    cli_print(cli, "%s %s %s %s %s",
+    cli_print(cli, "%4s %20s %20s %6s %s",
 	    "TID",
 	    "Hostname",
 	    "IP",
@@ -540,7 +541,7 @@ int cmd_show_tunnels(struct cli_def *cli, char *command, char **argv, int argc)
 	if (!show_all && (!tunnel[i].ip || tunnel[i].die || !tunnel[i].hostname[0])) continue;
 
 	for (x = 0; x < MAXSESSION; x++) if (session[x].tunnel == i && session[x].opened && !session[x].die) sessions++;
-	cli_print(cli, "%d %s %s %s %d",
+	cli_print(cli, "%4d %20s %20s %6s %6d",
 		i,
 		*tunnel[i].hostname ? tunnel[i].hostname : "(null)",
 		inet_toa(htonl(tunnel[i].ip)),
@@ -753,7 +754,6 @@ int cmd_show_pool(struct cli_def *cli, char *command, char **argv, int argc)
 {
     int i;
     int used = 0, free = 0, show_all = 0;
-    time_t time_now;
 
     if (!config->cluster_iam_master)
     {
@@ -873,6 +873,7 @@ int cmd_show_run(struct cli_def *cli, char *command, char **argv, int argc)
 
 int cmd_show_radius(struct cli_def *cli, char *command, char **argv, int argc)
 {
+    int i, free = 0, used = 0, show_all = 0;
     char *states[] = {
 	"NULL",
 	"CHAP",
@@ -882,8 +883,6 @@ int cmd_show_radius(struct cli_def *cli, char *command, char **argv, int argc)
 	"STOP",
 	"WAIT",
     };
-    int i, free = 0, used = 0, show_all = 0;
-    time_t time_now;
 
     if (CLI_HELP_REQUESTED)
     {
@@ -1544,7 +1543,6 @@ int cmd_uptime(struct cli_def *cli, char *command, char **argv, int argc)
     FILE *fh;
     char buf[100], *p = buf, *loads[3];
     int i, num_sessions = 0;
-    time_t time_now;
 
     if (CLI_HELP_REQUESTED)
 	return CLI_HELP_NO_ARGS;

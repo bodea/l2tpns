@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.6 2004-07-05 06:54:01 bodea Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.7 2004-07-07 09:09:53 bodea Exp $";
 
 #include <stdio.h>
 #include <sys/file.h>
@@ -44,8 +44,6 @@ ipt my_address = 0;		// The network address of my ethernet port.
 static int walk_session_number = 0;	// The next session to send when doing the slow table walk.
 static int walk_tunnel_number = 0;	// The next tunnel to send when doing the slow table walk.
 
-static int hsess, fsess;	// Saved copies of the highest used session id, and the first free one.
-
 #define MAX_HEART_SIZE (8192)	// Maximum size of heartbeat packet. Must be less than max IP packet size :)
 #define MAX_CHANGES  (MAX_HEART_SIZE/(sizeof(sessiont) + sizeof(int) ) - 2)	// Assumes a session is the biggest type!
 
@@ -68,7 +66,7 @@ static struct {
 	int	uptodate;
 } peers[CLUSTER_MAX_SIZE];	// List of all the peers we've heard from.
 static int num_peers;		// Number of peers in list.
-static int have_peers;		// At least one peer
+static int have_peers;		// At least one up to date peer
 
 int rle_decompress(u8 ** src_p, int ssize, u8 *dst, int dsize);
 int rle_compress(u8 ** src_p, int ssize, u8 *dst, int dsize);
@@ -94,7 +92,7 @@ int cluster_init()
     if (!*config->cluster_interface)
 	return 0;
 
-    cluster_sockfd = socket(AF_INET, SOCK_DGRAM, UDP);
+    cluster_sockfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
@@ -158,8 +156,6 @@ int cluster_send_data(void *data, int datalen)
     addr.sin_port = htons(CLUSTERPORT);
     addr.sin_family = AF_INET;
 
-//    log_hex(4, "Cluster send", data, datalen); // VERY big data packets. How about we don't..
-
     log(5,0,0,0, "Cluster send data: %d bytes\n", datalen);
 
     if (sendto(cluster_sockfd, data, datalen, MSG_NOSIGNAL, (void *) &addr, sizeof(addr)) < 0)
@@ -202,18 +198,13 @@ void cluster_uptodate(void)
 
 	log(0,0,0,0, "Now uptodate with master.\n");
 
-		// If we're not a master, or if we have no slaves
-		// then start taking traffic..
-	if (!config->cluster_iam_master || !have_peers)
-	{
 #ifdef BGP
-		if (bgp_configured)
-			bgp_enable_routing(1);
-		else
+	if (bgp_configured)
+		bgp_enable_routing(1);
+	else
 #endif /* BGP */
-			if (config->send_garp)
-				send_garp(config->bind_address);	// Start taking traffic.
-	}
+		if (config->send_garp)
+			send_garp(config->bind_address);	// Start taking traffic.
 }
 
 //
@@ -339,6 +330,13 @@ int master_garden_packet(sessionidt s, char *data, int size)
 static void send_heartbeat(int seq, char * data, int size)
 {
     int i;
+    static int last_seq = -1;
+
+    if (last_seq != -1 && (seq != (last_seq+1)%HB_MAX_SEQ) ) {
+	log(0,0,0,0, "FATAL: Sequence number skipped! (%d != %d)\n",
+		seq, last_seq);
+    } 
+    last_seq = seq;
 
     if (size > sizeof(past_hearts[0].data)) {
 	log(0,0,0,0, "Tried to heartbeat something larger than the maximum packet!\n");
@@ -440,35 +438,62 @@ void cluster_check_master(void)
 	clockt t = TIME;
 	static int probed = 0;
 
-		// Is the master late? If so, try probing it...
-	if (TIME > (config->cluster_last_hb + config->cluster_hb_timeout/8 + 11)) {
-		if (!probed) {
-	   		if (config->cluster_master_address) {
-				peer_send_message(config->cluster_master_address,
-					C_LASTSEEN, config->cluster_seq_number, NULL, 0);
+	if (TIME < (config->cluster_last_hb + config->cluster_hb_timeout))
+	{
+		// If the master is late (missed 2 hearbeats by a second and a
+		// hair) it may be that the switch has dropped us from the
+		// multicast group, try unicasting one probe to the master
+		// which will hopefully respond with a unicast heartbeat that
+		// will allow us to limp along until the querier next runs.
+		if (config->cluster_master_address
+		    && TIME > (config->cluster_last_hb + 2 * config->cluster_hb_interval + 11))
+		{
+			if (!probed)
+			{
 				probed = 1;
+				log(1, 0, 0, 0, "Heartbeat from master %.1fs late, probing...\n",
+				    TIME - (config->cluster_last_hb + config->cluster_hb_interval));
+
+				peer_send_message(config->cluster_master_address,
+				    C_LASTSEEN, config->cluster_seq_number, NULL, 0);
 			}
+		} else {	// We got a recent heartbeat; reset the probe flag.
+			probed = 0;
 		}
-	} else {	// We got a recent heartbeat; reset the probe flag.
-		probed = 0;
+
+		if (!config->cluster_iam_master)
+			return;		// Everything's ok. return.
+
+		// Master needs to check peer state
 	}
-
-	if (TIME < (config->cluster_last_hb + config->cluster_hb_timeout) )
-		return;		// Everything's ok. return.
-
-	if (!config->cluster_iam_master)
-		log(0,0,0,0, "Master timed out! Holding election...\n");
 
 	config->cluster_last_hb = TIME + 1;
 
-	for (i = have_peers = 0; i < num_peers ; ++i) {
+	if (config->cluster_iam_master)
+		config->cluster_iam_uptodate = 1;	// cleared in loop below
+	else
+		log(0,0,0,0, "Master timed out! Holding election...\n");
+
+
+	for (i = have_peers = 0; i < num_peers; i++)
+	{
 		if ((peers[i].timestamp + config->cluster_hb_timeout) < t)
 			continue;	// Stale peer! Skip them.
 
 		if (!peers[i].basetime)
 			continue;	// Shutdown peer! Skip them.
 
-		have_peers = 1;
+		if (peers[i].uptodate)
+			have_peers = 1;
+
+		if (config->cluster_iam_master)
+		{
+			if (!peers[i].uptodate)
+				config->cluster_iam_uptodate = 0; // Start fast heartbeats
+
+			continue;
+		}
+
 		if (peers[i].basetime < basetime) {
 			log(1,0,0,0, "Expecting %s to become master\n", inet_toa(peers[i].peer) );
 			return;		// They'll win the election. Get out of here.
@@ -586,12 +611,11 @@ void cluster_check_master(void)
 
 	config->cluster_undefined_sessions = 0;
 	config->cluster_undefined_tunnels = 0;
+    	config->cluster_iam_uptodate = 1; // assume all peers are up-to-date
 
-		//
-		// FIXME. We need to fix up the tunnel control message
-		// queue here! There's a number of other variables we
-		// should also update.
-	cluster_uptodate();
+	// FIXME. We need to fix up the tunnel control message
+	// queue here! There's a number of other variables we
+	// should also update.
 }
 
 
@@ -699,6 +723,7 @@ int hb_add_type(char **p, int type, int id)
 		default:
 			log(0,0,0,0, "Found an invalid type in heart queue! (%d)\n", type);
 			kill(0, SIGTERM);
+			exit(1);
 	}
 	return 0;
 }
@@ -706,31 +731,33 @@ int hb_add_type(char **p, int type, int id)
 //
 // Send a heartbeat, incidently sending out any queued changes..
 //
-void cluster_heartbeat(int highsession, int freesession, int hightunnel)
+void cluster_heartbeat()
 {
 	int i, count = 0, tcount = 0;
 	char buff[MAX_HEART_SIZE + sizeof(heartt) + sizeof(int) ];
 	heartt h;
-	char * p = buff;
+	char *p = buff;
 
 	if (!config->cluster_iam_master)	// Only the master does this.
 		return;
 
-	hsess = highsession;
-	fsess = freesession;
-		// Fill out the heartbeat header.
+	// Fill out the heartbeat header.
+	memset(&h, 0, sizeof(h));
+
 	h.version = HB_VERSION;
 	h.seq = config->cluster_seq_number;
 	h.basetime = basetime;
 	h.clusterid = config->bind_address;	// Will this do??
 	h.basetime = basetime;
-	h.highsession = highsession;
-	h.freesession = freesession;
-	h.hightunnel = hightunnel;
+	h.highsession = config->cluster_highest_sessionid;
+	h.freesession = sessionfree;
+	h.hightunnel = config->cluster_highest_tunnelid;
 	h.size_sess = sizeof(sessiont);		// Just in case.
 	h.size_tunn = sizeof(tunnelt);
+	h.interval = config->cluster_hb_interval;
+	h.timeout  = config->cluster_hb_timeout;
 
-	add_type(&p, C_HEARTBEAT, HB_VERSION, (char*) &h, sizeof(h) );
+	add_type(&p, C_HEARTBEAT, HB_VERSION, (char*) &h, sizeof(h));
 
 	for (i = 0; i < config->cluster_num_changes; ++i) {
 		hb_add_type(&p, cluster_changes[i].type, cluster_changes[i].id);
@@ -739,6 +766,7 @@ void cluster_heartbeat(int highsession, int freesession, int hightunnel)
 	if (p > (buff + sizeof(buff))) {	// Did we somehow manage to overun the buffer?
 		log(0,0,0,0, "FATAL: Overran the heartbeat buffer! This is fatal. Exiting. (size %d)\n", p - buff);
 		kill(0, SIGTERM);
+		exit(1);
 	}
 
 		//
@@ -749,11 +777,11 @@ void cluster_heartbeat(int highsession, int freesession, int hightunnel)
 		if (!walk_session_number)	// session #0 isn't valid.
 			++walk_session_number;
 
-		if (count >= highsession)	// If we're a small cluster, don't go wild.
+		if (count >= config->cluster_highest_sessionid)	// If we're a small cluster, don't go wild.
 			break;
 
 		hb_add_type(&p, C_CSESSION, walk_session_number);
-		walk_session_number = (1+walk_session_number)%(highsession+1);	// +1 avoids divide by zero.
+		walk_session_number = (1+walk_session_number)%(config->cluster_highest_sessionid+1);	// +1 avoids divide by zero.
 
 		++count;			// Count the number of extra sessions we're sending.
 	}
@@ -783,6 +811,7 @@ void cluster_heartbeat(int highsession, int freesession, int hightunnel)
 	if (p > (buff + sizeof(buff))) {	// Did we somehow manage to overun the buffer?
 		log(0,0,0,0, "Overran the heartbeat buffer now! This is fatal. Exiting. (size %d)\n", p - buff);
 		kill(0, SIGTERM);
+		exit(1);
 	}
 
 	log(3,0,0,0, "Sending heartbeat #%d with %d changes (%d x-sess, %d x-tunnels, %d highsess, %d hightun size %d)\n",
@@ -813,7 +842,7 @@ int type_changed(int type, int id)
 	++config->cluster_num_changes;
 
 	if (config->cluster_num_changes > MAX_CHANGES)
-		cluster_heartbeat(config->cluster_highest_sessionid, fsess, config->cluster_highest_tunnelid);
+		cluster_heartbeat(); // flush now
 
 	return 1;
 }
@@ -868,8 +897,13 @@ int cluster_catchup_slave(int seq, u32 slave)
 	while (seq != config->cluster_seq_number) {
 		s = seq%HB_HISTORY_SIZE;
 		if (seq != past_hearts[s].seq) {
+			int i;
 			log(0,0,0,0, "Tried to re-send heartbeat for %s but %d doesn't match %d! (%d,%d)\n",
 				inet_toa(slave), seq, past_hearts[s].seq, s, config->cluster_seq_number);
+
+			for (i = 0; i < HB_HISTORY_SIZE; ++i) {
+				log(0,0,0,0, "\tentry %3d: seq %d (size %d)\n", i, past_hearts[s].seq, past_hearts[s].size);
+			}
 			return -1;	// What to do here!?
 		}
 		peer_send_data(slave, past_hearts[s].data, past_hearts[s].size);
@@ -895,14 +929,6 @@ int cluster_add_peer(u32 peer, time_t basetime, pingt *p)
 		return 0;
 	}
 
-		// Is this the master shutting down??
-	if (peer == config->cluster_master_address && !basetime) {
-		config->cluster_master_address = 0;
-		config->cluster_last_hb = 0; // Force an election.
-		cluster_check_master();
-		return 0;
-	}
-
 	for (i = 0; i < num_peers ; ++i)
 	{
 		if (peers[i].peer != peer)
@@ -911,7 +937,16 @@ int cluster_add_peer(u32 peer, time_t basetime, pingt *p)
 		// This peer already exists. Just update the timestamp.
 		peers[i].basetime = basetime;
 		peers[i].timestamp = TIME;
+		peers[i].uptodate = !p->undef;
 		break;
+	}
+
+		// Is this the master shutting down??
+	if (peer == config->cluster_master_address && !basetime) {
+		config->cluster_master_address = 0;
+		config->cluster_last_hb = 0; // Force an election.
+		cluster_check_master();
+		return 0;
 	}
 
 	if (i >= num_peers)
@@ -921,8 +956,9 @@ int cluster_add_peer(u32 peer, time_t basetime, pingt *p)
 		// Not found. Is there a stale slot to re-use?
 		for (i = 0; i < num_peers ; ++i)
 		{
-			if (peers[i].peer != peer)
-				continue;
+			if (!peers[i].basetime) // Shutdown
+				break;
+
 			if ((peers[i].timestamp + config->cluster_hb_timeout * 10) < TIME) // Stale.
 				break;
 		}
@@ -937,19 +973,27 @@ int cluster_add_peer(u32 peer, time_t basetime, pingt *p)
 		peers[i].peer = peer;
 		peers[i].basetime = basetime;
 		peers[i].timestamp = TIME;
+		peers[i].uptodate = !p->undef;
 		if (i == num_peers)
 			++num_peers;
 
 		log(1,0,0,0, "Added %s as a new peer. Now %d peers\n", inet_toa(peer), num_peers);
 	}
 
+	if (peers[i].uptodate)
+	{
 #ifdef BGP
-	/* drop routes if we've now got a peer */
-	if (bgp_configured && config->cluster_iam_master && !have_peers)
-		bgp_enable_routing(0);
+		/* drop routes if we've now got a peer */
+		if (config->cluster_iam_master && bgp_configured && !have_peers)
+			bgp_enable_routing(0);
 #endif /* BGP */
+		have_peers = 1;
+	}
+	else if (config->cluster_iam_master)
+	{
+		config->cluster_iam_uptodate = 0; // increase heart-rate...
+	}
 
-	have_peers = 1;
 
 	return 1;
 }
@@ -1017,6 +1061,7 @@ static int cluster_recv_session(int more , u8 * p)
 
 	if (!config->cluster_iam_uptodate)
 		cluster_uptodate();	// Check to see if we're up to date.
+
 	return 0;
 }
 
@@ -1054,22 +1099,27 @@ static int cluster_recv_tunnel(int more, u8 *p)
 
 
 //
-// Process a version one heartbeat..
+// Process a heartbeat..
 //
-static int cluster_process_heartbeat_v2(u8 * data, int size, int more, u8 * p, u32 addr)
+static int cluster_process_heartbeat(u8 * data, int size, int more, u8 * p, u32 addr)
 {
 	heartt * h;
 	int s = size - (p-data);
 	int i, type;
 
-	if (more != HB_VERSION) {
-		log(0,0,0,0, "Received a heartbeat version that I don't understand!\n");
+#if HB_VERSION != 3
+# error "need to update cluster_process_heartbeat()"
+#endif
+
+	// we handle version 2+
+	if (more < 2 || more > HB_VERSION) {
+		log(0,0,0,0, "Received a heartbeat version that I don't support (%d)!\n", more);
 		return -1; // Ignore it??
 	}
+
 		// Ok. It's a heartbeat packet from a cluster master!
 	if (s < sizeof(*h))
 		goto shortpacket;
-
 
 	h = (heartt*) p;
 	p += sizeof(*h);
@@ -1127,6 +1177,25 @@ static int cluster_process_heartbeat_v2(u8 * data, int size, int more, u8 * p, u
 			// Check that we don't have too many undefined sessions, and
 			// that the free session pointer is correct.
 	cluster_check_sessions(h->highsession, h->freesession, h->hightunnel);
+
+	if (more > 2) // reserved section of heartt was not initialized prior to v3
+	{
+		if (h->interval != config->cluster_hb_interval)
+		{
+			log(2, 0, 0, 0, "Master set ping/heartbeat interval to %u (was %u)\n",
+			    h->interval, config->cluster_hb_interval);
+
+		    	config->cluster_hb_interval = h->interval;
+		}
+
+		if (h->timeout != config->cluster_hb_timeout)
+		{
+			log(2, 0, 0, 0, "Master set heartbeat timeout to %u (was %u)\n",
+			    h->timeout, config->cluster_hb_timeout);
+
+		    	config->cluster_hb_timeout = h->timeout;
+		}
+	}
 
 		// Ok. process the packet...
 	while ( s > 0) {
@@ -1315,14 +1384,14 @@ int processcluster(char * data, int size, u32 addr)
 
 	case C_HEARTBEAT:
 		log(4,0,0,0, "Got a heartbeat from %s\n", inet_toa(addr));
-
-		return cluster_process_heartbeat_v2(data, size, more, p, addr);
+		return cluster_process_heartbeat(data, size, more, p, addr);
 
 	default:
 		log(0,0,0,0, "Strange type packet received on cluster socket (%d)\n", type);
 		return -1;
 	}
 	return 0;
+
 shortpacket:
 	log(0,0,0,0, "I got an cluster heartbeat packet! This means I'm probably out of sync!!\n");
 	return -1;
