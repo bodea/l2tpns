@@ -149,7 +149,7 @@ int garden_session(sessiont *s, int flag)
 
 		if (!s->die) {
 			/* OK, we're up! */
-			u8 r = p.radiusnew(p.get_id_by_session(s));
+			u16 r = p.radiusnew(p.get_id_by_session(s));
 			p.radiussend(r, RADIUSSTART);
 		}
 	}
