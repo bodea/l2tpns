@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.50 2005-01-13 08:03:04 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.51 2005-01-13 08:26:25 bodea Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -644,39 +644,6 @@ static int cmd_show_users(struct cli_def *cli, char *command, char **argv, int a
 	return CLI_OK;
 }
 
-static char *duration(time_t secs)
-{
-	static char *buf = NULL;
-	int p = 0;
-
-	if (!buf) buf = calloc(64, 1);
-
-	if (secs >= 86400)
-	{
-		int days = secs / 86400;
-		p = sprintf(buf, "%d day%s, ", days, days > 1 ? "s" : "");
-		secs %= 86400;
-	}
-
-	if (secs >= 3600)
-	{
-		int mins = secs / 60;
-		int hrs = mins / 60;
-
-		mins %= 60;
-		sprintf(buf + p, "%d:%02d", hrs, mins);
-	}
-	else if (secs >= 60)
-	{
-		int mins = secs / 60;
-		sprintf(buf + p, "%d min%s", mins, mins > 1 ? "s" : "");
-	}
-	else
-		sprintf(buf, "%ld sec%s", secs, secs > 1 ? "s" : "");
-
-	return buf;
-}
-
 static int cmd_show_counters(struct cli_def *cli, char *command, char **argv, int argc)
 {
 	if (CLI_HELP_REQUESTED)
@@ -760,8 +727,15 @@ static int cmd_show_counters(struct cli_def *cli, char *command, char **argv, in
 	cli_print(cli, "%-30s%u", "call_random_data",		GET_STAT(call_random_data));
 #endif
 
-	cli_print(cli, "");
-	cli_print(cli, "Counters last reset %s ago", duration(time_now - GET_STAT(last_reset)));
+	{
+		time_t l = GET_STAT(last_reset);
+		char *t = ctime(&l);
+		char *p = strchr(t, '\n');
+		if (p) *p = 0;
+
+		cli_print(cli, "");
+		cli_print(cli, "Last counter reset %s", t);
+	}
 
 	return CLI_OK;
 }
@@ -1756,6 +1730,39 @@ static int cmd_remove_plugin(struct cli_def *cli, char *command, char **argv, in
 
 	cli_print(cli, "Plugin is not loaded");
 	return CLI_OK;
+}
+
+static char *duration(time_t secs)
+{
+	static char *buf = NULL;
+	int p = 0;
+
+	if (!buf) buf = calloc(64, 1);
+
+	if (secs >= 86400)
+	{
+		int days = secs / 86400;
+		p = sprintf(buf, "%d day%s, ", days, days > 1 ? "s" : "");
+		secs %= 86400;
+	}
+
+	if (secs >= 3600)
+	{
+		int mins = secs / 60;
+		int hrs = mins / 60;
+
+		mins %= 60;
+		sprintf(buf + p, "%d:%02d", hrs, mins);
+	}
+	else if (secs >= 60)
+	{
+		int mins = secs / 60;
+		sprintf(buf + p, "%d min%s", mins, mins > 1 ? "s" : "");
+	}
+	else
+		sprintf(buf, "%ld sec%s", secs, secs > 1 ? "s" : "");
+
+	return buf;
 }
 
 static int cmd_uptime(struct cli_def *cli, char *command, char **argv, int argc)
