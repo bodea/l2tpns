@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.62 2004-12-05 23:45:04 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.63 2004-12-09 00:50:45 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -1254,7 +1254,7 @@ static void tunnelshutdown(tunnelidt t, char *reason)
 	// TBA - should we wait for sessions to stop?
 	{                            // Send StopCCN
 		controlt *c = controlnew(4); // sending StopCCN
-		control16(c, 1, 1, 1);    // result code (admin reasons - TBA make error, general error, add message
+		control16(c, 1, 1, 1);    // result code (admin reasons - TBA make error, general error, add message)
 		control16(c, 9, t, 1);    // assigned tunnel (our end)
 		controladd(c, t, 0);      // send the message
 	}
@@ -2340,60 +2340,101 @@ static void mainloop(void)
 		else if (n)
 		{
 			struct sockaddr_in addr;
-			int alen = sizeof(addr);
-			if (FD_ISSET(udpfd, &r))
-			{
-				int c, n;
-				for (c = 0; c < config->multi_read_count; c++)
-				{
-					if ((n = recvfrom(udpfd, buf, sizeof(buf), 0, (void *) &addr, &alen)) > 0)
-						processudp(buf, n, &addr);
-					else
-						break;
-				}
-			}
-			if (FD_ISSET(tunfd, &r))
-			{
-				int c, n;
-				for (c = 0; c < config->multi_read_count; c++)
-				{
-					if ((n = read(tunfd, buf, sizeof(buf))) > 0)
-						processtun(buf, n);
-					else
-						break;
-				}
-			}
+			int alen, c, s;
 
-			if (config->cluster_iam_master)
-				for (i = 0; i < config->num_radfds; i++)
-					if (FD_ISSET(radfds[i], &r))
-						processrad(buf, recv(radfds[i], buf, sizeof(buf), 0), i);
-
-			if (FD_ISSET(cluster_sockfd, &r))
-			{
-				int size;
-				size = recvfrom(cluster_sockfd, buf, sizeof(buf), MSG_WAITALL, (void *) &addr, &alen);
-				processcluster(buf, size, addr.sin_addr.s_addr);
-			}
-
+			// nsctl commands
 			if (FD_ISSET(controlfd, &r))
+			{
+				alen = sizeof(addr);
 				processcontrol(buf, recvfrom(controlfd, buf, sizeof(buf), MSG_WAITALL, (void *) &addr, &alen), &addr, alen);
+				n--;
+			}
 
+			// RADIUS responses
+			if (config->cluster_iam_master)
+			{
+				for (i = 0; i < config->num_radfds; i++)
+				{
+					if (FD_ISSET(radfds[i], &r))
+					{
+						processrad(buf, recv(radfds[i], buf, sizeof(buf), 0), i);
+						n--;
+					}
+				}
+			}
+
+			// CLI connections
 			if (FD_ISSET(clifd, &r))
 			{
-				struct sockaddr_in addr;
-				int sockfd;
-				int len = sizeof(addr);
-
-				if ((sockfd = accept(clifd, (struct sockaddr *)&addr, &len)) <= 0)
+				int cli;
+				
+				alen = sizeof(addr);
+				if ((cli = accept(clifd, (struct sockaddr *)&addr, &len)) >= 0)
 				{
-					LOG(0, 0, 0, "accept error: %s\n", strerror(errno));
-					continue;
+					cli_do(cli);
+					close(cli);
 				}
 				else
+					LOG(0, 0, 0, "accept error: %s\n", strerror(errno));
+
+				n--;
+			}
+
+#ifdef BGP
+			for (i = 0; i < BGP_NUM_PEERS; i++)
+			{
+				int isr = bgp_set[i] ? FD_ISSET(bgp_peers[i].sock, &r) : 0;
+				int isw = bgp_set[i] ? FD_ISSET(bgp_peers[i].sock, &w) : 0;
+				bgp_process(&bgp_peers[i], isr, isw);
+				if (isr) n--;
+				if (isw) n--;
+			}
+#endif /* BGP */
+
+			for (c = 0; n && c < config->multi_read_count; c++)
+			{
+				// L2TP
+				if (FD_ISSET(udpfd, &r))
 				{
-					cli_do(sockfd);
-					close(sockfd);
+					alen = sizeof(addr);
+					if ((s = recvfrom(udpfd, buf, sizeof(buf), 0, (void *) &addr, &alen)) > 0)
+					{
+						processudp(buf, s, &addr);
+					}
+					else
+					{
+						FD_CLR(udpfd, &r);
+						n--;
+					}
+				}
+
+				// incoming IP
+				if (FD_ISSET(tunfd, &r))
+				{
+					if ((n = read(tunfd, buf, sizeof(buf))) > 0)
+					{
+						processtun(buf, n);
+					}
+					else
+					{
+						FD_CLR(tunfd, &r);
+						n--;
+					}
+				}
+
+				// cluster
+				if (FD_ISSET(cluster_sockfd, &r))
+				{
+					alen = sizeof(addr);
+					if ((s = recvfrom(cluster_sockfd, buf, sizeof(buf), MSG_WAITALL, (void *) &addr, &alen)) > 0)
+					{
+						processcluster(buf, s, addr.sin_addr.s_addr);
+					}
+					else
+					{
+						FD_CLR(cluster_sockfd, &r);
+						n--;
+					}
 				}
 			}
 		}
@@ -2445,15 +2486,6 @@ static void mainloop(void)
 				next_clean = time_now + config->cleanup_interval; // Did. Move to next interval.
 			}
 		}
-
-#ifdef BGP
-		for (i = 0; i < BGP_NUM_PEERS; i++)
-		{
-			bgp_process(&bgp_peers[i],
-				bgp_set[i] ? FD_ISSET(bgp_peers[i].sock, &r) : 0,
-				bgp_set[i] ? FD_ISSET(bgp_peers[i].sock, &w) : 0);
-		}
-#endif /* BGP */
 	}
 
 		// Are we the master and shutting down??
