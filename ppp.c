@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.16 2004-09-23 04:01:36 fred_nerk Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.17 2004-10-29 04:01:53 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -731,7 +731,7 @@ void processccp(tunnelidt t, sessionidt s, u8 * p, u16 l)
 	log_hex(5, "CCP", p, l);
 	if (l < 2 || (*p != ConfigReq && *p != TerminateReq))
 	{
-		log(1, 0, s, t, "Unexpecetd CCP request code %d\n", *p);
+		log(1, 0, s, t, "Unexpected CCP request code %d\n", *p);
 		STAT(tunnel_rx_errors);
 		return ;
 	}
