@@ -30,24 +30,6 @@ make install DESTDIR=%{buildroot}
 %clean
 rm -rf %{buildroot}
 
-%post
-/sbin/chkconfig --add dhcpd
-/sbin/chkconfig --add dhcrelay
-
-%preun
-if [ $1 = 0 ]; then     # execute this only if we are NOT doing an upgrade
-    service dhcpd stop >/dev/null 2>&1
-    service dhcrelay stop >/dev/null 2>&1
-    /sbin/chkconfig --del dhcpd 
-    /sbin/chkconfig --del dhcrelay
-fi
-
-%postun
-if [ "$1" -ge "1" ]; then
-    service dhcpd condrestart >/dev/null 2>&1
-    service dhcrelay condrestart >/dev/null 2>&1
-fi
-
 %files
 %defattr(-,root,root)
 %doc Changes INSTALL INTERNALS COPYING Docs/manual.html
