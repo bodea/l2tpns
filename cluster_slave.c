@@ -1,5 +1,5 @@
 // L2TPNS Cluster Master
-// $Id: cluster_slave.c,v 1.3 2004-03-05 00:22:06 fred_nerk Exp $
+// $Id: cluster_slave.c,v 1.4 2004-05-24 04:12:48 fred_nerk Exp $
 
 #include <stdio.h>
 #include <netinet/in.h>
@@ -78,7 +78,7 @@ int handle_tunnel(char *buf, int l)
     // Ignore tunnel message if NOSTATEFILE exists
     if (config->ignore_cluster_updates)
     {
-	log(1, 0, 0, 0, "Discarding tunnel message from cluster master.\n", l, sizeof(tunnelt));
+	log(1, 0, 0, 0, "Discarding tunnel message from cluster master.\n");
 	return 0;
     }
 
@@ -114,7 +114,7 @@ int handle_session(char *buf, int l)
     // Ignore tunnel message if NOSTATEFILE exists
     if (config->ignore_cluster_updates)
     {
-	log(1, 0, 0, 0, "Discarding session message from cluster master.\n", l, sizeof(tunnelt));
+	log(1, 0, 0, 0, "Discarding session message from cluster master.\n");
 	return 0;
     }
 
