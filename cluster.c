@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.8 2004-07-08 16:54:35 bodea Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.9 2004-07-11 07:57:35 bodea Exp $";
 
 #include <stdio.h>
 #include <sys/file.h>
@@ -911,12 +911,25 @@ int cluster_catchup_slave(int seq, u32 slave)
 // We've heard from another peer! Add it to the list
 // that we select from at election time.
 //
-int cluster_add_peer(u32 peer, time_t basetime, pingt *p)
+int cluster_add_peer(u32 peer, time_t basetime, pingt *pp, int size)
 {
 	int i;
 	u32 clusterid;
+	pingt p;
+	
 
-	clusterid = p->addr;
+		// Allow for backward compatability.
+		// Just the ping packet into a new structure to allow
+		// for the possibility that we might have received
+		// more or fewer elements than we were expecting.
+	if (size > sizeof(p))
+		size = sizeof(p);
+
+	memset( (void*) &p, 0, sizeof(p) );
+	memcpy( (void*) &p, (void*) pp, size);
+	
+
+	clusterid = p.addr;
 	if (clusterid != config->bind_address)
 	{
 		// Is this for us?
@@ -932,7 +945,7 @@ int cluster_add_peer(u32 peer, time_t basetime, pingt *p)
 		// This peer already exists. Just update the timestamp.
 		peers[i].basetime = basetime;
 		peers[i].timestamp = TIME;
-		peers[i].uptodate = !p->undef;
+		peers[i].uptodate = !p.undef;
 		break;
 	}
 
@@ -969,7 +982,7 @@ int cluster_add_peer(u32 peer, time_t basetime, pingt *p)
 		peers[i].peer = peer;
 		peers[i].basetime = basetime;
 		peers[i].timestamp = TIME;
-		peers[i].uptodate = !p->undef;
+		peers[i].uptodate = !p.undef;
 		if (i == num_peers)
 			++num_peers;
 
@@ -1297,7 +1310,7 @@ int processcluster(char * data, int size, u32 addr)
 
 	switch (type) {
 	case C_PING:	// Update the peers table.
-		return cluster_add_peer(addr, more, (pingt*)p);
+		return cluster_add_peer(addr, more, (pingt*)p, s);
 
 	case C_LASTSEEN:	// Catch up a slave (slave missed a packet).
 		return cluster_catchup_slave(more, addr);

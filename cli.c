@@ -2,7 +2,7 @@
 // vim: sw=4 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.9 2004-07-08 16:54:35 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.10 2004-07-11 07:57:33 bodea Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -314,11 +314,7 @@ void cli_do(int sockfd)
     memset(&debug_flags, 0, sizeof(debug_flags));
     debug_flags.critical = 1;
 
-    {
-	char prompt[1005];
-	snprintf(prompt, 1005, "l2tpns> ");
-	cli_loop(cli, sockfd, prompt);
-    }
+    cli_loop(cli, sockfd);
 
     close(sockfd);
     log(3, 0, 0, 0, "Closed CLI connection\n");

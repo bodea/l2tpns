@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.7 2004-07-08 16:54:35 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.8 2004-07-11 07:57:35 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -420,9 +420,9 @@ void processlcp(tunnelidt t, sessionidt s, u8 * p, u16 l)
 		sessionshutdown(s, "Remote end closed connection.");
 		tunnelsend(b, l + (q - b), t); // send it
 	}
-	else if (*p == TerminateReq)
+	else if (*p == TerminateAck)
 	{
-		sessionshutdown(s, "Remote end closed connection.");
+		sessionshutdown(s, "Connection closed.");
 	}
 	else if (*p == EchoReq)
 	{

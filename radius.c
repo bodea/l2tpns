@@ -1,6 +1,6 @@
 // L2TPNS Radius Stuff
 
-char const *cvs_id_radius = "$Id: radius.c,v 1.7 2004-07-07 09:09:53 bodea Exp $";
+char const *cvs_id_radius = "$Id: radius.c,v 1.8 2004-07-11 07:57:35 bodea Exp $";
 
 #include <time.h>
 #include <stdio.h>
@@ -664,6 +664,6 @@ void radius_clean()
 				|| !session[radius[i].session].opened
 				|| session[radius[i].session].die
 				|| session[radius[i].session].tunnel == 0)
-			radiusclear(i, 0);
+			radiusclear(i, radius[i].session);
 	}
 }

@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.12 2004-07-08 16:54:35 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.13 2004-07-11 07:57:35 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -1015,7 +1015,7 @@ void sessionshutdown(sessionidt s, char *reason)
 		return;                   // not a live session
 	}
 
-	if (!session[s].die)
+	if (!dead)
 		log(2, 0, s, session[s].tunnel, "Shutting down session %d: %s\n", s, reason);
 
 	session[s].die = now() + 150; // Clean up in 15 seconds
@@ -1122,9 +1122,10 @@ void sessionkill(sessionidt s, char *reason)
 
 	CSTAT(call_sessionkill);
 
+	session[s].die = now();
 	sessionshutdown(s, reason);  // close radius/routes, etc.
 	if (session[s].radius)
-		radiusclear(session[s].radius, 0); // cant send clean accounting data, session is killed
+		radiusclear(session[s].radius, s); // cant send clean accounting data, session is killed
 
 	log(2, 0, s, session[s].tunnel, "Kill session %d (%s): %s\n", s, session[s].user, reason);
 
@@ -1304,9 +1305,9 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 				// Is this a duplicate of the first packet? (SCCRQ)
 				//
 			for ( i = 1; i <= config->cluster_highest_tunnelid ; ++i) {
-				if (tunnel[t].state != TUNNELOPENING ||
-					tunnel[t].ip != ntohl(*(ipt *) & addr->sin_addr) ||
-					tunnel[t].port != ntohs(addr->sin_port) )
+				if (tunnel[i].state != TUNNELOPENING ||
+					tunnel[i].ip != ntohl(*(ipt *) & addr->sin_addr) ||
+					tunnel[i].port != ntohs(addr->sin_port) )
 					continue;
 				t = i;
 				break;
