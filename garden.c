@@ -9,7 +9,7 @@
 
 /* walled garden */
 
-char const *cvs_id = "$Id: garden.c,v 1.15 2004-11-18 05:44:36 bodea Exp $";
+char const *cvs_id = "$Id: garden.c,v 1.16 2004-11-18 06:41:03 bodea Exp $";
 
 int plugin_api_version = PLUGIN_API_VERSION;
 static struct pluginfuncs *p = 0;
@@ -77,7 +77,7 @@ int plugin_kill_session(struct param_new_session *data)
 
 char *plugin_control_help[] = {
 	"  garden USER|SID                             Put user into the walled garden",
-	"  ungarden USER|SID                           Release user from garden",
+	"  ungarden SID                                Release session from garden",
 	0
 };
 
@@ -94,14 +94,10 @@ int plugin_control(struct param_control *data)
 	if (strcmp(data->argv[0], "garden") && strcmp(data->argv[0], "ungarden"))
 		return PLUGIN_RET_OK; // not for us
 
-	flag = data->argv[0][0] != 'u';
+	if (!iam_master)
+		return PLUGIN_RET_NOTMASTER;
 
-	if (!iam_master)	// All garden processing happens on the master.
-	{
-	    	data->response = NSCTL_RES_ERR;
-		data->additional = "must be run on the cluster master";
-		return PLUGIN_RET_STOP;
-	}
+	flag = data->argv[0][0] != 'u';
 
 	if (data->argc != 2)
 	{

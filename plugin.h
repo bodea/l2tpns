@@ -21,7 +21,8 @@ enum
 
 #define PLUGIN_RET_ERROR	0
 #define PLUGIN_RET_OK		1
-#define PLUGIN_RET_STOP		2
+#define PLUGIN_RET_STOP		2 
+#define PLUGIN_RET_NOTMASTER	3
 
 struct pluginfuncs
 {
@@ -81,8 +82,10 @@ struct param_timer
 
 struct param_control
 {
+	int iam_master;
     	int argc;
 	char **argv;
+	// output
 	int response;
 	char *additional;
 };

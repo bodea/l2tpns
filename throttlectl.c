@@ -5,7 +5,7 @@
 
 /* throttle control */
 
-char const *cvs_id = "$Id: throttlectl.c,v 1.2 2004-11-18 05:44:36 bodea Exp $";
+char const *cvs_id = "$Id: throttlectl.c,v 1.3 2004-11-18 06:41:03 bodea Exp $";
 
 int plugin_api_version = PLUGIN_API_VERSION;
 static struct pluginfuncs *p = 0;
@@ -16,8 +16,6 @@ char *plugin_control_help[] = {
 	0
 };
 
-static int iam_master = 0;
-
 int plugin_init(struct pluginfuncs *funcs)
 {
 	if (!funcs)
@@ -25,12 +23,6 @@ int plugin_init(struct pluginfuncs *funcs)
 
 	p = funcs;
 	return 1;
-}
-
-int plugin_become_master(void)
-{
-	iam_master = 1;
-	return PLUGIN_RET_OK;
 }
 
 int plugin_control(struct param_control *data)
@@ -49,14 +41,10 @@ int plugin_control(struct param_control *data)
 	    && strcmp(data->argv[0], "unthrottle"))
 		return PLUGIN_RET_OK; // not for us
 
-	flag = data->argv[0][0] != 'g';
+	if (!data->iam_master)
+		return PLUGIN_RET_NOTMASTER;
 
-	if (!iam_master)
-	{
-	    	data->response = NSCTL_RES_ERR;
-		data->additional = "must be run on the cluster master";
-		return PLUGIN_RET_STOP;
-	}
+	flag = data->argv[0][0] != 'g';
 
 	if (flag)
 	{

@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.52 2004-11-17 15:08:19 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.53 2004-11-18 06:41:03 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -3859,17 +3859,20 @@ static int remove_plugin(char *plugin_name)
 int run_plugins(int plugin_type, void *data)
 {
 	int (*func)(void *data);
-	if (!plugins[plugin_type] || plugin_type > max_plugin_functions) return 1;
+
+	if (!plugins[plugin_type] || plugin_type > max_plugin_functions)
+		return PLUGIN_RET_ERROR;
 
 	ll_reset(plugins[plugin_type]);
 	while ((func = ll_next(plugins[plugin_type])))
 	{
-		int rc;
-		rc = func(data);
-		if (rc == PLUGIN_RET_STOP) return 1;
-		if (rc == PLUGIN_RET_ERROR) return 0;
+		int r = func(data);
+
+		if (r != PLUGIN_RET_OK)
+			return r; // stop here
 	}
-	return 1;
+
+	return PLUGIN_RET_OK;
 }
 
 static void plugins_done()
@@ -3966,14 +3969,39 @@ static void processcontrol(u8 * buf, int len, struct sockaddr_in *addr, int alen
 
 	case NSCTL_REQ_CONTROL:
 		{
-			struct param_control param = { request.argc, request.argv, 0, NULL };
-			if (!run_plugins(PLUGIN_CONTROL, &param))
+			struct param_control param = {
+				config->cluster_iam_master,
+				request.argc,
+				request.argv,
+				0,
+				NULL,
+			};
+
+			int r = run_plugins(PLUGIN_CONTROL, &param);
+
+			if (r == PLUGIN_RET_ERROR)
 			{
 				response.type = NSCTL_RES_ERR;
 				response.argc = 1;
 				response.argv[0] = param.additional
 					? param.additional
 					: "error returned by plugin";
+			}
+			else if (r == PLUGIN_RET_NOTMASTER)
+			{
+				static char msg[] = "must be run on master: 000.000.000.000";
+
+				response.type = NSCTL_RES_ERR;
+				response.argc = 1;
+				if (config->cluster_master_address)
+				{
+					strcpy(msg + 23, inet_toa(config->cluster_master_address));
+					response.argv[0] = msg;
+				}
+				else
+				{
+				    	response.argv[0] = "must be run on master: none elected";
+				}
 			}
 			else if (!(param.response & NSCTL_RESPONSE))
 			{
