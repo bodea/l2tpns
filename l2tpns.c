@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.36 2004-10-30 07:17:41 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.37 2004-11-02 04:35:04 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -967,65 +967,48 @@ void controladd(controlt * c, tunnelidt t, sessionidt s)
 //
 // Throttle or Unthrottle a session
 //
-// Throttle the data folling through a session
-// to be no more than 'throttle' kbit/sec each way.
+// Throttle the data from/to through a session to no more than
+// 'rate_in' kbit/sec in (from user) or 'rate_out' kbit/sec out (to
+// user).
 //
-int throttle_session(sessionidt s, int throttle)
+// If either value is -1, the current value is retained for that
+// direction.
+//
+void throttle_session(sessionidt s, int rate_in, int rate_out)
 {
 	if (!session[s].tunnel)
-		return 0;	// No-one home.
+		return; // No-one home.
 
 	if (!*session[s].user)
-	        return 0; // User not logged in
+	        return; // User not logged in
 
-	if (throttle)
+	if (rate_in >= 0)
 	{
-		int rate_in = throttle & 0x0000FFFF;
-		int rate_out = throttle >> 16;
-
-		if (session[s].tbf_in || session[s].tbf_out)
-		{
-			if (throttle == session[s].throttle)
-				return 1;
-
-			// Currently throttled but the rate is changing.
-
+		int bytes = rate_in * 1024 / 8; // kbits to bytes
+		if (session[s].tbf_in)
 			free_tbf(session[s].tbf_in);
-			free_tbf(session[s].tbf_out);
-		}
 
-		if (rate_in) session[s].tbf_in = new_tbf(s, rate_in * 1024 / 4, rate_in * 1024 / 8, send_ipin);
-		if (rate_out) session[s].tbf_out = new_tbf(s, rate_out * 1024 / 4, rate_out * 1024 / 8, send_ipout);
+		if (rate_in > 0)
+			session[s].tbf_in = new_tbf(s, bytes * 2, bytes, send_ipin);
+		else
+			session[s].tbf_in = 0;
 
-		if (throttle != session[s].throttle)
-		{
-			// Changed. Flood to slaves.
-			session[s].throttle = throttle;
-			cluster_send_session(s);
-		}
-
-		return 1;
+		session[s].throttle_in = rate_in;
 	}
 
-	// else Unthrottling.
-
-	if (!session[s].tbf_in && !session[s].tbf_out && !session[s].throttle)
-		return 0;
-
-	free_tbf(session[s].tbf_in);
-	session[s].tbf_in = 0;
-
-	free_tbf(session[s].tbf_out);
-	session[s].tbf_out = 0;
-
-	if (throttle != session[s].throttle)
+	if (rate_out >= 0)
 	{
-		// Changed. Flood to slaves.
-		session[s].throttle = throttle;
-		cluster_send_session(s);
-	}
+		int bytes = rate_out * 1024 / 8;
+		if (session[s].tbf_out)
+			free_tbf(session[s].tbf_out);
 
-	return 0;
+		if (rate_out > 0)
+			session[s].tbf_out = new_tbf(s, bytes * 2, bytes, send_ipin);
+		else
+			session[s].tbf_out = 0;
+
+		session[s].throttle_out = rate_out;
+	}
 }
 
 // start tidy shutdown of session
@@ -1091,16 +1074,18 @@ void sessionshutdown(sessionidt s, char *reason)
 		}
 		else
 			free_ip_address(s);
-
-		if (session[s].throttle)	// Unthrottle if throttled.
-			throttle_session(s, 0);
 	}
+
+	if (session[s].throttle_in || session[s].throttle_out) // Unthrottle if throttled.
+		throttle_session(s, 0, 0);
+
 	{                            // Send CDN
 		controlt *c = controlnew(14); // sending CDN
 		control16(c, 1, 3, 1);    // result code (admin reasons - TBA make error, general error, add message
 		control16(c, 14, s, 1);   // assigned session (our end)
 		controladd(c, session[s].tunnel, s); // send the message
 	}
+
 	cluster_send_session(s);
 }
 
@@ -1158,8 +1143,6 @@ void sessionkill(sessionidt s, char *reason)
 		radiusclear(session[s].radius, s); // cant send clean accounting data, session is killed
 
 	log(2, 0, s, session[s].tunnel, "Kill session %d (%s): %s\n", s, session[s].user, reason);
-
-	throttle_session(s, 0);		// Force session to be un-throttle. Free'ing TBF structures.
 
 	memset(&session[s], 0, sizeof(session[s]));
 	session[s].tunnel = T_FREE;	// Mark it as free.
@@ -1578,7 +1561,7 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 				case 13:    // Response
 					// Why did they send a response? We never challenge.
 					log(2, ntohl(addr->sin_addr.s_addr), s, t, "   received unexpected challenge response\n");
-				break;
+					break;
 
 				case 14:    // assigned session
 					asession = session[s].far = ntohs(*(u16 *) (b));
@@ -2141,7 +2124,14 @@ int regular_cleanups(void)
 				a = 0; // dead, no need to check for other actions
 			}
 
-			if (a & CLI_SESS_SNOOP)
+			if (a & CLI_SESS_NOSNOOP)
+			{
+				log(2, 0, s, session[s].tunnel, "Unsnooping session by CLI\n");
+				session[s].snoop_ip = 0;
+				session[s].snoop_port = 0;
+				send++;
+			}
+			else if (a & CLI_SESS_SNOOP)
 			{
 				log(2, 0, s, session[s].tunnel, "Snooping session by CLI (to %s:%d)\n",
 				    inet_toa(cli_session_actions[s].snoop_ip), cli_session_actions[s].snoop_port);
@@ -2151,27 +2141,20 @@ int regular_cleanups(void)
 				send++;
 			}
 
-			if (a & CLI_SESS_NOSNOOP)
-			{
-				log(2, 0, s, session[s].tunnel, "Unsnooping session by CLI\n");
-				session[s].snoop_ip = 0;
-				session[s].snoop_port = 0;
-				send++;
-			}
-
-			if (a & CLI_SESS_THROTTLE)
-			{
-				log(2, 0, s, session[s].tunnel, "Throttling session by CLI (to %dkb/s up and %dkb/s down)\n",
-				    cli_session_actions[s].throttle & 0xFFFF,
-				    cli_session_actions[s].throttle >> 16);
-
-				throttle_session(s, cli_session_actions[s].throttle);
-			}
-
 			if (a & CLI_SESS_NOTHROTTLE)
 			{
 				log(2, 0, s, session[s].tunnel, "Un-throttling session by CLI\n");
-				throttle_session(s, 0);
+				throttle_session(s, 0, 0);
+				send++;
+			}
+			else if (a & CLI_SESS_THROTTLE)
+			{
+				log(2, 0, s, session[s].tunnel, "Throttling session by CLI (to %dkb/s up and %dkb/s down)\n",
+				    cli_session_actions[s].throttle_in,
+				    cli_session_actions[s].throttle_out);
+
+				throttle_session(s, cli_session_actions[s].throttle_in, cli_session_actions[s].throttle_out);
+				send++;
 			}
 
 			if (send)
@@ -2246,11 +2229,13 @@ int still_busy(void)
 	return 0;
 }
 
+static fd_set readset;
+static int readset_n = 0;
+
 // main loop - gets packets on tun or udp and processes them
 void mainloop(void)
 {
-	fd_set cr;
-	int cn, i;
+	int i;
 	u8 buf[65536];
 	struct timeval to;
 	clockt next_cluster_ping = 0;	// send initial ping immediately
@@ -2259,29 +2244,22 @@ void mainloop(void)
 	log(4, 0, 0, 0, "Beginning of main loop. udpfd=%d, tunfd=%d, cluster_sockfd=%d, controlfd=%d\n",
 			udpfd, tunfd, cluster_sockfd, controlfd);
 
-	FD_ZERO(&cr);
-	FD_SET(udpfd, &cr);
-	FD_SET(tunfd, &cr);
-	FD_SET(controlfd, &cr);
-	FD_SET(clifd, &cr);
-	if (cluster_sockfd) FD_SET(cluster_sockfd, &cr);
-	cn = udpfd;
-	if (cn < tunfd) cn = tunfd;
-	if (cn < controlfd) cn = controlfd;
-	if (cn < clifd) cn = clifd;
-	if (cn < cluster_sockfd) cn = cluster_sockfd;
-	for (i = 0; i < config->num_radfds; i++)
-	{
-		if (!radfds[i]) continue;
-		FD_SET(radfds[i], &cr);
-		if (radfds[i] > cn)
-			cn = radfds[i];
-	}
+	FD_ZERO(&readset);
+	FD_SET(udpfd, &readset);
+	FD_SET(tunfd, &readset);
+	FD_SET(controlfd, &readset);
+	FD_SET(clifd, &readset);
+	if (cluster_sockfd) FD_SET(cluster_sockfd, &readset);
+	readset_n = udpfd;
+	if (tunfd > readset_n)          readset_n = tunfd;
+	if (controlfd > readset_n)      readset_n = controlfd;
+	if (clifd > readset_n)          readset_n = clifd;
+	if (cluster_sockfd > readset_n) readset_n = cluster_sockfd;
 
 	while (!main_quit || still_busy())
 	{
 		fd_set r;
-		int n = cn;
+		int n = readset_n;
 #ifdef BGP
 		fd_set w;
 		int bgp_set[BGP_NUM_PEERS];
@@ -2293,7 +2271,7 @@ void mainloop(void)
 			update_config();
 		}
 
-		memcpy(&r, &cr, sizeof(fd_set));
+		memcpy(&r, &readset, sizeof(fd_set));
 		to.tv_sec = 0;
 		to.tv_usec = 100000; // 1/10th of a second.
 
@@ -2325,7 +2303,8 @@ void mainloop(void)
 		TIME = now();
 		if (n < 0)
 		{
-			if (errno == EINTR)
+			if (errno == EINTR ||
+			    errno == ECHILD) // EINTR was clobbered by sigchild_handler()
 				continue;
 
 			log(0, 0, 0, 0, "Error returned from select(): %s\n", strerror(errno));
@@ -2358,9 +2337,11 @@ void mainloop(void)
 						break;
 				}
 			}
-			for (i = 0; i < config->num_radfds; i++)
-				if (FD_ISSET(radfds[i], &r))
-					processrad(buf, recv(radfds[i], buf, sizeof(buf), 0), i);
+
+			if (config->cluster_iam_master)
+				for (i = 0; i < config->num_radfds; i++)
+					if (FD_ISSET(radfds[i], &r))
+						processrad(buf, recv(radfds[i], buf, sizeof(buf), 0), i);
 
 			if (FD_ISSET(cluster_sockfd, &r))
 			{
@@ -2874,7 +2855,7 @@ void dump_acct_info()
 
 	for (i = 0; i < MAXSESSION; i++)
 	{
-		if (!session[i].opened || !session[i].ip || (!session[i].cin && !session[i].cout) || !*session[i].user || session[i].walled_garden)
+		if (!session[i].opened || !session[i].ip || !(session[i].cin || session[i].cout) || !*session[i].user || session[i].walled_garden)
 			continue;
 		if (!f)
 		{
@@ -2897,11 +2878,11 @@ void dump_acct_info()
 
 		log(4, 0, 0, 0, "Dumping accounting information for %s\n", session[i].user);
 		fprintf(f, "%s %s %d %u %u\n",
-		        session[i].user,		// username
-		        inet_toa(htonl(session[i].ip)),	// ip
-		        (session[i].throttle) ? 2 : 1,	// qos
-		        (u32)session[i].cin,		// uptxoctets
-		        (u32)session[i].cout);		// downrxoctets
+		        session[i].user,						// username
+		        inet_toa(htonl(session[i].ip)),					// ip
+		        (session[i].throttle_in || session[i].throttle_out) ? 2 : 1,	// qos
+		        (u32)session[i].cin,						// uptxoctets
+		        (u32)session[i].cout);						// downrxoctets
 
 		session[i].pin = session[i].cin = 0;
 		session[i].pout = session[i].cout = 0;
@@ -3599,10 +3580,9 @@ int sessionsetup(tunnelidt t, sessionidt s)
 		run_plugins(PLUGIN_NEW_SESSION, &data);
 	}
 
-	// Force throttling on or off (Actually : refresh the current throttling status)
-	// This has the advantage of cleaning up after another throttled user who may have left
-	// firewall rules lying around
-	throttle_session(s, session[s].throttle);
+	// Allocate TBFs if throttled
+	if (session[s].throttle_in || session[s].throttle_out)
+		throttle_session(s, session[s].throttle_in, session[s].throttle_out);
 
 	session[s].last_packet = time_now;
 
@@ -3690,6 +3670,12 @@ int load_session(sessionidt s, sessiont *new)
 	if (new->tunnel && s > config->cluster_highest_sessionid)	// Maintain this in the slave. It's used
 					// for walking the sessions to forward byte counts to the master.
 		config->cluster_highest_sessionid = s;
+
+	// TEMP: old session struct used a u32 to define the throttle
+	// speed for both up/down, new uses a u16 for each.  Deal with
+	// sessions from an old master for migration.
+	if (new->throttle_out == 0 && new->tbf_out)
+		new->throttle_out = new->throttle_in;
 
 	memcpy(&session[s], new, sizeof(session[s]));	// Copy over..
 
@@ -3946,19 +3932,33 @@ tunnelidt new_tunnel()
 //
 void become_master(void)
 {
-	int s;
+	int s, i;
 	run_plugins(PLUGIN_BECOME_MASTER, NULL);
 
-	for (s = 1; s <= config->cluster_highest_sessionid ; ++s)
+	// running a bunch of iptables commands is slow and can cause
+	// the master to drop tunnels on takeover--kludge around the
+	// problem by forking for the moment (note: race)
+	if (!fork_and_close())
 	{
-		if (!session[s].tunnel) // Not an in-use session.
-			continue;
+		for (s = 1; s <= config->cluster_highest_sessionid ; ++s)
+		{
+			if (!session[s].tunnel) // Not an in-use session.
+				continue;
 
-		run_plugins(PLUGIN_NEW_SESSION_MASTER, &session[s]);
+			run_plugins(PLUGIN_NEW_SESSION_MASTER, &session[s]);
+		}
+		exit(0);
+	}
+
+	// add radius fds
+	for (i = 0; i < config->num_radfds; i++)
+	{
+		if (!radfds[i]) continue;
+		FD_SET(radfds[i], &readset);
+		if (radfds[i] > readset_n)
+			readset_n = radfds[i];
 	}
 }
-
-
 
 int cmd_show_hist_idle(struct cli_def *cli, char *command, char **argv, int argc)
 {

@@ -12,6 +12,8 @@
 - Shared_malloc returns NULL on failure
 - Sync changes
 - Unfsck 4->8 indenting change
+- Use 2 seperate u16 values for throttle rate in/out
+- Defer adding radius fds to the select loop until become_master
 
 * Thu Sep 02 2004 David Parrish <david@dparrish.com> 2.0.2
 - Combined LCP patches from Iain and Yuri. This should allow Windows 2k/XP

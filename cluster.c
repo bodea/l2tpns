@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.14 2004-10-30 07:35:00 bodea Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.15 2004-11-02 04:35:03 bodea Exp $";
 
 #include <stdio.h>
 #include <sys/file.h>
@@ -589,7 +589,7 @@ void cluster_check_master(void)
 
 
 		session[i].tbf_in = session[i].tbf_out = 0; // Remove stale pointers from old master.
-		throttle_session(i, session[i].throttle);
+		throttle_session(i, session[i].throttle_in, session[i].throttle_out);
 
 		if (session[i].tunnel != T_FREE && i > config->cluster_highest_sessionid)
 			config->cluster_highest_sessionid = i;

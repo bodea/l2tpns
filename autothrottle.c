@@ -34,13 +34,13 @@ int plugin_radius_response(struct param_radius_response *data)
 				switch (i)
 				{
 					case 2: // output
-						data->s->throttle |= (rate & 0xFFFF);
+						data->s->throttle_out = rate;
 						free(pt);
 						p->log(3, 0, p->get_id_by_session(data->s), data->s->tunnel, "      Set output throttle rate %dkb/s\n", rate);
 						return PLUGIN_RET_OK;
 
 					case 3: //input
-						data->s->throttle |= (rate << 16);
+						data->s->throttle_in = rate;
 						free(pt);
 						p->log(3, 0, p->get_id_by_session(data->s), data->s->tunnel, "      Set input throttle rate %dkb/s\n", rate);
 						return PLUGIN_RET_OK;
@@ -66,12 +66,12 @@ int plugin_radius_response(struct param_radius_response *data)
 		if (strcmp(data->value, "yes") == 0)
 		{
 			p->log(3, 0, p->get_id_by_session(data->s), data->s->tunnel, "         Throttling user\n");
-			data->s->throttle = 1;
+			data->s->throttle_in = data->s->throttle_out = config->rl_rate;
 		}
 		else if (strcmp(data->value, "no") == 0)
 		{
 			p->log(3, 0, p->get_id_by_session(data->s), data->s->tunnel, "         Not throttling user\n");
-			data->s->throttle = 0;
+			data->s->throttle_in = data->s->throttle_out = 0;
 		}
 	}
 

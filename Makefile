@@ -121,7 +121,7 @@ md5.o: md5.c md5.h
 ppp.o: ppp.c l2tpns.h constants.h plugin.h util.h tbf.h cluster.h
 radius.o: radius.c md5.h constants.h l2tpns.h plugin.h util.h
 tbf.o: tbf.c l2tpns.h util.h tbf.h
-util.o: util.c l2tpns.h
+util.o: util.c l2tpns.h bgp.h
 garden.so: garden.c l2tpns.h plugin.h control.h
 autothrottle.so: autothrottle.c l2tpns.h plugin.h control.h
 autosnoop.so: autosnoop.c l2tpns.h plugin.h control.h

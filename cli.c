@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.19 2004-10-30 07:35:31 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.20 2004-11-02 04:35:03 bodea Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -10,7 +10,6 @@ char const *cvs_id_cli = "$Id: cli.c,v 1.19 2004-10-30 07:35:31 bodea Exp $";
 #include <sys/stat.h>
 #include <syslog.h>
 #include <malloc.h>
-#include <sched.h>
 #include <string.h>
 #include <ctype.h>
 #include <stdlib.h>
@@ -39,8 +38,6 @@ extern ippoolt *ip_address_pool;
 extern struct Tstats *_statistics;
 struct cli_def *cli = NULL;
 int cli_quit = 0;
-extern int clifd, udpfd, tunfd, snoopfd, ifrfd, cluster_sockfd;
-extern int *radfds;
 extern struct configt *config;
 extern struct config_descriptt config_values[];
 #ifdef RINGBUFFER
@@ -237,52 +234,11 @@ void init_cli(char *hostname)
 
 void cli_do(int sockfd)
 {
-	int i;
 	int require_auth = 1;
 	struct sockaddr_in addr;
 	int l = sizeof(addr);
 
-	if (fork()) return;
-	if (config->scheduler_fifo)
-	{
-		int ret;
-		struct sched_param params = {0};
-		params.sched_priority = 0;
-		if ((ret = sched_setscheduler(0, SCHED_OTHER, &params)) == 0)
-		{
-			log(3, 0, 0, 0, "Dropped FIFO scheduler\n");
-		}
-		else
-		{
-			log(0, 0, 0, 0, "Error setting scheduler to OTHER: %s\n", strerror(errno));
-			log(0, 0, 0, 0, "This is probably really really bad.\n");
-		}
-	}
-
-	signal(SIGPIPE, SIG_DFL);
-	signal(SIGCHLD, SIG_DFL);
-	signal(SIGHUP, SIG_DFL);
-	signal(SIGUSR1, SIG_DFL);
-	signal(SIGQUIT, SIG_DFL);
-	signal(SIGKILL, SIG_DFL);
-	signal(SIGALRM, SIG_DFL);
-	signal(SIGTERM, SIG_DFL);
-
-	// Close sockets
-	if (udpfd) close(udpfd); udpfd = 0;
-	if (tunfd) close(tunfd); tunfd = 0;
-	if (snoopfd) close(snoopfd); snoopfd = 0;
-	for (i = 0; i < config->num_radfds; i++)
-		if (radfds[i]) close(radfds[i]);
-	if (ifrfd) close(ifrfd); ifrfd = 0;
-	if (cluster_sockfd) close(cluster_sockfd); cluster_sockfd = 0;
-	if (clifd) close(clifd); clifd = 0;
-#ifdef BGP
-	for (i = 0; i < BGP_NUM_PEERS; i++)
-		if (bgp_peers[i].sock != -1)
-			close(bgp_peers[i].sock);
-#endif /* BGP */
-
+	if (fork_and_close()) return;
 	if (getpeername(sockfd, (struct sockaddr *)&addr, &l) == 0)
 	{
 		log(3, 0, 0, 0, "Accepted connection to CLI from %s\n", inet_toa(addr.sin_addr.s_addr));
@@ -412,8 +368,18 @@ int cmd_show_session(struct cli_def *cli, char *command, char **argv, int argc)
 				cli_print(cli, "	Intercepted:	%s:%d", inet_toa(session[s].snoop_ip), session[s] .snoop_port);
 			else
 				cli_print(cli, "	Intercepted:	no");
-			cli_print(cli, "	Throttled:	%s", session[s].throttle ? "YES" : "no");
+
 			cli_print(cli, "	Walled Garden:	%s", session[s].walled_garden ? "YES" : "no");
+			{
+				int t = (session[s].throttle_in || session[s].throttle_out);
+				cli_print(cli, "	Throttled:	%s%s%.0d%s%s%.0d%s%s",
+					t ? "YES" : "no", t ? " (" : "",
+					session[s].throttle_in, session[s].throttle_in ? "kbps" : t ? "-" : "",
+					t ? "/" : "",
+					session[s].throttle_out, session[s].throttle_out ? "kbps" : t ? "-" : "",
+					t ? ")" : "");
+			}
+
 			b_in = session[s].tbf_in;
 			b_out = session[s].tbf_out;
 			if (b_in || b_out)
@@ -454,7 +420,7 @@ int cmd_show_session(struct cli_def *cli, char *command, char **argv, int argc)
 	}
 
 	// Show Summary
-	cli_print(cli, "  %s %4s %-32s %-15s %s %s %s %10s %10s %10s %4s %-15s %s",
+	cli_print(cli, "%5s %4s %-32s %-15s %s %s %s %10s %10s %10s %4s %-15s %s",
 			"SID",
 			"TID",
 			"Username",
@@ -481,7 +447,7 @@ int cmd_show_session(struct cli_def *cli, char *command, char **argv, int argc)
 				session[i].user[0] ? session[i].user : "*",
 				userip,
 				(session[i].snoop_ip && session[i].snoop_port) ? "Y" : "N",
-				(session[i].throttle) ? "Y" : "N",
+				(session[i].throttle_in || session[i].throttle_out) ? "Y" : "N",
 				(session[i].walled_garden) ? "Y" : "N",
 				abs(time_now - (unsigned long)session[i].opened),
 				(unsigned long)session[i].total_cout,
@@ -983,17 +949,26 @@ int cmd_show_throttle(struct cli_def *cli, char *command, char **argv, int argc)
 	if (CLI_HELP_REQUESTED)
 		return CLI_HELP_NO_ARGS;
 
-	cli_print(cli, "Token bucket filters:");
-	cli_print(cli, "%-6s %8s %-4s", "ID", "Handle", "Used");
+	cli_print(cli, "%5s %4s %-32s %7s %6s %6s %6s",
+			"SID",
+			"TID",
+			"Username",
+			"Rate In",
+			"Out",
+			"TBFI",
+			"TBFO");
+
 	for (i = 0; i < MAXSESSION; i++)
 	{
-		if (!session[i].throttle)
-			continue;
-
-		cli_print(cli, "%-6d %8d %8d",
-			i,
-			session[i].tbf_in,
-			session[i].tbf_out);
+		if (session[i].throttle_in || session[i].throttle_out)
+			cli_print(cli, "%5d %4d %-32s  %6d %6d %6d %6d",
+				i,
+				session[i].tunnel,
+				session[i].user,
+				session[i].throttle_in,
+				session[i].throttle_out,
+				session[i].tbf_in,
+				session[i].tbf_out);
 	}
 
 	return CLI_OK;
@@ -1275,21 +1250,42 @@ int cmd_throttle(struct cli_def *cli, char *command, char **argv, int argc)
 	int rate_out = 0;
 	sessionidt s;
 
+	/*
+	   throttle USER                   - throttle in/out to default rate
+	   throttle USER RATE              - throttle in/out to default rate
+	   throttle USER in RATE           - throttle input only
+	   throttle USER out RATE          - throttle output only
+	   throttle USER in RATE out RATE  - throttle both
+	 */
+
 	if (CLI_HELP_REQUESTED)
 	{
 		switch (argc)
 		{
 		case 1:
-			return cli_arg_help(cli, 0, "user", "Username of session to throttle", NULL);
+			return cli_arg_help(cli, 0,
+				"USER", "Username of session to throttle", NULL);
 
 		case 2:
-			return cli_arg_help(cli, 1, "rate", "Incoming rate in kb/s", NULL);
+			return cli_arg_help(cli, 1,
+				"RATE", "Rate in kbps (in and out)",
+				"in",   "Select incoming rate",
+				"out",  "Select outgoing rate", NULL);
+
+		case 4:
+			return cli_arg_help(cli, 1,
+				"in",   "Select incoming rate",
+				"out",  "Select outgoing rate", NULL);
 
 		case 3:
-			return cli_arg_help(cli, 1, "rate", "Outgoing rate in kb/s", NULL);
+			if (isdigit(argv[1][0]))
+				return cli_arg_help(cli, 1, NULL);
+
+		case 5:
+			return cli_arg_help(cli, 0, "RATE", "Rate in kbps", NULL);
 
 		default:
-			return cli_arg_help(cli, argc > 1, "user", "Username of session to throttle", NULL);
+			return cli_arg_help(cli, argc > 1, NULL);
 		}
 	}
 
@@ -1305,24 +1301,71 @@ int cmd_throttle(struct cli_def *cli, char *command, char **argv, int argc)
 		return CLI_OK;
 	}
 
-	rate_in = rate_out = config->rl_rate;
-	if (argc >= 2) rate_in = atoi(argv[1]);
-	if (argc >= 3) rate_out = atoi(argv[2]);
-
 	if (!(s = sessionbyuser(argv[0])))
 	{
 		cli_print(cli, "User %s is not connected", argv[0]);
 		return CLI_OK;
 	}
 
-	if (session[s].throttle)
+	if (argc == 1)
+	{
+		rate_in = rate_out = config->rl_rate;
+	}
+	else if (argc == 2)
+	{
+		rate_in = rate_out = atoi(argv[1]);
+		if (rate_in < 1)
+		{
+			cli_print(cli, "Invalid rate \"%s\"", argv[1]);
+			return CLI_OK;
+		}
+	}
+	else if (argc == 3 || argc == 5)
+	{
+		int i;
+		for (i = 1; i < argc - 1; i += 2)
+		{
+			int len = strlen(argv[i]);
+			int r = 0;
+			if (!strncasecmp(argv[i], "in", len))
+				r = rate_in = atoi(argv[i+1]);
+			else if (!strncasecmp(argv[i], "out", len))
+				r = rate_out = atoi(argv[i+1]);
+
+			if (r < 1)
+			{
+				cli_print(cli, "Invalid rate specification \"%s %s\"", argv[i], argv[i+1]);
+				return CLI_OK;
+			}
+		}
+	}
+	else
+	{
+		cli_print(cli, "Invalid arguments");
+		return CLI_OK;
+	}
+
+	if ((rate_in && session[s].throttle_in) || (rate_out && session[s].throttle_out))
 	{
 		cli_print(cli, "User %s already throttled, unthrottle first", argv[0]);
 		return CLI_OK;
 	}
 
+	cli_session_actions[s].throttle_in = cli_session_actions[s].throttle_out = -1;
+	if (rate_in && session[s].throttle_in != rate_in)
+		cli_session_actions[s].throttle_in = rate_in;
+
+	if (rate_out && session[s].throttle_out != rate_out)
+		cli_session_actions[s].throttle_out = rate_out;
+
+	if (cli_session_actions[s].throttle_in == -1 &&
+	    cli_session_actions[s].throttle_out == -1)
+	{
+		cli_print(cli, "User %s already throttled at this rate", argv[0]);
+		return CLI_OK;
+	}
+
 	cli_print(cli, "Throttling user %s", argv[0]);
-	cli_session_actions[s].throttle = rate_in << 16 | rate_out;
 	cli_session_actions[s].action |= CLI_SESS_THROTTLE;
 
 	return CLI_OK;
@@ -1357,14 +1400,15 @@ int cmd_no_throttle(struct cli_def *cli, char *command, char **argv, int argc)
 			continue;
 		}
 
-		if (!session[s].throttle)
+		if (session[s].throttle_in || session[s].throttle_out)
+		{
+			cli_print(cli, "Unthrottling user %s", argv[i]);
+			cli_session_actions[s].action |= CLI_SESS_NOTHROTTLE;
+		}
+		else
 		{
 			cli_print(cli, "User %s not throttled", argv[i]);
-			continue;
 		}
-
-		cli_print(cli, "Unthrottling user %s", argv[i]);
-		cli_session_actions[s].action |= CLI_SESS_NOTHROTTLE;
 	}
 
 	return CLI_OK;

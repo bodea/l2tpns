@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.25 2004-10-30 07:17:41 bodea Exp $
+// $Id: l2tpns.h,v 1.26 2004-11-02 04:35:04 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -122,7 +122,8 @@ struct cli_session_actions {
 	char action;
 	ipt snoop_ip;
 	u16 snoop_port;
-	int throttle;
+	int throttle_in;
+	int throttle_out;
 };
 
 #define CLI_SESS_KILL		0x01
@@ -172,7 +173,8 @@ typedef struct sessions
 	u32 total_cin;			// This counter is never reset while a session is open
 	u32 total_cout;			// This counter is never reset while a session is open
 	u32 id;				// session id
-	u32 throttle;			// non-zero if this session is throttled.
+	u16 throttle_in;		// upstream throttle rate (kbps)
+	u16 throttle_out;		// downstream throttle rate
 	clockt opened;			// when started
 	clockt die;			// being closed, when to finally free
 	time_t last_packet;		// Last packet from the user (used for idle timeouts)
@@ -419,7 +421,7 @@ struct configt
 
 	ipt		default_dns1, default_dns2;
 
-	unsigned long	rl_rate;			// throttle rate
+	unsigned long	rl_rate;			// default throttle rate
 	int		num_tbfs;			// number of throttle buckets
 
 	int		save_state;
@@ -565,7 +567,7 @@ void host_unreachable(ipt destination, u16 id, ipt source, char *packet, int pac
 void fix_address_pool(int sid);
 void rebuild_address_pool(void);
 void send_ipin(sessionidt s, u8 * buf, int len);
-int throttle_session(sessionidt s, int throttle);
+void throttle_session(sessionidt s, int rate_in, int rate_out);
 int load_session(sessionidt, sessiont *);
 void become_master(void);	// We're the master; kick off any required master initializations.
 extern tunnelt *tunnel;
@@ -597,6 +599,7 @@ extern u32 last_id;
 extern struct Tstats *_statistics;
 extern ipt my_address;
 extern int tun_write(u8 *data, int size);
+extern int clifd;
 
 
 #define TIME (config->current_time)
