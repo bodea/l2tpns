@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.63 2004-12-09 00:50:45 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.64 2004-12-09 13:05:00 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -2369,7 +2369,7 @@ static void mainloop(void)
 				int cli;
 				
 				alen = sizeof(addr);
-				if ((cli = accept(clifd, (struct sockaddr *)&addr, &len)) >= 0)
+				if ((cli = accept(clifd, (struct sockaddr *)&addr, &alen)) >= 0)
 				{
 					cli_do(cli);
 					close(cli);
