@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.28 2004-09-20 23:34:35 fred_nerk Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.29 2004-09-23 03:59:09 fred_nerk Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -2180,8 +2180,7 @@ int regular_cleanups(void)
 			if (++count >= MAX_ACTIONS) break;
 		}
 	}
-
-	if (config->accounting_dir && next_acct <= TIME)
+	if (*config->accounting_dir && next_acct <= TIME)
 	{
 		// Dump accounting data
 		next_acct = TIME + ACCT_TIME;
@@ -2464,12 +2463,12 @@ void initdata(void)
 	int i;
 	char *p;
 
-	if ((_statistics = shared_malloc(sizeof(struct Tstats))) == MAP_FAILED)
+	if (!(_statistics = shared_malloc(sizeof(struct Tstats))))
 	{
 		log(0, 0, 0, 0, "Error doing malloc for _statistics: %s\n", strerror(errno));
 		exit(1);
 	}
-	if ((config = shared_malloc(sizeof(struct configt))) == MAP_FAILED)
+	if (!(config = shared_malloc(sizeof(struct configt))))
 	{
 		log(0, 0, 0, 0, "Error doing malloc for configuration: %s\n", strerror(errno));
 		exit(1);
@@ -2477,37 +2476,37 @@ void initdata(void)
 	memset(config, 0, sizeof(struct configt));
 	time(&config->start_time);
 	strncpy(config->config_file, CONFIGFILE, sizeof(config->config_file) - 1);
-	if ((tunnel = shared_malloc(sizeof(tunnelt) * MAXTUNNEL)) == MAP_FAILED);
+	if (!(tunnel = shared_malloc(sizeof(tunnelt) * MAXTUNNEL)))
 	{
 		log(0, 0, 0, 0, "Error doing malloc for tunnels: %s\n", strerror(errno));
 		exit(1);
 	}
-	if ((session = shared_malloc(sizeof(sessiont) * MAXSESSION)) == MAP_FAILED)
+	if (!(session = shared_malloc(sizeof(sessiont) * MAXSESSION)))
 	{
 		log(0, 0, 0, 0, "Error doing malloc for sessions: %s\n", strerror(errno));
 		exit(1);
 	}
 
-	if ((sess_count = shared_malloc(sizeof(sessioncountt) * MAXSESSION)) == MAP_FAILED)
+	if (!(sess_count = shared_malloc(sizeof(sessioncountt) * MAXSESSION)))
 	{
 		log(0, 0, 0, 0, "Error doing malloc for sessions_count: %s\n", strerror(errno));
 		exit(1);
 	}
 
-	if ((radius = shared_malloc(sizeof(radiust) * MAXRADIUS)) == MAP_FAILED)
+	if (!(radius = shared_malloc(sizeof(radiust) * MAXRADIUS)))
 	{
 		log(0, 0, 0, 0, "Error doing malloc for radius: %s\n", strerror(errno));
 		exit(1);
 	}
 
-	if ((ip_address_pool = shared_malloc(sizeof(ippoolt) * MAXIPPOOL)) == MAP_FAILED)
+	if (!(ip_address_pool = shared_malloc(sizeof(ippoolt) * MAXIPPOOL)))
 	{
 		log(0, 0, 0, 0, "Error doing malloc for ip_address_pool: %s\n", strerror(errno));
 		exit(1);
 	}
 
 #ifdef RINGBUFFER
-	if ((ringbuffer = shared_malloc(sizeof(struct Tringbuffer))) == MAP_FAILED)
+	if (!(ringbuffer = shared_malloc(sizeof(struct Tringbuffer))))
 	{
 		log(0, 0, 0, 0, "Error doing malloc for ringbuffer: %s\n", strerror(errno));
 		exit(1);
@@ -2515,16 +2514,14 @@ void initdata(void)
 	memset(ringbuffer, 0, sizeof(struct Tringbuffer));
 #endif
 
-	if ((cli_session_actions = shared_malloc(sizeof(struct cli_session_actions) * MAXSESSION))
-			== MAP_FAILED)
+	if (!(cli_session_actions = shared_malloc(sizeof(struct cli_session_actions) * MAXSESSION)))
 	{
 		log(0, 0, 0, 0, "Error doing malloc for cli session actions: %s\n", strerror(errno));
 		exit(1);
 	}
 	memset(cli_session_actions, 0, sizeof(struct cli_session_actions) * MAXSESSION);
 
-	if ((cli_tunnel_actions = shared_malloc(sizeof(struct cli_tunnel_actions) * MAXSESSION))
-			== MAP_FAILED)
+	if (!(cli_tunnel_actions = shared_malloc(sizeof(struct cli_tunnel_actions) * MAXSESSION)))
 	{
 		log(0, 0, 0, 0, "Error doing malloc for cli tunnel actions: %s\n", strerror(errno));
 		exit(1);
@@ -2557,7 +2554,7 @@ void initdata(void)
 	_statistics->start_time = _statistics->last_reset = time(NULL);
 
 #ifdef BGP
-	if ((bgp_peers = shared_malloc(sizeof(struct bgp_peer) * BGP_NUM_PEERS)) == MAP_FAILED)
+	if (!(bgp_peers = shared_malloc(sizeof(struct bgp_peer) * BGP_NUM_PEERS)))
 	{
 		log(0, 0, 0, 0, "Error doing malloc for bgp: %s\n", strerror(errno));
 		exit(1);
