@@ -12,9 +12,10 @@ BuildRequires: libcli >= 1.8.2
 Requires: libcli >= 1.8.2
 
 %description
-A L2TP LNS which does not require l2tpd, pppd or any kernel patches. Can support
-up to 65535 active sessions on a single box. Also supports ISP features like
-speed throttling, walled garden, usage accounting, and more.
+l2tpns is a layer 2 tunneling protocol network server (LNS).  It
+supports up to 65535 concurrent sessions per server/cluster plus ISP
+features such as rate limiting, walled garden, usage accounting, and
+more.
 
 %prep
 %setup -q
