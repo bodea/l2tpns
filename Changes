@@ -1,6 +1,11 @@
-? Brendan O'Dea <bod@optusnet.com.au> 2.0.4
+* Mon Nov 8 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.4
 - Added setrxspeed plugin
 - Added peer_address config option
+- Rename wrapper macros to LOG()/LOG_HEX(), use p->log() in plugins
+- Replace some PPP{PAP,CHAP} magic numebrs with constants
+- Nak asyncmap (unless == 0)
+- Bundle ConfigRej options
+- Clean up initlcp handling
 
 * Wed Nov 3 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.3
 - Added support for hidden AVPs by Robert Clark
