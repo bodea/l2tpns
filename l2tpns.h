@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.50 2004-12-18 01:20:05 bodea Exp $
+// $Id: l2tpns.h,v 1.49.2.1 2005-01-06 01:39:23 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -15,7 +15,7 @@
 #include <sys/types.h>
 #include <libcli.h>
 
-#define VERSION	"2.1.0"
+#define VERSION	"2.0.14"
 
 // Limits
 #define MAXTUNNEL	500		// could be up to 65535
@@ -81,16 +81,14 @@
 #define	L2TPPORT	1701		// L2TP port
 #define RADPORT		1645		// old radius port...
 #define	PKTARP		0x0806		// ARP packet type
-#define	PKTIP		0x0800		// IPv4 packet type
-#define	PKTIPV6		0x86DD		// IPv6 packet type
+#define	PKTIP		0x0800		// IP packet type
+#define PSEUDOMAC	0x0200		// pseudo MAC prefix (local significant MAC)
 #define	PPPPAP		0xC023
 #define	PPPCHAP		0xC223
 #define	PPPLCP		0xC021
 #define	PPPIPCP		0x8021
-#define	PPPIPV6CP	0x8057
 #define	PPPCCP		0x80FD
 #define PPPIP		0x0021
-#define PPPIPV6		0x0057
 #define PPPMP		0x003D
 #define MIN_IP_SIZE	0x19
 enum
@@ -210,8 +208,6 @@ sessiont;
 #define SF_IPCP_ACKED	1	// Has this session seen an IPCP Ack?
 #define SF_LCP_ACKED	2	// LCP negotiated
 #define SF_CCP_ACKED	4	// CCP negotiated
-#define SF_IPV6CP_ACKED	8	// IPv6 negotiated
-#define SF_IPV6_NACKED	16	// IPv6 rejected
 
 typedef struct
 {
@@ -484,7 +480,7 @@ typedef struct
 #endif
 } configt;
 
-enum config_typet { INT, STRING, UNSIGNED_LONG, SHORT, BOOL, IPv4, IPv6, MAC };
+enum config_typet { INT, STRING, UNSIGNED_LONG, SHORT, BOOL, IP, MAC };
 typedef struct
 {
 	char *key;

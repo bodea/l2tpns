@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.28 2004-12-22 05:30:58 bodea Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.26.2.1 2005-01-06 01:39:23 bodea Exp $";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -38,12 +38,11 @@ char const *cvs_id_cluster = "$Id: cluster.c,v 1.28 2004-12-22 05:30:58 bodea Ex
  */
 
 // Module variables.
-int cluster_sockfd = 0;			// The filedescriptor for the cluster communications port.
+int cluster_sockfd = 0;		// The filedescriptor for the cluster communications port.
 
 in_addr_t my_address = 0;		// The network address of my ethernet port.
 static int walk_session_number = 0;	// The next session to send when doing the slow table walk.
 static int walk_tunnel_number = 0;	// The next tunnel to send when doing the slow table walk.
-int forked = 0;				// Sanity check: CLI must not diddle with heartbeat table
 
 #define MAX_HEART_SIZE (8192)	// Maximum size of heartbeat packet. Must be less than max IP packet size :)
 #define MAX_CHANGES  (MAX_HEART_SIZE/(sizeof(sessiont) + sizeof(int) ) - 2)	// Assumes a session is the biggest type!
@@ -864,11 +863,6 @@ int cluster_send_session(int sid)
 {
 	if (!config->cluster_iam_master) {
 		LOG(0, sid, 0, "I'm not a master, but I just tried to change a session!\n");
-		return -1;
-	}
-
-	if (forked) {
-		LOG(0, sid, 0, "cluster_send_session called from child process!\n");
 		return -1;
 	}
 
