@@ -2,7 +2,7 @@ Brief Installation guide for L2TPNS
 
 1. Requirements
 
-  * libcli 1.7.0 or greater
+  * libcli 1.8.0 or greater
     You can get it from http://sourceforge.net/projects/libcli.
 
   * A kernel with iptables support.
