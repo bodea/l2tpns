@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.39 2004-12-03 06:41:11 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.40 2004-12-15 03:09:56 bodea Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -22,6 +22,7 @@ char const *cvs_id_cli = "$Id: cli.c,v 1.39 2004-12-03 06:41:11 bodea Exp $";
 #include <unistd.h>
 #include <dlfcn.h>
 #include <libcli.h>
+#include <netdb.h>
 #include "l2tpns.h"
 #include "util.h"
 #include "cluster.h"
@@ -29,7 +30,6 @@ char const *cvs_id_cli = "$Id: cli.c,v 1.39 2004-12-03 06:41:11 bodea Exp $";
 #include "ll.h"
 #ifdef BGP
 #include "bgp.h"
-#include <netdb.h>
 #endif
 
 extern tunnelt *tunnel;
