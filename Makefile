@@ -28,18 +28,24 @@ INCLUDES = -I.
 CPPFLAGS = $(INCLUDES) $(DEFINES)
 CFLAGS = -Wall $(OPTIM)
 LDFLAGS =
-LDLIBS = -lm
+LDLIBS =
 INSTALL = install -c -D -o root -g root
+
+l2tpns.LIBS = -lm -lcli -ldl
 
 OBJS = arp.o bgp.o cli.o cluster.o constants.o control.o icmp.o \
     l2tpns.o ll.o md5.o ppp.o radius.o tbf.o util.o
 
+PROGRAMS = l2tpns nsctl
 PLUGINS = garden.so throttlectl.so autothrottle.so snoopctl.so \
     autosnoop.so stripdomain.so setrxspeed.so
 
-TARGETS = l2tpns nsctl generateload bounce $(PLUGINS)
+TESTS = generateload bounce 
 
-all: $(TARGETS)
+all: programs plugins tests
+programs: $(PROGRAMS)
+plugins: $(PLUGINS)
+tests: $(TESTS)
 
 clean:
 	rm -f *.o test/*.o $(TARGETS) Makefile.tmp Makefile.bak
@@ -52,16 +58,16 @@ depend:
 	mv Makefile.tmp Makefile
 
 l2tpns:	$(OBJS)
-	$(LD) $(LDFLAGS) -o $@ $^ $(LDLIBS) -lcli -ldl
+	$(LD) $(LDFLAGS) -o $@ $^ $(LDLIBS) $($@.LIBS)
 
 nsctl:	nsctl.o control.o
-	$(LD) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+	$(LD) $(LDFLAGS) -o $@ $^ $(LDLIBS) $($@.LIBS)
 
 generateload:	test/generateload.o
-	$(LD) $(LDFLAGS) -o $@ $^ # -lpthread
+	$(LD) $(LDFLAGS) -o $@ $^ $(LDLIBS) $($@.LIBS)
 
 bounce:	test/bounce.o
-	$(LD) $(LDFLAGS) -o $@ $^
+	$(LD) $(LDFLAGS) -o $@ $^ $(LDLIBS) $($@.LIBS)
 
 %.o: %.c
 	$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<

@@ -231,8 +231,6 @@ void sigint(int signal);
 void clean_shutdown();
 void print_report();
 
-pthread_t pthread_reader;
-
 int ns = 0, nr = 0;
 int udpfd;
 int t = 0;
