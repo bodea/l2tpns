@@ -39,7 +39,8 @@
 - Add result/error codes to CDN when shutting down sessions.  Sends 2/7
   (general error, try another LNS) when out of IP addresses, and 3
   (adminstrative) for everything else (suggestion from Chris Gates).
-- sessionshutdown: only send RADIUS stop when there's an ip address.
+- Only send RADIUS stop record in sessionshutdown when there's an ip address.
+- Reset .die on master takeover.
 
 * Fri Dec 17 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.13
 - Better cluster master collision resolution: keep a counter of state
