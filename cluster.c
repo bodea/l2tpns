@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.4 2004-06-28 02:43:13 fred_nerk Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.5 2004-07-02 07:30:43 bodea Exp $";
 
 #include <stdio.h>
 #include <sys/file.h>
@@ -343,6 +343,7 @@ static void send_heartbeat(int seq, char * data, int size)
     if (size > sizeof(past_hearts[0].data)) {
 	log(0,0,0,0, "Tried to heartbeat something larger than the maximum packet!\n");
 	kill(0, SIGTERM);
+	exit(1);
     }
     i = seq % HB_HISTORY_SIZE;
     past_hearts[i].seq = seq;
@@ -770,8 +771,8 @@ void cluster_heartbeat(int highsession, int freesession, int hightunnel)
 		kill(0, SIGTERM);
 	}
 
-	log(3,0,0,0, "Sending heartbeat with %d changes (%d x-sess, %d x-tunnels, %d highsess, %d hightun size %d)\n",
-			config->cluster_num_changes, count, tcount, config->cluster_highest_sessionid,
+	log(3,0,0,0, "Sending heartbeat #%d with %d changes (%d x-sess, %d x-tunnels, %d highsess, %d hightun size %d)\n",
+			h.seq, config->cluster_num_changes, count, tcount, config->cluster_highest_sessionid,
 			config->cluster_highest_tunnelid, (p-buff));
 
 	config->cluster_num_changes = 0;
@@ -1068,16 +1069,18 @@ static int cluster_process_heartbeat_v2(u8 * data, int size, int more, u8 * p, u
 
 		log(0,0,0,0, "I just got a packet claiming to be from a master but _I_ am the master!\n");
 		if (!h->basetime) {
-			log(0,0,0,0, "Heartbeat from addr %s with zero basetime!\n", inet_toa(htonl(addr)) );
+			log(0,0,0,0, "Heartbeat from addr %s with zero basetime!\n", inet_toa(addr) );
 			return -1; // Skip it.
 		}
 		if (basetime > h->basetime) {
-			log(0,0,0,0, "They're (%s) an older master than me so I'm gone!\n", inet_toa(htonl(addr)));
+			log(0,0,0,0, "They're (%s) an older master than me so I'm gone!\n", inet_toa(addr));
 			kill(0, SIGTERM);
+			exit(1);
 		}
 		if (basetime == h->basetime && my_address < addr) { // Tie breaker.
 			log(0,0,0,0, "They're a higher IP address than me, so I'm gone!\n");
 			kill(0, SIGTERM);
+			exit(1);
 		}
 		return -1; // Skip it.
 	}

@@ -2,7 +2,7 @@
 // vim: sw=4 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.6 2004-06-28 02:43:13 fred_nerk Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.7 2004-07-02 07:30:43 bodea Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -171,13 +171,13 @@ void init_cli()
     c = cli_register_command(cli, NULL, "restart", NULL, PRIVILEGE_PRIVILEGED, MODE_EXEC, NULL);
     cli_register_command(cli, c, "bgp", cmd_restart_bgp, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Restart BGP");
 
-    c = cli_register_command(cli, NULL, "load", NULL, PRIVILEGE_PRIVILEGED, MODE_EXEC, NULL);
-    cli_register_command(cli, c, "plugin", cmd_load_plugin, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Load a plugin");
+    c = cli_register_command(cli, NULL, "load", NULL, PRIVILEGE_PRIVILEGED, MODE_CONFIG, NULL);
+    cli_register_command(cli, c, "plugin", cmd_load_plugin, PRIVILEGE_PRIVILEGED, MODE_CONFIG, "Load a plugin");
 
-    c = cli_register_command(cli, NULL, "remove", NULL, PRIVILEGE_PRIVILEGED, MODE_EXEC, NULL);
-    cli_register_command(cli, c, "plugin", cmd_remove_plugin, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Remove a plugin");
+    c = cli_register_command(cli, NULL, "remove", NULL, PRIVILEGE_PRIVILEGED, MODE_CONFIG, NULL);
+    cli_register_command(cli, c, "plugin", cmd_remove_plugin, PRIVILEGE_PRIVILEGED, MODE_CONFIG, "Remove a plugin");
 
-    cli_register_command(cli, NULL, "set", cmd_set, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Set a configuration variable");
+    cli_register_command(cli, NULL, "set", cmd_set, PRIVILEGE_PRIVILEGED, MODE_CONFIG, "Set a configuration variable");
 
     // Enable regular processing
     cli_regular(cli, regular_stuff);
@@ -204,9 +204,9 @@ void init_cli()
 	    }
 	    else
 	    {
-	    cli_allow_user(cli, buf, p);
-	    log(3, 0, 0, 0, "Allowing user %s to connect to the CLI\n", buf);
-	}
+		cli_allow_user(cli, buf, p);
+		log(3, 0, 0, 0, "Allowing user %s to connect to the CLI\n", buf);
+	    }
 	}
 	fclose(f);
     }
@@ -331,7 +331,7 @@ void cli_do_file(FILE *fh)
 {
     log(3, 0, 0, 0, "Reading configuration file\n");
     cli_print_callback(cli, cli_print_log);
-    cli_file(cli, fh, PRIVILEGE_PRIVILEGED);
+    cli_file(cli, fh, PRIVILEGE_PRIVILEGED, MODE_CONFIG);
     cli_print_callback(cli, NULL);
 }
 
@@ -455,7 +455,7 @@ int cmd_show_session(struct cli_def *cli, char *command, char **argv, int argc)
 		(unsigned long)session[i].total_cout,
 		(unsigned long)session[i].total_cin,
 		abs(time_now - (session[i].last_packet ? session[i].last_packet : time_now)),
-                tunnelip,
+		tunnelip,
 		session[i].calling[0] ? session[i].calling : "*");
 	if (userip) free(userip);
 	if (tunnelip) free(tunnelip);
@@ -1009,9 +1009,10 @@ int cmd_drop_user(struct cli_def *cli, char *command, char **argv, int argc)
 
     if (!config->cluster_iam_master)
     {
-	cli_print(cli, "Can't do this on a slave. Do it on %s", inet_toa(config->cluster_master_address));
+	cli_print(cli, "Can't do this on a slave.  Do it on %s", inet_toa(config->cluster_master_address));
 	return CLI_OK;
     }
+
     if (!argc)
     {
 	cli_print(cli, "Specify a user to drop");
@@ -1056,9 +1057,10 @@ int cmd_drop_tunnel(struct cli_def *cli, char *command, char **argv, int argc)
 
     if (!config->cluster_iam_master)
     {
-	cli_print(cli, "Can't do this on a slave. Do it on %s", inet_toa(config->cluster_master_address));
+	cli_print(cli, "Can't do this on a slave.  Do it on %s", inet_toa(config->cluster_master_address));
 	return CLI_OK;
     }
+
     if (!argc)
     {
 	cli_print(cli, "Specify a tunnel to drop");
@@ -1112,9 +1114,10 @@ int cmd_drop_session(struct cli_def *cli, char *command, char **argv, int argc)
 
     if (!config->cluster_iam_master)
     {
-	cli_print(cli, "Can't do this on a slave. Do it on %s", inet_toa(config->cluster_master_address));
+	cli_print(cli, "Can't do this on a slave.  Do it on %s", inet_toa(config->cluster_master_address));
 	return CLI_OK;
     }
+
     if (!argc)
     {
 	cli_print(cli, "Specify a session id to drop");
@@ -1232,7 +1235,7 @@ int cmd_no_snoop(struct cli_def *cli, char *command, char **argv, int argc)
 
     if (!config->cluster_iam_master)
     {
-	cli_print(cli, "Can't do this on a slave. Do it on %s", inet_toa(config->cluster_master_address));
+	cli_print(cli, "Can't do this on a slave.  Do it on %s", inet_toa(config->cluster_master_address));
 	return CLI_OK;
     }
 
@@ -1268,9 +1271,10 @@ int cmd_throttle(struct cli_def *cli, char *command, char **argv, int argc)
 
     if (!config->cluster_iam_master)
     {
-	cli_print(cli, "Can't do this on a slave. Do it on %s", inet_toa(config->cluster_master_address));
+	cli_print(cli, "Can't do this on a slave.  Do it on %s", inet_toa(config->cluster_master_address));
 	return CLI_OK;
     }
+
     if (!argc)
     {
 	cli_print(cli, "Specify a user");
@@ -1289,6 +1293,7 @@ int cmd_throttle(struct cli_def *cli, char *command, char **argv, int argc)
 	else
 	    cli_print(cli, "Throttling user %s", argv[i]);
     }
+
     return CLI_OK;
 }
 
@@ -1303,9 +1308,10 @@ int cmd_no_throttle(struct cli_def *cli, char *command, char **argv, int argc)
 
     if (!config->cluster_iam_master)
     {
-	cli_print(cli, "Can't do this on a slave. Do it on %s", inet_toa(config->cluster_master_address));
+	cli_print(cli, "Can't do this on a slave.  Do it on %s", inet_toa(config->cluster_master_address));
 	return CLI_OK;
     }
+
     if (!argc)
     {
 	cli_print(cli, "Specify a user");
@@ -1346,9 +1352,9 @@ int cmd_debug(struct cli_def *cli, char *command, char **argv, int argc)
     {
 	char *p = (char *) &debug_flags;
 	for (i = 0; i < sizeof(debug_flags); i++)
-    {
-	    if (p[i])
 	{
+	    if (p[i])
+	    {
 		cli_print(cli, "Currently debugging:%s%s%s%s%s%s",
 		    (debug_flags.critical) ? " critical" : "",
 		    (debug_flags.error)    ? " error"    : "",
@@ -1357,9 +1363,9 @@ int cmd_debug(struct cli_def *cli, char *command, char **argv, int argc)
 		    (debug_flags.calls)    ? " calls"    : "",
 		    (debug_flags.data)     ? " data"     : "");
 
-	    return CLI_OK;
+		return CLI_OK;
+	    }
 	}
-    }
 
 	cli_print(cli, "Debugging off");
 	return CLI_OK;
