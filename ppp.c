@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.33 2004-11-29 02:17:18 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.34 2004-11-30 00:50:03 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -358,7 +358,7 @@ void processlcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 	{
 		int x = l - 4;
 		u8 *o = (p + 4);
-		u8 response = 0;
+		u8 *response = 0;
 
 		LOG(3, s, t, "LCP: ConfigReq (%d bytes)...\n", l);
 		if (config->debug > 3) dumplcp(p, l);
@@ -367,6 +367,7 @@ void processlcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 		{
 			int type = o[0];
 			int length = o[1];
+
 			if (length == 0 || type == 0 || x < length) break;
 			switch (type)
 			{
@@ -378,15 +379,16 @@ void processlcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 					if (!ntohl(*(u32 *)(o + 2))) // all bits zero is OK
 						break;
 
-					if (response && response != ConfigNak) // rej already queued
+					if (response && *response != ConfigNak) // rej already queued
 						break;
 
 					LOG(2, s, t, "    Remote requesting asyncmap.  Rejecting.\n");
 					if (!response)
 					{
-						q = makeppp(b, sizeof(b), NULL, 0, t, s, PPPLCP);
+						q = response = makeppp(b, sizeof(b), p, 2, t, s, PPPLCP);
 						if (!q) break;
-						response = *q++ = ConfigNak;
+						*q = ConfigNak;
+						q += 4;
 					}
 
 					if ((q - b + 11) > sizeof(b))
@@ -399,6 +401,7 @@ void processlcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 					*q++ = 6;
 					memset(q, 0, 4); // asyncmap 0
 					q += 4;
+					*((u16 *) (response + 2)) = q - response; // LCP header length
 					break;
 
 				case 3: // Authentication-Protocol
@@ -408,7 +411,7 @@ void processlcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 						if (proto == PPPPAP)
 							break;
 
-						if (response && response != ConfigNak) // rej already queued
+						if (response && *response != ConfigNak) // rej already queued
 							break;
 
 						if (proto == PPPCHAP)
@@ -420,9 +423,10 @@ void processlcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 
 						if (!response)
 						{
-							q = makeppp(b, sizeof(b), NULL, 0, t, s, PPPLCP);
+							q = response = makeppp(b, sizeof(b), p, 2, t, s, PPPLCP);
 							if (!q) break;
-							response = *q++ = ConfigNak;
+							*q = ConfigNak;
+							q += 4;
 						}
 
 						if ((q - b + length) > sizeof(b))
@@ -434,6 +438,7 @@ void processlcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 						memcpy(q, o, length);
 						*(u16 *)(q += 2) = htons(PPPPAP); // NAK -> Use PAP instead
 						q += length;
+						*((u16 *) (response + 2)) = q - response;
 					}
 					break;
 
@@ -448,11 +453,12 @@ void processlcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 
 				default: // Reject any unknown options
 					LOG(2, s, t, "    Rejecting PPP LCP Option type %d\n", type);
-					if (!response || response != ConfigRej) // drop nak in favour of rej
+					if (!response || *response != ConfigRej) // drop nak in favour of rej
 					{
-						q = makeppp(b, sizeof(b), NULL, 0, t, s, PPPLCP);
-						if (!q) return;
-						response = *q++ = ConfigRej;
+						q = response = makeppp(b, sizeof(b), p, 2, t, s, PPPLCP);
+						if (!q) break;
+						*q = ConfigRej;
+						q += 4;
 					}
 
 					if ((q - b + length) > sizeof(b))
@@ -463,6 +469,7 @@ void processlcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 
 					memcpy(q, o, length);
 					q += length;
+					*((u16 *) (response + 2)) = q - response; // LCP header length
 			}
 			x -= length;
 			o += length;
