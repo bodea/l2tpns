@@ -1,6 +1,6 @@
 // L2TPNS: icmp
 
-char const *cvs_id_icmp = "$Id: icmp.c,v 1.3 2004-06-28 02:43:13 fred_nerk Exp $";
+char const *cvs_id_icmp = "$Id: icmp.c,v 1.4 2004-11-15 02:26:20 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -28,8 +28,9 @@ void host_unreachable(ipt destination, u16 id, ipt source, char *packet, int pac
 	int len = 0, on = 1, icmp_socket;
 	struct sockaddr_in whereto = {0};
 
-	if (!(icmp_socket = socket(AF_INET, SOCK_RAW, IPPROTO_RAW)))
+	if ((icmp_socket = socket(AF_INET, SOCK_RAW, IPPROTO_RAW)) < 0)
 		return;
+
 	setsockopt(icmp_socket, IPPROTO_IP, IP_HDRINCL, (char *)&on, sizeof(on));
 
 	whereto.sin_addr.s_addr = destination;
