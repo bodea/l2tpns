@@ -29,7 +29,7 @@ OBJS=	md5.o \
 
 PLUGINS=garden.so autothrottle.so autosnoop.so
 
-all:	l2tpns nsctl $(PLUGINS)
+all:	l2tpns nsctl generateload bounce $(PLUGINS)
 
 clean:
 	/bin/rm -f *.o *.so l2tpns nsctl
@@ -72,6 +72,12 @@ l2tpns:	$(OBJS)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS) $(LIBS) -lcli -ldl
 
 nsctl:	nsctl.o control.o
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS) $(LIBS)
+
+generateload:	test/generateload.o
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS) $(LIBS)
+
+bounce:	test/bounce.o
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS) $(LIBS)
 
 %.o: %.c
