@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.14 2004-08-02 03:38:01 fred_nerk Exp $
+// $Id: l2tpns.h,v 1.15 2004-08-02 05:40:21 fred_nerk Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -90,7 +90,8 @@ enum
 	ProtocolRej,
 	EchoReq,
 	EchoReply,
-	DiscardRequest
+	DiscardRequest,
+	IdentRequest
 };
 
 // Types

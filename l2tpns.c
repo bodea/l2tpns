@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.19 2004-08-02 03:38:01 fred_nerk Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.20 2004-08-02 05:40:21 fred_nerk Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -2035,7 +2035,7 @@ int regular_cleanups(void)
 		if (!session[s].tunnel)	// Session isn't in use
 			continue;
 
-		if (!session[s].die && session[s].ip && !(session[s].flags & SF_IPCP_ACKED) )
+		if (!session[s].die && session[s].ip && !(session[s].flags & SF_IPCP_ACKED))
 		{
 			// IPCP has not completed yet. Resend
 			log(3, session[s].ip, s, session[s].tunnel, "No ACK for initial IPCP ConfigReq... resending\n");
@@ -3497,7 +3497,9 @@ int sessionsetup(tunnelidt t, sessionidt s)
 	for (r = 0; r < MAXROUTE && session[s].route[r].ip; r++)
 		routeset(s, session[s].route[r].ip, session[s].route[r].mask, session[s].ip, 1);
 
-	if (!session[s].sid) {	// did this session just finish radius?
+	if (!session[s].sid)
+	{
+		// did this session just finish radius?
 		log(3, session[s].ip, s, t, "Sending initial IPCP to client\n");
 		sendipcp(t, s);
 		session[s].sid = ++last_sid;
