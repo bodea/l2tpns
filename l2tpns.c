@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.40 2004-11-04 05:08:36 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.41 2004-11-04 06:05:55 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -1924,27 +1924,12 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 		}
 		else if (prot == PPPIP)
 		{
-			if (!config->cluster_iam_master)
+			session[s].last_packet = time_now;
+			if (session[s].walled_garden && !config->cluster_iam_master)
 			{
-				// We're a slave. Should we forward this packet to the master?
-
-				// Is this a walled garden session, or something that needs it's
-				// idle time updated??
-
-				// Maintain the idle timeouts on the master. If this would
-				// significantly reset the idletimeout, run it via the master
-				// to refresh the master's idle timer.
-				// Not sure this is ideal: It may re-order packets.
-
-				if (session[s].walled_garden || (session[s].last_packet + (ECHO_TIMEOUT/2)) < time_now)
-				{
-					master_forward_packet(buf, len, addr->sin_addr.s_addr, addr->sin_port);
-					session[s].last_packet = time_now;
-					return;
-				}
-				// fall through to processipin.
-			} else
-				session[s].last_packet = time_now;
+				master_forward_packet(buf, len, addr->sin_addr.s_addr, addr->sin_port);
+				return;
+			}
 			processipin(t, s, p, l);
 		}
 		else
@@ -3588,15 +3573,14 @@ int sessionsetup(tunnelidt t, sessionidt s)
 	if (!session[s].ip || session[s].ip == 0xFFFFFFFE)
 	{
 		assign_ip_address(s);
-		if (session[s].ip)
-			log(3, 0, s, t, "   No IP allocated. Assigned %s from pool\n",
-					inet_toa(htonl(session[s].ip)));
-		else
+		if (!session[s].ip)
 		{
 			log(0, 0, s, t, "   No IP allocated. The IP address pool is FULL!\n");
 			sessionshutdown(s, "No IP addresses available");
 			return 0;
 		}
+		log(3, 0, s, t, "   No IP allocated. Assigned %s from pool\n",
+			inet_toa(htonl(session[s].ip)));
 	}
 
 
