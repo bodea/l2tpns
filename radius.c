@@ -1,6 +1,6 @@
 // L2TPNS Radius Stuff
 
-char const *cvs_id_radius = "$Id: radius.c,v 1.14 2004-11-27 05:19:53 bodea Exp $";
+char const *cvs_id_radius = "$Id: radius.c,v 1.15 2004-11-27 20:42:02 bodea Exp $";
 
 #include <time.h>
 #include <stdio.h>
@@ -473,7 +473,7 @@ void processrad(u8 *buf, int len, char socket_index)
 				{
 					if (*p == 8)
 					{
-						// Statically assigned address
+						// Framed-IP-Address
 						LOG(3, 0, s, session[s].tunnel, "   Radius reply contains IP address %s\n", inet_toa(*(u32 *) (p + 2)));
 						session[s].ip = ntohl(*(u32 *) (p + 2));
 						session[s].ip_pool_index = -1;
@@ -492,7 +492,7 @@ void processrad(u8 *buf, int len, char socket_index)
 					}
 					else if (*p == 22)
 					{
-						// framed-route
+						// Framed-Route
 						ipt ip = 0, mask = 0;
 						u8 u = 0;
 						u8 bits = 0;
@@ -540,13 +540,49 @@ void processrad(u8 *buf, int len, char socket_index)
 							routes++;
 						}
 					}
+					else if (*p == 11)
+					{
+					    	// Filter-Id
+					    	char *filter = p + 2;
+						int l = p[1] - 2;
+						char *s;
+						u8 *f = 0;
+						int i;
+
+						LOG(3, 0, s, session[s].tunnel, "   Radius reply contains Filter-Id \"%.*s\"\n", l, filter);
+						if ((s = memchr(filter, '.', l)))
+						{
+							int b = s - filter;
+							if (l - b == 3 && !memcmp("in", s+1, 2))
+								f = &session[s].filter_in;
+							else if (l - b == 4 && !memcmp("out", s+1, 3))
+								f = &session[s].filter_out;
+
+							l = b;
+						}
+
+						if (!f)
+						{
+							LOG(3, 0, s, session[s].tunnel, "    Invalid filter\n");
+							continue;
+						}
+
+						for (*f = 0, i = 0; !*f && i < MAXFILTER; i++)
+							if (strlen(ip_filters[i].name) == l &&
+							    !strncmp(ip_filters[i].name, filter, l))
+								*f = i + 1;
+
+						if (!*f)
+							LOG(3, 0, s, session[s].tunnel, "    Unknown filter\n");
+
+					}
 					else if (*p == 26)
 					{
 						// Vendor-Specific Attribute
 						int vendor = ntohl(*(int *)(p + 2));
 						char attrib = *(p + 6);
 						char attrib_length = *(p + 7) - 2;
-						LOG(3, 0, s, session[s].tunnel, "   Radius reply contains Vendor-Specific. Vendor=%d Attrib=%d Length=%d\n", vendor, attrib, attrib_length);
+						LOG(3, 0, s, session[s].tunnel, "   Radius reply contains Vendor-Specific.  Vendor=%d Attrib=%d Length=%d\n", vendor, attrib, attrib_length);
 						if (attrib_length == 0) continue;
 						if (attrib != 1)
 							LOG(3, 0, s, session[s].tunnel, "      Unknown vendor-specific\n");
