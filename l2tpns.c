@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.44 2004-11-05 04:55:27 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.45 2004-11-05 07:50:05 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -2947,9 +2947,11 @@ int main(int argc, char *argv[])
 		switch (o)
 		{
 			case 'd':
-				// Double fork to detach from terminal
 				if (fork()) exit(0);
-				if (fork()) exit(0);
+				setsid();
+				freopen("/dev/null", "r", stdin);
+				freopen("/dev/null", "w", stdout);
+				freopen("/dev/null", "w", stderr);
 				break;
 			case 'v':
 				optdebug++;
