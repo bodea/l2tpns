@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.37 2004-11-25 12:41:35 bodea Exp $
+// $Id: l2tpns.h,v 1.38 2004-11-27 05:19:53 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -142,7 +142,7 @@ struct cli_tunnel_actions {
 #define DUMP_MAGIC "L2TPNS#" VERSION "#"
 
 // structures
-typedef struct routes           // route
+typedef struct			// route
 {
 	ipt ip;
 	ipt mask;
@@ -157,7 +157,7 @@ typedef struct controls         // control message
 }
 controlt;
 
-typedef struct sessions
+typedef struct
 {
 	sessionidt next;		// next session in linked list
 	sessionidt far;			// far end session ID
@@ -199,7 +199,9 @@ typedef struct sessions
 	ipt snoop_ip;			// Interception destination IP
 	u16 snoop_port;			// Interception destination port
 	u16 sid;			// near end session id.
-	char reserved[20];		// Space to expand structure without changing HB_VERSION
+	u8 filter_in;			// input filter index (to ip_filters[N-1]; 0 if none)
+	u8 filter_out;			// output filter index
+	char reserved[18];		// Space to expand structure without changing HB_VERSION
 }
 sessiont;
 
@@ -207,7 +209,8 @@ sessiont;
 #define SF_LCP_ACKED	2	// LCP negotiated
 #define SF_CCP_ACKED	4	// CCP negotiated
 
-typedef struct {
+typedef struct
+{
 	u32	cin;
 	u32	cout;
 } sessioncountt;
@@ -216,7 +219,7 @@ typedef struct {
 #define	SESSIONACFC	2	// ACFC negotiated flags
 
 // 168 bytes per tunnel
-typedef struct tunnels
+typedef struct
 {
 	tunnelidt far;		// far end tunnel ID
 	ipt ip;			// Ip for far end
@@ -239,7 +242,7 @@ typedef struct tunnels
 tunnelt;
 
 // 180 bytes per radius session
-typedef struct radiuss		// outstanding RADIUS requests
+typedef struct			// outstanding RADIUS requests
 {
 	sessionidt session;	// which session this applies to
 	hasht auth;		// request authenticator
@@ -393,7 +396,7 @@ struct Tstats
 #define SET_STAT(x, y)
 #endif
 
-struct configt
+typedef struct
 {
 	int		debug;				// debugging level
 	time_t		start_time;			// time when l2tpns was started
@@ -470,16 +473,65 @@ struct configt
 		int	hold;
 	}		neighbour[BGP_NUM_PEERS];
 #endif
-};
+} configt;
 
 enum config_typet { INT, STRING, UNSIGNED_LONG, SHORT, BOOL, IP, MAC };
-struct config_descriptt
+typedef struct
 {
 	char *key;
 	int offset;
 	int size;
 	enum config_typet type;
-};
+} config_descriptt;
+
+typedef struct
+{
+	u8 op;		// operation
+#define FILTER_PORT_OP_NONE	0 // all ports match
+#define FILTER_PORT_OP_EQ	1
+#define FILTER_PORT_OP_NEQ	2
+#define FILTER_PORT_OP_GT	3
+#define FILTER_PORT_OP_LT	4
+#define FILTER_PORT_OP_RANGE	5
+	portt port;
+	portt port2;	// for range
+} ip_filter_portt;
+
+typedef struct
+{
+	int action;		// permit/deny
+#define FILTER_ACTION_DENY	1
+#define FILTER_ACTION_PERMIT	2
+	int proto;		// protocol: IPPROTO_* (netinet/in.h)
+	ipt src_ip;		// source ip
+	ipt src_wild;
+	ip_filter_portt src_ports;
+	ipt dst_ip;		// dest ip
+	ipt dst_wild;
+	ip_filter_portt dst_ports;
+	u8 tcp_flag_op;		// match type: any, all
+#define FILTER_FLAG_OP_ANY	0
+#define FILTER_FLAG_OP_ALL	1
+	u8 tcp_sflags;		// flags set
+	u8 tcp_cflags;		// flags clear
+} ip_filter_rulet;
+
+#define TCP_FLAG_FIN	0x01
+#define TCP_FLAG_SYN	0x02
+#define TCP_FLAG_RST	0x04
+#define TCP_FLAG_PSH	0x08
+#define TCP_FLAG_ACK	0x10
+#define TCP_FLAG_URG	0x20
+
+#define MAXFILTER		32
+#define MAXFILTER_RULES		32
+typedef struct
+{
+    	char name[32];		// ACL name
+	int extended;		// type: 0 = standard, 1 = extended
+	ip_filter_rulet rules[MAXFILTER_RULES];
+	int used;		// session ref count
+} ip_filtert;
 
 // arp.c
 void sendarp(int ifr_idx, const unsigned char* mac, ipt ip);
@@ -570,7 +622,7 @@ if (count++ < max) { \
 }
 
 
-extern struct configt *config;
+extern configt *config;
 extern time_t basetime;		// Time when this process started.
 extern time_t time_now;		// Seconds since EPOCH.
 extern u32 last_id;

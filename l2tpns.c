@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.56 2004-11-25 02:49:18 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.57 2004-11-27 05:19:53 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -54,7 +54,7 @@ char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.56 2004-11-25 02:49:18 bodea Exp 
 #endif /* BGP */
 
 // Globals
-struct configt *config = NULL;	// all configuration
+configt *config = NULL;		// all configuration
 int tunfd = -1;			// tun interface file handle. (network device)
 int udpfd = -1;			// UDP file handle
 int controlfd = -1;		// Control signal handle
@@ -88,9 +88,9 @@ linked_list *loaded_plugins;
 linked_list *plugins[MAX_PLUGIN_TYPES];
 
 #define membersize(STRUCT, MEMBER) sizeof(((STRUCT *)0)->MEMBER)
-#define CONFIG(NAME, MEMBER, TYPE) { NAME, offsetof(struct configt, MEMBER), membersize(struct configt, MEMBER), TYPE }
+#define CONFIG(NAME, MEMBER, TYPE) { NAME, offsetof(configt, MEMBER), membersize(configt, MEMBER), TYPE }
 
-struct config_descriptt config_values[] = {
+config_descriptt config_values[] = {
 	CONFIG("debug", debug, INT),
 	CONFIG("log_file", log_filename, STRING),
 	CONFIG("pid_file", pid_file, STRING),
@@ -146,6 +146,7 @@ sessiont *session = NULL;		// Array of session structures.
 sessioncountt *sess_count = NULL;	// Array of partial per-session traffic counters.
 radiust *radius = NULL;			// Array of radius structures.
 ippoolt *ip_address_pool = NULL;	// Array of dynamic IP addresses.
+ip_filtert *ip_filters = NULL;	// Array of named filters.
 static controlt *controlfree = 0;
 struct Tstats *_statistics = NULL;
 #ifdef RINGBUFFER
@@ -942,8 +943,10 @@ static void controladd(controlt * c, tunnelidt t, sessionidt s)
 		tunnel[t].controle->next = c;
 	else
 		tunnel[t].controls = c;
+
 	tunnel[t].controle = c;
 	tunnel[t].controlc++;
+
 	// send now if space in window
 	if (tunnel[t].controlc <= tunnel[t].window)
 	{
@@ -1306,10 +1309,9 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 			STAT(tunnel_rx_errors);
 			return;
 		}
-		LOG(3, ntohl(addr->sin_addr.s_addr), s, t, "Control message (%d bytes): (unacked %d) l-ns %d l-nr %d r-ns %d r-nr %d\n",
-				l, tunnel[t].controlc, tunnel[t].ns, tunnel[t].nr, ns, nr);
-		// if no tunnel specified, assign one
-		if (!t)
+
+		// check for duplicate tunnel open message
+		if (!t && ns == 0)
 		{
 			int i;
 
@@ -1323,10 +1325,15 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 					tunnel[i].port != ntohs(addr->sin_port) )
 					continue;
 				t = i;
+				LOG(3, ntohl(addr->sin_addr.s_addr), s, t, "Duplicate SCCRQ?\n");
 				break;
 			}
 		}
 
+		LOG(3, ntohl(addr->sin_addr.s_addr), s, t, "Control message (%d bytes): (unacked %d) l-ns %d l-nr %d r-ns %d r-nr %d\n",
+				l, tunnel[t].controlc, tunnel[t].ns, tunnel[t].nr, ns, nr);
+
+		// if no tunnel specified, assign one
 		if (!t)
 		{
 			if (!(t = new_tunnel()))
@@ -1339,8 +1346,28 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 			tunnel[t].ip = ntohl(*(ipt *) & addr->sin_addr);
 			tunnel[t].port = ntohs(addr->sin_port);
 			tunnel[t].window = 4; // default window
-			LOG(1, ntohl(addr->sin_addr.s_addr), 0, t, "   New tunnel from %u.%u.%u.%u/%u ID %d\n", tunnel[t].ip >> 24, tunnel[t].ip >> 16 & 255, tunnel[t].ip >> 8 & 255, tunnel[t].ip & 255, tunnel[t].port, t);
 			STAT(tunnel_created);
+			LOG(1, ntohl(addr->sin_addr.s_addr), 0, t, "   New tunnel from %u.%u.%u.%u/%u ID %d\n",
+				tunnel[t].ip >> 24, tunnel[t].ip >> 16 & 255,
+				tunnel[t].ip >> 8 & 255, tunnel[t].ip & 255, tunnel[t].port, t);
+		}
+
+			// If the 'ns' just received is not the 'nr' we're
+			// expecting, just send an ack and drop it.
+			//
+			// if 'ns' is less, then we got a retransmitted packet.
+			// if 'ns' is greater than missed a packet. Either way
+			// we should ignore it.
+		if (ns != tunnel[t].nr)
+		{
+			// is this the sequence we were expecting?
+			STAT(tunnel_rx_errors);
+			LOG(1, ntohl(addr->sin_addr.s_addr), 0, t, "   Out of sequence tunnel %d, (%d is not the expected %d)\n",
+				t, ns, tunnel[t].nr);
+
+			if (l)	// Is this not a ZLB?
+				controlnull(t);
+			return;
 		}
 
 		// This is used to time out old tunnels
@@ -1350,7 +1377,7 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 		{
 			int skip = tunnel[t].window; // track how many in-window packets are still in queue
 				// some to clear maybe?
-			while (tunnel[t].controlc && (((tunnel[t].ns - tunnel[t].controlc) - nr) & 0x8000))
+			while (tunnel[t].controlc > 0 && (((tunnel[t].ns - tunnel[t].controlc) - nr) & 0x8000))
 			{
 				controlt *c = tunnel[t].controls;
 				tunnel[t].controls = c->next;
@@ -1361,22 +1388,6 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 				tunnel[t].try = 0; // we have progress
 			}
 
-				// If the 'ns' just received is not the 'nr' we're
-				// expecting, just send an ack and drop it.
-				//
-				// if 'ns' is less, then we got a retransmitted packet.
-				// if 'ns' is greater than missed a packet. Either way
-				// we should ignore it.
-			if (ns != tunnel[t].nr)
-			{
-				// is this the sequence we were expecting?
-				LOG(1, ntohl(addr->sin_addr.s_addr), 0, t, "   Out of sequence tunnel %d, (%d is not the expected %d)\n", t, ns, tunnel[t].nr);
-				STAT(tunnel_rx_errors);
-
-				if (l)	// Is this not a ZLB?
-					controlnull(t);
-				return;
-			}
 			// receiver advance (do here so quoted correctly in any sends below)
 			if (l) tunnel[t].nr = (ns + 1);
 			if (skip < 0) skip = 0;
@@ -2480,12 +2491,12 @@ static void initdata(int optdebug, char *optconfig)
 		LOG(0, 0, 0, 0, "Error doing malloc for _statistics: %s\n", strerror(errno));
 		exit(1);
 	}
-	if (!(config = shared_malloc(sizeof(struct configt))))
+	if (!(config = shared_malloc(sizeof(configt))))
 	{
 		LOG(0, 0, 0, 0, "Error doing malloc for configuration: %s\n", strerror(errno));
 		exit(1);
 	}
-	memset(config, 0, sizeof(struct configt));
+	memset(config, 0, sizeof(configt));
 	time(&config->start_time);
 	strncpy(config->config_file, optconfig, strlen(optconfig));
 	config->debug = optdebug;
@@ -2520,6 +2531,13 @@ static void initdata(int optdebug, char *optconfig)
 		LOG(0, 0, 0, 0, "Error doing malloc for ip_address_pool: %s\n", strerror(errno));
 		exit(1);
 	}
+
+if (!(ip_filters = shared_malloc(sizeof(ip_filtert) * MAXFILTER)))
+{
+	LOG(0, 0, 0, 0, "Error doing malloc for ip_filters: %s\n", strerror(errno));
+	exit(1);
+}
+memset(ip_filters, 0, sizeof(ip_filtert) * MAXFILTER);
 
 #ifdef RINGBUFFER
 	if (!(ringbuffer = shared_malloc(sizeof(struct Tringbuffer))))
@@ -2572,11 +2590,11 @@ static void initdata(int optdebug, char *optconfig)
 	_statistics->start_time = _statistics->last_reset = time(NULL);
 
 #ifdef BGP
- 	if (!(bgp_peers = shared_malloc(sizeof(struct bgp_peer) * BGP_NUM_PEERS)))
- 	{
- 		LOG(0, 0, 0, 0, "Error doing malloc for bgp: %s\n", strerror(errno));
- 		exit(1);
- 	}
+	if (!(bgp_peers = shared_malloc(sizeof(struct bgp_peer) * BGP_NUM_PEERS)))
+	{
+		LOG(0, 0, 0, 0, "Error doing malloc for bgp: %s\n", strerror(errno));
+		exit(1);
+	}
 #endif /* BGP */
 }
 

@@ -1,6 +1,6 @@
 // L2TPNS Radius Stuff
 
-char const *cvs_id_radius = "$Id: radius.c,v 1.13 2004-11-25 02:45:27 bodea Exp $";
+char const *cvs_id_radius = "$Id: radius.c,v 1.14 2004-11-27 05:19:53 bodea Exp $";
 
 #include <time.h>
 #include <stdio.h>
@@ -22,7 +22,7 @@ extern radiust *radius;
 extern sessiont *session;
 extern tunnelt *tunnel;
 extern u32 sessionid;
-extern struct configt *config;
+extern configt *config;
 extern int *radfds;
 
 static const char *radius_state(int state)

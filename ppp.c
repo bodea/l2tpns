@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.30 2004-11-25 12:46:48 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.31 2004-11-27 05:19:53 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -21,7 +21,7 @@ extern int tunfd;
 extern char hostname[];
 extern u32 eth_tx;
 extern time_t time_now;
-extern struct configt *config;
+extern configt *config;
 
 static void initccp(tunnelidt t, sessionidt s);
 

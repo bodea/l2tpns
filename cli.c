@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.28 2004-11-16 07:54:32 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.29 2004-11-27 05:19:53 bodea Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -38,14 +38,15 @@ extern radiust *radius;
 extern ippoolt *ip_address_pool;
 extern struct Tstats *_statistics;
 static struct cli_def *cli = NULL;
-extern struct configt *config;
-extern struct config_descriptt config_values[];
+extern configt *config;
+extern config_descriptt config_values[];
 #ifdef RINGBUFFER
 extern struct Tringbuffer *ringbuffer;
 #endif
 extern struct cli_session_actions *cli_session_actions;
 extern struct cli_tunnel_actions *cli_tunnel_actions;
 extern tbft *filter_list;
+extern ip_filtert *ip_filters;
 
 static char *debug_levels[] = {
 	"CRIT",
@@ -109,6 +110,14 @@ static int cmd_suspend_bgp(struct cli_def *cli, char *command, char **argv, int 
 static int cmd_no_suspend_bgp(struct cli_def *cli, char *command, char **argv, int argc);
 static int cmd_restart_bgp(struct cli_def *cli, char *command, char **argv, int argc);
 #endif /* BGP */
+
+#define MODE_CONFIG_NACL 9
+static int cmd_ip_access_list(struct cli_def *cli, char *command, char **argv, int argc);
+static int cmd_no_ip_access_list(struct cli_def *cli, char *command, char **argv, int argc);
+static int cmd_ip_access_list_rule(struct cli_def *cli, char *command, char **argv, int argc);
+
+/* match if b is a substr of a */
+#define MATCH(a,b) (!strncmp((a), (b), strlen(b)))
 
 void init_cli(char *hostname)
 {
@@ -203,6 +212,16 @@ void init_cli(char *hostname)
 
 	cli_register_command(cli, NULL, "set", cmd_set, PRIVILEGE_PRIVILEGED, MODE_CONFIG, "Set a configuration variable");
 
+	c = cli_register_command(cli, NULL, "ip", NULL, PRIVILEGE_PRIVILEGED, MODE_CONFIG, NULL);
+	cli_register_command(cli, c, "access-list", cmd_ip_access_list, PRIVILEGE_PRIVILEGED, MODE_CONFIG, "Add named access-list");
+
+	cli_register_command(cli, NULL, "permit", cmd_ip_access_list_rule, PRIVILEGE_PRIVILEGED, MODE_CONFIG_NACL, "Permit rule");
+	cli_register_command(cli, NULL, "deny", cmd_ip_access_list_rule, PRIVILEGE_PRIVILEGED, MODE_CONFIG_NACL, "Deny rule");
+
+	c = cli_register_command(cli, NULL, "no", NULL, PRIVILEGE_UNPRIVILEGED, MODE_CONFIG, NULL);
+	c2 = cli_register_command(cli, c, "ip", NULL, PRIVILEGE_PRIVILEGED, MODE_CONFIG, NULL);
+	cli_register_command(cli, c2, "access-list", cmd_no_ip_access_list, PRIVILEGE_PRIVILEGED, MODE_CONFIG, "Remove named access-list");
+
 	// Enable regular processing
 	cli_regular(cli, regular_stuff);
 
@@ -267,7 +286,7 @@ void cli_do(int sockfd)
 		require_auth = addr.sin_addr.s_addr != inet_addr("127.0.0.1");
 	}
 	else
-		LOG(0, 0, 0, 0, "getpeername() failed on cli socket. Requiring authentication: %s\n", strerror(errno));
+		LOG(0, 0, 0, 0, "getpeername() failed on cli socket.  Requiring authentication: %s\n", strerror(errno));
 
 	if (require_auth)
 	{
@@ -852,6 +871,8 @@ static int cmd_write_memory(struct cli_def *cli, char *command, char **argv, int
 	return CLI_OK;
 }
 
+static char const *show_access_list_rule(int extended, ip_filter_rulet *rule);
+
 static int cmd_show_run(struct cli_def *cli, char *command, char **argv, int argc)
 {
 	int i;
@@ -898,17 +919,17 @@ static int cmd_show_run(struct cli_def *cli, char *command, char **argv, int arg
 #ifdef BGP
 	if (config->as_number)
 	{
-	    	int k;
+		int k;
 		int h;
 
-	    	cli_print(cli, "# BGP");
+		cli_print(cli, "# BGP");
 		cli_print(cli, "router bgp %u", config->as_number);
 		for (i = 0; i < BGP_NUM_PEERS; i++)
 		{
 			if (!config->neighbour[i].name[0])
 				continue;
 
-		    	cli_print(cli, " neighbour %s remote-as %u", config->neighbour[i].name, config->neighbour[i].as);
+			cli_print(cli, " neighbour %s remote-as %u", config->neighbour[i].name, config->neighbour[i].as);
 
 			k = config->neighbour[i].keepalive;
 			h = config->neighbour[i].hold;
@@ -928,6 +949,22 @@ static int cmd_show_run(struct cli_def *cli, char *command, char **argv, int arg
 		}
 	}
 #endif
+
+	cli_print(cli, "# Filters");
+	for (i = 0; i < MAXFILTER; i++)
+	{
+		ip_filter_rulet *rules;
+	    	if (!*ip_filters[i].name)
+			continue;
+
+		cli_print(cli, "ip access-list %s %s",
+			ip_filters[i].extended ? "extended" : "standard",
+			ip_filters[i].name);
+
+		rules = ip_filters[i].rules;
+		while (rules->action)
+			cli_print(cli, "%s", show_access_list_rule(ip_filters[i].extended, rules++));
+	}
 
 	cli_print(cli, "# end");
 	return CLI_OK;
@@ -1877,7 +1914,7 @@ static int cmd_router_bgp(struct cli_def *cli, char *command, char **argv, int a
 	return CLI_OK;
 }
 
-static int find_bgp_neighbour(char *name)
+static int find_bgp_neighbour(char const *name)
 {
 	int i;
 	int new = -1;
@@ -1893,7 +1930,7 @@ static int find_bgp_neighbour(char *name)
 
 	for (i = 0; i < BGP_NUM_PEERS; i++)
 	{
-	    	if (!config->neighbour[i].name[0])
+		if (!config->neighbour[i].name[0])
 		{
 			if (new == -1) new = i;
 			continue;
@@ -1940,12 +1977,12 @@ static int cmd_router_bgp_neighbour(struct cli_def *cli, char *command, char **a
 				NULL);
 
 		default:
-		    	if (!strncmp("remote-as", argv[1], strlen(argv[1])))
-			    	return cli_arg_help(cli, argv[2][1], "<1-65535>", "Autonomous system number", NULL);
+			if (MATCH("remote-as", argv[1]))
+				return cli_arg_help(cli, argv[2][1], "<1-65535>", "Autonomous system number", NULL);
 
-			if (!strncmp("timers", argv[1], strlen(argv[1])))
+			if (MATCH("timers", argv[1]))
 			{
-			    	if (argc == 3)
+				if (argc == 3)
 					return cli_arg_help(cli, 0, "<1-65535>", "Keepalive time", NULL);
 
 				if (argc == 4)
@@ -1977,9 +2014,9 @@ static int cmd_router_bgp_neighbour(struct cli_def *cli, char *command, char **a
 		return CLI_OK;
 	}
 
-	if (!strncmp("remote-as", argv[1], strlen(argv[1])))
+	if (MATCH("remote-as", argv[1]))
 	{
-	    	int as = atoi(argv[2]);
+		int as = atoi(argv[2]);
 		if (as < 0 || as > 65535)
 		{
 			cli_print(cli, "Invalid autonomous system number");
@@ -1997,7 +2034,7 @@ static int cmd_router_bgp_neighbour(struct cli_def *cli, char *command, char **a
 		return CLI_OK;
 	}
 
-	if (argc != 4 || strncmp("timers", argv[1], strlen(argv[1])))
+	if (argc != 4 || !MATCH("timers", argv[1]))
 	{
 		cli_print(cli, "Invalid arguments");
 		return CLI_OK;
@@ -2221,6 +2258,568 @@ static int cmd_restart_bgp(struct cli_def *cli, char *command, char **argv, int 
 	return CLI_OK;
 }
 #endif /* BGP*/
+
+static int filt;
+static int find_access_list(char const *name)
+{
+	int i;
+
+	for (i = 0; i < MAXFILTER; i++)
+		if (!(*ip_filters[i].name && strcmp(ip_filters[i].name, name)))
+			return i;
+
+	return -1;
+}
+
+static int access_list(struct cli_def *cli, char **argv, int argc, int add)
+{
+	int extended;
+
+	if (CLI_HELP_REQUESTED)
+	{
+		switch (argc)
+		{
+		case 1:
+			return cli_arg_help(cli, 0,
+				"standard", "Standard syntax",
+				"extended", "Extended syntax",
+				NULL);
+
+		case 2:
+			return cli_arg_help(cli, argv[1][1],
+				"NAME", "Access-list name",
+				NULL);
+
+		default:
+			if (argc == 3 && !argv[2][1])
+				return cli_arg_help(cli, 1, NULL);
+
+			return CLI_OK;
+		}
+	}
+
+	if (argc != 2)
+	{
+		cli_print(cli, "Specify access-list type and name");
+		return CLI_OK;
+	}
+
+	if (MATCH("standard", argv[0]))
+		extended = 0;
+	else if (MATCH("extended", argv[0]))
+		extended = 1;
+	else
+	{
+		cli_print(cli, "Invalid access-list type");
+		return CLI_OK;
+	}
+
+	if (strlen(argv[1]) > sizeof(ip_filters[0].name) - 1 ||
+	    strspn(argv[1], "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_") != strlen(argv[1]))
+	{
+		cli_print(cli, "Invalid access-list name");
+		return CLI_OK;
+	}
+
+	filt = find_access_list(argv[1]);
+	if (add)
+	{
+		if (filt < 0)
+		{
+			cli_print(cli, "Too many access-lists");
+			return CLI_OK;
+		}
+
+		// racy
+		if (!*ip_filters[filt].name)
+		{
+			memset(&ip_filters[filt], 0, sizeof(ip_filters[filt]));
+			strcpy(ip_filters[filt].name, argv[1]);
+			ip_filters[filt].extended = extended;
+		}
+		else if (ip_filters[filt].extended != extended)
+		{
+			cli_print(cli, "Access-list is %s",
+				ip_filters[filt].extended ? "extended" : "standard");
+
+			return CLI_OK;
+		}
+
+		cli_set_configmode(cli, MODE_CONFIG_NACL, extended ? "ext-nacl" : "std-nacl");
+		return CLI_OK;
+	}
+
+	if (filt < 0 || !*ip_filters[filt].name)
+	{
+		cli_print(cli, "Access-list not defined");
+		return CLI_OK;
+	}
+
+	// racy
+	if (ip_filters[filt].used)
+	{
+		cli_print(cli, "Access-list in use");
+		return CLI_OK;
+	}
+
+	memset(&ip_filters[filt], 0, sizeof(ip_filters[filt]));
+	return CLI_OK;
+}
+
+static int cmd_ip_access_list(struct cli_def *cli, char *command, char **argv, int argc)
+{
+	return access_list(cli, argv, argc, 1);
+}
+
+static int cmd_no_ip_access_list(struct cli_def *cli, char *command, char **argv, int argc)
+{
+	return access_list(cli, argv, argc, 0);
+}
+
+static int show_ip_wild(char *buf, ipt ip, ipt wild)
+{
+	int i;
+	if (ip == INADDR_ANY && wild == INADDR_BROADCAST)
+		return sprintf(buf, " any");
+
+	if (wild == INADDR_ANY)
+		return sprintf(buf, " host %s", inet_toa(ip));
+
+	i = sprintf(buf, " %s", inet_toa(ip));
+	return i + sprintf(buf + i, " %s", inet_toa(wild));
+}
+
+static int show_ports(char *buf, ip_filter_portt *ports)
+{
+	switch (ports->op)
+	{
+	case FILTER_PORT_OP_EQ:    return sprintf(buf, " eq %u", ports->port);
+	case FILTER_PORT_OP_NEQ:   return sprintf(buf, " neq %u", ports->port);
+	case FILTER_PORT_OP_GT:    return sprintf(buf, " gt %u", ports->port);
+	case FILTER_PORT_OP_LT:    return sprintf(buf, " lt %u", ports->port);
+	case FILTER_PORT_OP_RANGE: return sprintf(buf, " range %u %u", ports->port, ports->port2);
+	}
+
+	return 0;
+}
+
+static char const *show_access_list_rule(int extended, ip_filter_rulet *rule)
+{
+	static char buf[256];
+	char *p = buf;
+
+	p += sprintf(p, " %s", rule->action == FILTER_ACTION_PERMIT ? "permit" : "deny");
+	if (extended)
+	{
+		struct protoent *proto = getprotobynumber(rule->proto);
+		p += sprintf(p, " %s", proto ? proto->p_name : "ERR");
+	}
+
+	p += show_ip_wild(p, rule->src_ip, rule->src_wild);
+	if (!extended)
+		return buf;
+
+	if (rule->proto == IPPROTO_TCP || rule->proto == IPPROTO_UDP)
+		p += show_ports(p, &rule->src_ports);
+
+	p += show_ip_wild(p, rule->dst_ip, rule->dst_wild);
+	if (rule->proto == IPPROTO_TCP || rule->proto == IPPROTO_UDP)
+		p += show_ports(p, &rule->dst_ports);
+
+	if (rule->proto == IPPROTO_TCP && (rule->tcp_sflags || rule->tcp_cflags))
+	{
+		if (rule->tcp_flag_op == FILTER_FLAG_OP_ANY &&
+		    rule->tcp_sflags == (TCP_FLAG_ACK|TCP_FLAG_FIN) &&
+		    rule->tcp_cflags == TCP_FLAG_SYN)
+		{
+			p += sprintf(p, " established");
+		}
+		else
+		{
+		    	p += sprintf(p, " match-%s", rule->tcp_flag_op == FILTER_FLAG_OP_ALL ? "all" : "any");
+			if (rule->tcp_sflags & TCP_FLAG_FIN) p += sprintf(p, " +fin");
+			if (rule->tcp_cflags & TCP_FLAG_FIN) p += sprintf(p, " -fin");
+			if (rule->tcp_sflags & TCP_FLAG_SYN) p += sprintf(p, " +syn");
+			if (rule->tcp_cflags & TCP_FLAG_SYN) p += sprintf(p, " -syn");
+			if (rule->tcp_sflags & TCP_FLAG_RST) p += sprintf(p, " +rst");
+			if (rule->tcp_cflags & TCP_FLAG_RST) p += sprintf(p, " -rst");
+			if (rule->tcp_sflags & TCP_FLAG_PSH) p += sprintf(p, " +psh");
+			if (rule->tcp_cflags & TCP_FLAG_PSH) p += sprintf(p, " -psh");
+			if (rule->tcp_sflags & TCP_FLAG_ACK) p += sprintf(p, " +ack");
+			if (rule->tcp_cflags & TCP_FLAG_ACK) p += sprintf(p, " -ack");
+			if (rule->tcp_sflags & TCP_FLAG_URG) p += sprintf(p, " +urg");
+			if (rule->tcp_cflags & TCP_FLAG_URG) p += sprintf(p, " -urg");
+		}
+	}
+
+	return buf;
+}
+
+ip_filter_rulet *access_list_rule_ext(struct cli_def *cli, char *command, char **argv, int argc)
+{
+	static ip_filter_rulet rule;
+	struct in_addr addr;
+	int i;
+	int a;
+
+	if (CLI_HELP_REQUESTED)
+	{
+		if (argc == 1)
+		{
+			cli_arg_help(cli, 0,
+				"ip",  "Match IP packets",
+				"tcp", "Match TCP packets",
+				"udp", "Match UDP packets",
+				NULL);
+
+			return NULL;
+		}
+
+		// *sigh*, too darned complex
+		cli_arg_help(cli, 0, "RULE", "SOURCE [PORTS] DEST [PORTS] FLAGS", NULL);
+		return NULL;
+	}
+
+	if (argc < 3)
+	{
+		cli_print(cli, "Specify rule details");
+		return NULL;
+	}
+
+	memset(&rule, 0, sizeof(rule));
+	rule.action = (command[0] == 'p')
+		? FILTER_ACTION_PERMIT
+		: FILTER_ACTION_DENY;
+
+	if (MATCH("ip", argv[0]))
+		rule.proto = IPPROTO_IP;
+	else if (MATCH("udp", argv[0]))
+		rule.proto = IPPROTO_UDP;
+	else if (MATCH("tcp", argv[0]))
+		rule.proto = IPPROTO_TCP;
+	else
+	{
+		cli_print(cli, "Invalid protocol \"%s\"", argv[0]);
+		return NULL;
+	}
+
+	for (a = 1, i = 0; i < 2; i++)
+	{
+	    	ipt *ip;
+		ipt *wild;
+		ip_filter_portt *port;
+
+		if (i == 0)
+		{
+			ip = &rule.src_ip;
+			wild = &rule.src_wild;
+			port = &rule.src_ports;
+		}
+		else
+		{
+			ip = &rule.dst_ip;
+			wild = &rule.dst_wild;
+			port = &rule.dst_ports;
+			if (a >= argc)
+			{
+				cli_print(cli, "Specify destination");
+				return NULL;
+			}
+		}
+
+		if (MATCH("any", argv[a]))
+		{
+			*ip = INADDR_ANY;
+			*wild = INADDR_BROADCAST;
+			a++;
+		}
+		else if (MATCH("host", argv[a]))
+		{
+			if (++a >= argc)
+			{
+				cli_print(cli, "Specify host ip address");
+				return NULL;
+			}
+
+			if (!inet_aton(argv[a], &addr))
+			{
+				cli_print(cli, "Cannot parse IP \"%s\"", argv[a]);
+				return NULL;
+			}
+
+			*ip = addr.s_addr;
+			*wild = INADDR_ANY;
+			a++;
+		}
+		else
+		{
+			if (++a >= argc)
+			{
+				cli_print(cli, "Specify %s ip address and wildcard", i ? "destination" : "source");
+				return NULL;
+			}
+
+			if (!inet_aton(argv[a], &addr))
+			{
+				cli_print(cli, "Cannot parse IP \"%s\"", argv[a]);
+				return NULL;
+			}
+
+			*ip = addr.s_addr;
+
+			if (!inet_aton(argv[++a], &addr))
+			{
+				cli_print(cli, "Cannot parse IP \"%s\"", argv[a]);
+				return NULL;
+			}
+
+			*wild = addr.s_addr;
+		}
+
+		if (rule.proto == IPPROTO_IP || a >= argc)
+			continue;
+
+		port->op = 0;
+		if (MATCH("eq", argv[a]))
+			port->op = FILTER_PORT_OP_EQ;
+		else if (MATCH("neq", argv[a]))
+			port->op = FILTER_PORT_OP_NEQ;
+		else if (MATCH("gt", argv[a]))
+			port->op = FILTER_PORT_OP_GT;
+		else if (MATCH("lt", argv[a]))
+			port->op = FILTER_PORT_OP_LT;
+		else if (MATCH("range", argv[a]))
+			port->op = FILTER_PORT_OP_RANGE;
+
+		if (!port->op)
+			continue;
+
+		if (++a >= argc)
+		{
+			cli_print(cli, "Specify port");
+			return NULL;
+		}
+
+		if (!(port->port = atoi(argv[a])))
+		{
+			cli_print(cli, "Invalid port \"%s\"", argv[a]);
+			return NULL;
+		}
+			
+		a++;
+		if (port->op != FILTER_PORT_OP_RANGE)
+			continue;
+
+		if (a >= argc)
+		{
+			cli_print(cli, "Specify port");
+			return NULL;
+		}
+
+		if (!(port->port2 = atoi(argv[a])) || port->port2 < port->port)
+		{
+			cli_print(cli, "Invalid port \"%s\"", argv[a]);
+			return NULL;
+		}
+			
+		a++;
+	}
+
+	if (rule.proto == IPPROTO_TCP && a < argc)
+	{
+		if (MATCH("established", argv[a]))
+		{
+			rule.tcp_flag_op = FILTER_FLAG_OP_ANY;
+			rule.tcp_sflags = (TCP_FLAG_ACK|TCP_FLAG_FIN);
+			rule.tcp_cflags = TCP_FLAG_SYN;
+		    	a++;
+		}
+		else if (!strcmp(argv[a], "match-any") || !strcmp(argv[a], "match-an") ||
+			 !strcmp(argv[a], "match-all") || !strcmp(argv[a], "match-al"))
+		{
+			rule.tcp_flag_op = argv[a][7] == 'n'
+				? FILTER_FLAG_OP_ANY
+				: FILTER_FLAG_OP_ALL;
+
+			if (++a >= argc)
+			{
+				cli_print(cli, "Specify tcp flags");
+				return NULL;
+			}
+
+			while (a < argc && (argv[a][0] == '+' || argv[a][0] == '-'))
+			{
+			    	u8 *f;
+
+				f = (argv[a][0] == '+') ? &rule.tcp_sflags : &rule.tcp_cflags;
+
+				if (MATCH("fin", &argv[a][1]))      *f |= TCP_FLAG_FIN;
+				else if (MATCH("syn", &argv[a][1])) *f |= TCP_FLAG_SYN;
+				else if (MATCH("rst", &argv[a][1])) *f |= TCP_FLAG_RST;
+				else if (MATCH("psh", &argv[a][1])) *f |= TCP_FLAG_PSH;
+				else if (MATCH("ack", &argv[a][1])) *f |= TCP_FLAG_ACK;
+				else if (MATCH("urg", &argv[a][1])) *f |= TCP_FLAG_URG;
+				else
+				{
+					cli_print(cli, "Invalid tcp flag \"%s\"", argv[a]);
+					return NULL;
+				}
+
+				a++;
+			}
+		}
+	}
+
+	if (a < argc)
+	{
+		cli_print(cli, "Invalid flag \"%s\"", argv[a]);
+		return NULL;
+	}
+
+	return &rule;
+}
+
+ip_filter_rulet *access_list_rule_std(struct cli_def *cli, char *command, char **argv, int argc)
+{
+	static ip_filter_rulet rule;
+	struct in_addr addr;
+
+	if (CLI_HELP_REQUESTED)
+	{
+		if (argc == 1)
+		{
+			cli_arg_help(cli, argv[0][1],
+				"A.B.C.D", "Source address",
+				"any",     "Any source address",
+				"host",    "Source host",
+				NULL);
+
+			return NULL;
+		}
+
+		if (MATCH("any", argv[0]))
+		{
+			if (argc == 2 && !argv[1][1])
+				cli_arg_help(cli, 1, NULL);
+		}
+		else if (MATCH("host", argv[0]))
+		{
+			if (argc == 2)
+			{
+				cli_arg_help(cli, argv[1][1],
+					"A.B.C.D", "Host address",
+					NULL);
+			}
+			else if (argc == 3 && !argv[2][1])
+				cli_arg_help(cli, 1, NULL);
+		}
+		else
+		{
+			if (argc == 2)
+			{
+				cli_arg_help(cli, 1,
+					"A.B.C.D", "Wildcard bits",
+					NULL);
+			}
+			else if (argc == 3 && !argv[2][1])
+				cli_arg_help(cli, 1, NULL);
+		}
+
+		return NULL;
+	}
+
+	if (argc < 1)
+	{
+		cli_print(cli, "Specify rule details");
+		return NULL;
+	}
+
+	memset(&rule, 0, sizeof(rule));
+	rule.action = (command[0] == 'p')
+		? FILTER_ACTION_PERMIT
+		: FILTER_ACTION_DENY;
+
+	rule.proto = IPPROTO_IP;
+	if (MATCH("any", argv[0]))
+	{
+		rule.src_ip = INADDR_ANY;
+		rule.src_wild = INADDR_BROADCAST;
+	}
+	else if (MATCH("host", argv[0]))
+	{
+		if (argc != 2)
+		{
+			cli_print(cli, "Specify host ip address");
+			return NULL;
+		}
+
+		if (!inet_aton(argv[1], &addr))
+		{
+			cli_print(cli, "Cannot parse IP \"%s\"", argv[1]);
+			return NULL;
+		}
+
+		rule.src_ip = addr.s_addr;
+		rule.src_wild = INADDR_ANY;
+	}
+	else
+	{
+		if (argc > 2)
+		{
+			cli_print(cli, "Specify source ip address and wildcard");
+			return NULL;
+		}
+
+		if (!inet_aton(argv[0], &addr))
+		{
+			cli_print(cli, "Cannot parse IP \"%s\"", argv[0]);
+			return NULL;
+		}
+
+		rule.src_ip = addr.s_addr;
+
+		if (argc > 1)
+		{
+			if (!inet_aton(argv[1], &addr))
+			{
+				cli_print(cli, "Cannot parse IP \"%s\"", argv[1]);
+				return NULL;
+			}
+
+			rule.src_wild = addr.s_addr;
+		}
+		else
+			rule.src_wild = INADDR_ANY;
+	}
+
+	return &rule;
+}
+
+static int cmd_ip_access_list_rule(struct cli_def *cli, char *command, char **argv, int argc)
+{
+	int i;
+	ip_filter_rulet *rule = ip_filters[filt].extended
+		? access_list_rule_ext(cli, command, argv, argc)
+		: access_list_rule_std(cli, command, argv, argc);
+
+	if (!rule)
+		return CLI_OK;
+
+	for (i = 0; i < MAXFILTER_RULES - 1; i++) // -1: list always terminated by empty rule
+	{
+		if (!ip_filters[filt].rules[i].action)
+		{
+			memcpy(&ip_filters[filt].rules[i], rule, sizeof(*rule));
+			return CLI_OK;
+		}
+
+		if (!memcmp(&ip_filters[filt].rules[i], rule, sizeof(*rule)))
+			return CLI_OK;
+	}
+
+	cli_print(cli, "Too many rules");
+	return CLI_OK;
+}
 
 // Convert a string in the form of abcd.ef12.3456 into char[6]
 void parsemac(char *string, char mac[6])

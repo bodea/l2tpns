@@ -52,7 +52,8 @@ H3 {
     <LI><A HREF="#Interception">Interception</A></LI>
     <LI><A HREF="#Authentication">Authentication</A></LI>
     <LI><A HREF="#Plugins">Plugins</A></LI>
-    <LI><A HREF="#Walled Garden">Walled Garden</A></LI>
+    <LI><A HREF="#WalledGarden">Walled Garden</A></LI>
+    <LI><A HREF="#Filtering">Filtering</A></LI>
     <LI><A HREF="#Clustering">Clustering</A></LI>
     <LI><A HREF="#Routing">Routing</A></LI>
     <LI><A HREF="#Performance">Performance</A></LI>
@@ -200,29 +201,34 @@ software upgrade.
 
 <LI><B>primary_radius</B> (ip address)
 <LI><B>secondary_radius</B> (ip address)<BR>
-Sets the radius servers used for both authentication and accounting. 
-If the primary server does not respond, then the secondary radius
-server will be tried.
+Sets the RADIUS servers used for both authentication and accounting. 
+If the primary server does not respond, then the secondary RADIUS
+server will be tried.<br>
+<strong>Note:</strong> in addition to the source IP address and
+identifier, the RADIUS server <strong>must</strong> include the source
+port when detecting duplicates to supress (in order to cope with a
+large number of sessions comming on-line simultaneously l2tpns uses a
+set of udp sockets, each with a seperate identifier).
 </LI>
 
 <LI><B>primary_radius_port</B> (short)
 <LI><B>secondary_radius_port</B> (short)<BR>
-Sets the authentication ports for the primary and secondary radius
+Sets the authentication ports for the primary and secondary RADIUS
 servers.  The accounting port is one more than the authentication
-port.  If no radius ports are given, the authentication port defaults
+port.  If no RADIUS ports are given, the authentication port defaults
 to 1645, and the accounting port to 1646.
 </LI>
 
 <LI><B>radius_accounting</B> (boolean)<BR>
-If set to true, then radius accounting packets will be sent.  This
+If set to true, then RADIUS accounting packets will be sent.  This
 means that a Start record will be sent when the session is
 successfully authenticated, and a Stop record will be sent when the
 session is closed.
 </LI>
 
 <LI><B>radius_secret</B> (string)<BR>
-This secret will be used in all radius queries.  If this is not set then
-radius queries will fail.
+This secret will be used in all RADIUS queries.  If this is not set then
+RADIUS queries will fail.
 </LI>
 
 <LI><B>bind_address</B> (ip address)<BR>
@@ -337,6 +343,40 @@ define the attributes of BGP neighhbours.  Valid commands are:
 Where <I>peer</I> specifies the BGP neighbour as either a hostname or
 IP address, <I>as</I> is the remote AS number and <I>keepalive</I>,
 <I>hold</I> are the timer values in seconds.
+
+<P>Named access-lists are configured using one of the commands:
+<DL>
+  <DD><B>ip access-list standard</B> <I>name</I>
+  <DD><B>ip access-list extended</B> <I>name</I>
+</DL>
+
+<P>Subsequent lines prefixed with <B>permit</B> or <B>deny</B>
+define the body of the access-list.  Standard access-list syntax:
+<DL>
+  <DD>{<B>permit</B>|<B>deny</B>}
+    {<I>host</I>|<I>source source-wildcard</I>|<B>any</B>}
+    [{<I>host</I>|<I>destination destination-wildcard</I>|<B>any</B>}]
+</DL>
+
+Extended access-lists:
+
+<DL>
+  <DD>{<B>permit</B>|<B>deny</B>} <B>ip</B>
+    {<I>host</I>|<I>source source-wildcard</I>|<B>any</B>}
+    {<I>host</I>|<I>destination destination-wildcard</I>|<B>any</B>}
+  <DD>{<B>permit</B>|<B>deny</B>} <B>udp</B>
+    {<I>host</I>|<I>source source-wildcard</I>|<B>any</B>}
+	[{<B>eq</B>|<B>neq</B>|<B>gt</B>|<B>lt</B>} <I>port</I>|<B>range</B> <I>from</I> <I>to</I>]
+    {<I>host</I>|<I>destination destination-wildcard</I>|<B>any</B>}
+	[{<B>eq</B>|<B>neq</B>|<B>gt</B>|<B>lt</B>} <I>port</I>|<B>range</B> <I>from</I> <I>to</I>]
+  <DD>{<B>permit</B>|<B>deny</B>} <B>tcp</B>
+    {<I>host</I>|<I>source source-wildcard</I>|<B>any</B>}
+	[{<B>eq</B>|<B>neq</B>|<B>gt</B>|<B>lt</B>} <I>port</I>|<B>range</B> <I>from</I> <I>to</I>]
+    {<I>host</I>|<I>destination destination-wildcard</I>|<B>any</B>}
+	[{<B>eq</B>|<B>neq</B>|<B>gt</B>|<B>lt</B>} <I>port</I>|<B>range</B> <I>from</I> <I>to</I>]
+	[{<B>established</B>|{<B>match-any</B>|<B>match-all</B>}
+	    {<B>+</B>|<B>-</B>}{<B>fin</B>|<B>syn</B>|<B>rst</B>|<B>psh</B>|<B>ack</B>|<B>urg</B>} ...]
+</DL>
 
 <H3 ID="users">users</H3>
 
@@ -500,19 +540,19 @@ IP Address      Used  Session User
 </LI>
 
 <LI><B>show radius</B><BR>
-Show a summary of the in-use radius sessions.  This list should not be very
-long, as radius sessions should be cleaned up as soon as they are used.  The
+Show a summary of the in-use RADIUS sessions.  This list should not be very
+long, as RADIUS sessions should be cleaned up as soon as they are used.  The
 columns listed are:
 <TABLE>
-	<TR><TD><B>Radius</B></TD><TD>The ID of the radius request.  This is
-	sent in the packet to the radius server for identification.</TD></TR>
+	<TR><TD><B>Radius</B></TD><TD>The ID of the RADIUS request.  This is
+	sent in the packet to the RADIUS server for identification.</TD></TR>
 	<TR><TD><B>State</B></TD><TD>The state of the request - WAIT, CHAP,
 	AUTH, IPCP, START, STOP, NULL.</TD></TR>
-	<TR><TD><B>Session</B></TD><TD>The session ID that this radius
+	<TR><TD><B>Session</B></TD><TD>The session ID that this RADIUS
 	request is associated with</TD></TR>
 	<TR><TD><B>Retry</B></TD><TD>If a response does not appear to the
 	request, it will retry at this time.  This is a unix timestamp.</TD></TR>
-	<TR><TD><B>Try</B></TD><TD>Retry count.  The radius request is
+	<TR><TD><B>Try</B></TD><TD>Retry count.  The RADIUS request is
 	discarded after 3 retries.</TD></TR>
 </TABLE>
 <P>
@@ -553,7 +593,7 @@ current session for that username will be forwarded to the given
 host/port.  Specify <EM>no snoop username</EM> to disable interception
 for the session.<P>
 
-If you want interception to be permanent, you will have to modify the radius
+If you want interception to be permanent, you will have to modify the RADIUS
 response for the user.  See <A HREF="#Interception">Interception</A>.
 <P>
 </LI>
@@ -564,7 +604,7 @@ session.  Specify <EM>no throttle username</EM> to disable throttling
 for the current session.<P>
 
 If you want throttling to be permanent, you will have to modify the
-radius response for the user.  See <A HREF="#THrottling">Throttling</A>.
+RADIUS response for the user.  See <A HREF="#Throttling">Throttling</A>.
 <P>
 </LI>
 
@@ -660,7 +700,7 @@ desire.  You must first enable the global setting <EM>throttle_speed</EM>
 before this will be activated.<P>
 
 If you wish a session to be throttled permanently, you should set the
-Vendor-Specific radius value <B>Cisco-Avpair="throttle=yes"</B>, which
+Vendor-Specific RADIUS value <B>Cisco-Avpair="throttle=yes"</B>, which
 will be handled by the <EM>autothrottle</EM> module.<P>
 
 Otherwise, you can enable and disable throttling an active session using
@@ -684,7 +724,7 @@ and <EM>no snoop username</EM> CLI commands.  These will enable interception
 immediately.<P>
 
 If you wish the user to be intercepted whenever they reconnect, you will
-need to modify the radius response to include the Vendor-Specific value
+need to modify the RADIUS response to include the Vendor-Specific value
 <B>Cisco-Avpair="intercept=yes"</B>.  For this feature to be enabled,
 you need to have the <EM>autosnoop</EM> module loaded.<P>
 
@@ -694,11 +734,11 @@ Whenever a session connects, it is not fully set up until authentication is
 completed.  The remote end must send a PPP CHAP or PPP PAP authentication
 request to l2tpns.<P>
 
-This request is sent to the radius server, which will hopefully respond with
+This request is sent to the RADIUS server, which will hopefully respond with
 Auth-Accept or Auth-Reject.<P>
 
 If Auth-Accept is received, the session is set up and an IP address is
-assigned.  The radius server can include a Framed-IP-Address field in the
+assigned.  The RADIUS server can include a Framed-IP-Address field in the
 reply, and that address will be assigned to the client.  It can also include
 specific DNS servers, and a Framed-Route if that is required.<P>
 
@@ -708,7 +748,7 @@ walled garden module is loaded, in which case the user still receives the
 PPP AUTHACK, but their session is flagged as being a garden'd user, and they
 should not receive any service.<P>
 
-The radius reply can also contain a Vendor-Specific attribute called
+The RADIUS reply can also contain a Vendor-Specific attribute called
 Cisco-Avpair.  This field is a freeform text field that most Cisco
 devices understand to contain configuration instructions for the session.  In
 the case of l2tpns it is expected to be of the form
@@ -758,7 +798,7 @@ supplied structure:
 <TABLE CELLSPACING=1 CELLPADDING=3>
 	<TR BGCOLOR=LIGHTGREEN><TH><B>Event</B></TH><TH><B>Description</B></TH><TH><B>Parameters</B></TH></TR>
 	<TR VALIGN=TOP BGCOLOR=WHITE><TD><B>pre_auth</B></TD>
-		<TD>This is called after a radius response has been
+		<TD>This is called after a RADIUS response has been
 		received, but before it has been processed by the
 		code.  This will allow you to modify the response in
 		some way.
@@ -775,7 +815,7 @@ supplied structure:
 		</TD>
 	</TR>
 	<TR VALIGN=TOP BGCOLOR=WHITE><TD><B>post_auth</B></TD>
-		<TD>This is called after a radius response has been
+		<TD>This is called after a RADIUS response has been
 		received, and the basic checks have been performed.  This
 		is what the garden module uses to force authentication
 		to be accepted.
@@ -855,7 +895,7 @@ supplied structure:
 		</TD>
 	</TR>
 	<TR VALIGN=TOP BGCOLOR=WHITE><TD><B>radius_response</B></TD>
-		<TD>This is called whenever a radius response includes a
+		<TD>This is called whenever a RADIUS response includes a
 		Cisco-Avpair value.  The value is split up into
 		<EM>key=value</EM> pairs, and each is processed through all
 		modules.
@@ -901,7 +941,7 @@ Walled Garden is implemented so that you can provide perhaps limited service
 to sessions that incorrectly authenticate.<P>
 
 Whenever a session provides incorrect authentication, and the
-radius server responds with Auth-Reject, the walled garden module
+RADIUS server responds with Auth-Reject, the walled garden module
 (if loaded) will force authentication to succeed, but set the flag
 <EM>garden</EM> in the session structure, and adds an iptables rule to
 the <B>garden_users</B> chain to force all packets for the session's IP
@@ -925,6 +965,14 @@ command:
 <PRE>
 iptables -t nat -L garden -nvx
 </PRE>
+
+<H2 ID="Filtering">Filtering</H2>
+
+Sessions may be filtered by specifying <B>Filter-Id</B> attributes in
+the RADIUS reply.  <I>filter</I>.<B>in</B> specifies that the named
+access-list <I>filter</I> should be applied to traffic from the
+customer, <I>filter</I>.<B>out</B> specifies a list for traffic to the
+customer.
 
 <H2 ID="Clustering">Clustering</H2>
 

@@ -2,7 +2,7 @@
 .de Id
 .ds Dt \\$4 \\$5
 ..
-.Id $Id: startup-config.5,v 1.1 2004-11-17 15:08:19 bodea Exp $
+.Id $Id: startup-config.5,v 1.2 2004-11-27 05:19:54 bodea Exp $
 .TH STARTUP-CONFIG 5 "\*(Dt" L2TPNS "File Formats and Conventions"
 .SH NAME
 startup\-config \- configuration file for l2tpns
@@ -199,5 +199,111 @@ is the remote AS number and
 .IR keepalive ,
 .I hold
 are the timer values in seconds.
+.SS NAMED ACCESS LISTS
+Named access lists may be defined with either of
+.IP
+.BI "ip access\-list standard " name
+.br
+.BI "ip access\-list extended " name
+.PP
+Subsequent lines starting with
+.B permit
+or
+.B deny
+define the body of the access\-list.
+.PP
+.B Standard Access Lists
+.RS 4n
+Standard access lists are defined with:
+.IP
+.RB { permit | deny }
+.IR source " [" dest ]
+.PP
+Where
+.I source
+and
+.I dest
+specify IP matches using one of:
+.IP
+.I address
+.I wildard
+.br
+.B host
+.I address
+.br
+.B any
+.PP
+.I address
+and
+.I wildard
+are in dotted-quad notation, bits in the
+.I wildard
+indicate which address bits in
+.I address
+are relevant to the match (0 = exact match; 1 = don't care).
+.PP
+The shorthand
+.RB ' host
+.IR address '
+is equivalent to
+.RI ' address
+.BR 0.0.0.0 ';
+.RB ' any '
+to
+.RB ' 0.0.0.0
+.BR 255.255.255.255 '.
+.RE
+.PP
+.B Extended Access Lists
+.RS 4n
+Extended access lists are defined with:
+.IP
+.RB { permit | deny }
+.I proto
+.IR source " [" ports "] " dest " [" ports "] [" flags ]
+.PP
+Where
+.I proto
+is one of
+.BR ip ,
+.B tcp
+or
+.BR udp ,
+and
+.I source
+and
+.I dest
+are as described above for standard lists.
+.PP
+For
+.B tcp
+and
+.B udp
+matches, source and destination may be optionally followed by a
+.I ports
+specification:
+.IP
+.RB { eq | neq | gt | lt }
+.I port
+.br
+.B
+range
+.I from to
+.PP
+.B tcp
+matches may also specify
+.I flags
+to match against tcp header flags:
+.IP
+.RB { match\-any | match\-all }
+.RB { + | - }{ fin | syn | rst | psh | ack | urg }
+\&...
+.br
+.B established
+.PP
+.RB ' established '
+is shorthand for
+.RB ' "match-any +ack +rst -syn" '.
+.RE
 .SH SEE ALSO
 .BR l2tpns (8)

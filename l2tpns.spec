@@ -43,5 +43,5 @@ rm -rf %{buildroot}
 %attr(644,root,root) /usr/share/man/man[58]/*
 
 %changelog
-* Thu Nov 25 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.9-1
+* Sat Nov 27 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.9-1
 - 2.0.9 release, see /usr/share/doc/l2tpns-2.0.9/Changes
