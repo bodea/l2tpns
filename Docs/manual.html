@@ -257,6 +257,12 @@ the CLI, but changes will not affect currently connected users.
 <P>
 </LI>
 
+<LI><B>throttle_buckets</B> (int)<BR>
+Number of token buckets to allocate for throttling.  Each throttled
+session requires two buckets (in and out).
+<P>
+</LI>
+
 <LI><B>accounting_dir</B> (string)<BR>
 If set to a directory, then every 5 minutes the current usage for
 every connected use will be dumped to a file in this directory.  Each
