@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.70 2004-12-16 08:49:53 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.71 2004-12-16 08:54:16 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -2466,7 +2466,7 @@ static void mainloop(void)
 
 			if (c >= config->multi_read_count)
 				LOG(3, 0, 0, "Reached multi_read_count (%d); processed %d udp, %d tun and %d cluster packets\n",
-					udp_pkts, tun_pkts, cluster_pkts);
+					config->multi_read_count, udp_pkts, tun_pkts, cluster_pkts);
 		}
 
 			// Runs on every machine (master and slaves).
