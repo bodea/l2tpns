@@ -1,4 +1,4 @@
-* Wed Nov 17 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.8
+* Sat Nov 20 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.8
 - Ignore gateway address in Framed-Route (from Jonathan McDowell).
 - Don't route Framed-IP-Address if contained in a Framed-Route.
 - Call sessionshutdown() when a tunnel is dropped rather than
