@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.60 2005-03-10 06:16:05 bodea Exp $
+// $Id: l2tpns.h,v 1.61 2005-03-10 06:18:47 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -617,7 +617,7 @@ sessionidt sessionbyipv6(struct in6_addr ip);
 sessionidt sessionbyuser(char *username);
 void random_data(uint8_t *buf, int len);
 void sessionkill(sessionidt s, char *reason);
-void sessionshutdown(sessionidt s, char *reason, int result, error);
+void sessionshutdown(sessionidt s, char *reason, int result, int error);
 void send_garp(in_addr_t ip);
 void tunnelsend(uint8_t *buf, uint16_t l, tunnelidt t);
 void sendipcp(tunnelidt t, sessionidt s);

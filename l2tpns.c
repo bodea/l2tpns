@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.87 2005-03-10 06:16:05 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.88 2005-03-10 06:18:47 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -1433,7 +1433,7 @@ static void filter_session(sessionidt s, int filter_in, int filter_out)
 }
 
 // start tidy shutdown of session
-void sessionshutdown(sessionidt s, char *reason, int result, int code)
+void sessionshutdown(sessionidt s, char *reason, int result, int error)
 {
 	int walled_garden = session[s].walled_garden;
 
