@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.30 2004-11-27 20:41:41 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.31 2004-11-27 21:10:50 bodea Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -406,9 +406,9 @@ static int cmd_show_session(struct cli_def *cli, char *command, char **argv, int
 			cli_print(cli, "\tRx Speed:\t%lu", session[s].rx_connect_speed);
 			cli_print(cli, "\tTx Speed:\t%lu", session[s].tx_connect_speed);
 			if (session[s].filter_in && session[s].filter_in <= MAXFILTER)
-				cli_print(cli, "\tFilter in:\t%u (%s)", session[s].filter_in, filters[session[s].filter_in-1].name);
+				cli_print(cli, "\tFilter in:\t%u (%s)", session[s].filter_in, ip_filters[session[s].filter_in-1].name);
 			if (session[s].filter_out && session[s].filter_out <= MAXFILTER)
-				cli_print(cli, "\tFilter out:\t%u (%s)", session[s].filter_out, filters[session[s].filter_out-1].name);
+				cli_print(cli, "\tFilter out:\t%u (%s)", session[s].filter_out, ip_filters[session[s].filter_out-1].name);
 			if (session[s].snoop_ip && session[s].snoop_port)
 				cli_print(cli, "\tIntercepted:\t%s:%d", inet_toa(session[s].snoop_ip), session[s] .snoop_port);
 			else
@@ -2557,7 +2557,7 @@ ip_filter_rulet *access_list_rule_ext(struct cli_def *cli, char *command, char *
 		}
 		else
 		{
-			if (++a >= argc)
+			if (a >= argc - 1)
 			{
 				cli_print(cli, "Specify %s ip address and wildcard", i ? "destination" : "source");
 				return NULL;
@@ -2578,6 +2578,7 @@ ip_filter_rulet *access_list_rule_ext(struct cli_def *cli, char *command, char *
 			}
 
 			*wild = addr.s_addr;
+			a++;
 		}
 
 		if (rule.proto == IPPROTO_IP || a >= argc)

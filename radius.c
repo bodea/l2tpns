@@ -1,6 +1,6 @@
 // L2TPNS Radius Stuff
 
-char const *cvs_id_radius = "$Id: radius.c,v 1.15 2004-11-27 20:42:02 bodea Exp $";
+char const *cvs_id_radius = "$Id: radius.c,v 1.16 2004-11-27 21:10:51 bodea Exp $";
 
 #include <time.h>
 #include <stdio.h>
@@ -24,6 +24,7 @@ extern tunnelt *tunnel;
 extern u32 sessionid;
 extern configt *config;
 extern int *radfds;
+extern ip_filtert *ip_filters;
 
 static const char *radius_state(int state)
 {
@@ -545,17 +546,17 @@ void processrad(u8 *buf, int len, char socket_index)
 					    	// Filter-Id
 					    	char *filter = p + 2;
 						int l = p[1] - 2;
-						char *s;
+						char *suffix;
 						u8 *f = 0;
 						int i;
 
 						LOG(3, 0, s, session[s].tunnel, "   Radius reply contains Filter-Id \"%.*s\"\n", l, filter);
-						if ((s = memchr(filter, '.', l)))
+						if ((suffix = memchr(filter, '.', l)))
 						{
-							int b = s - filter;
-							if (l - b == 3 && !memcmp("in", s+1, 2))
+							int b = suffix - filter;
+							if (l - b == 3 && !memcmp("in", suffix+1, 2))
 								f = &session[s].filter_in;
-							else if (l - b == 4 && !memcmp("out", s+1, 3))
+							else if (l - b == 4 && !memcmp("out", suffix+1, 3))
 								f = &session[s].filter_out;
 
 							l = b;
