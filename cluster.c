@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.26 2004-12-16 23:40:31 bodea Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.27 2004-12-20 07:23:42 bodea Exp $";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -38,11 +38,12 @@ char const *cvs_id_cluster = "$Id: cluster.c,v 1.26 2004-12-16 23:40:31 bodea Ex
  */
 
 // Module variables.
-int cluster_sockfd = 0;		// The filedescriptor for the cluster communications port.
+int cluster_sockfd = 0;			// The filedescriptor for the cluster communications port.
 
 in_addr_t my_address = 0;		// The network address of my ethernet port.
 static int walk_session_number = 0;	// The next session to send when doing the slow table walk.
 static int walk_tunnel_number = 0;	// The next tunnel to send when doing the slow table walk.
+int forked = 0;				// Sanity check: CLI must not diddle with heartbeat table
 
 #define MAX_HEART_SIZE (8192)	// Maximum size of heartbeat packet. Must be less than max IP packet size :)
 #define MAX_CHANGES  (MAX_HEART_SIZE/(sizeof(sessiont) + sizeof(int) ) - 2)	// Assumes a session is the biggest type!
@@ -866,6 +867,11 @@ int cluster_send_session(int sid)
 		return -1;
 	}
 
+	if (forked) {
+		LOG(0, sid, 0, "cluster_send_session called from child process!"\n");
+		return -1;
+	}
+
 	return type_changed(C_CSESSION, sid);
 }
 
@@ -1177,9 +1183,22 @@ static int cluster_process_heartbeat(uint8_t *data, int size, int more, uint8_t 
 	config->cluster_last_hb = TIME;	// Reset to ensure that we don't become master!!
 
 	if (config->cluster_seq_number != h->seq) {	// Out of sequence heartbeat!
-		LOG(1, 0, 0, "HB: Got seq# %d but was expecting %d. asking for resend.\n", h->seq, config->cluster_seq_number);
+		static int lastseen_seq = 0;
+		static time_t lastseen_time = 0;
 
-		peer_send_message(addr, C_LASTSEEN, config->cluster_seq_number, NULL, 0);
+		// limit to once per second for a particular seq#
+		int ask = (config->cluster_seq_number != lastseen_seq || time_now != lastseen_time);
+
+		LOG(1, 0, 0, "HB: Got seq# %d but was expecting %d.  %s.\n",
+			h->seq, config->cluster_seq_number,
+			ask ? "Asking for resend" : "Ignoring");
+
+		if (ask)
+		{
+			lastseen_seq = config->cluster_seq_number;
+			lastseen_time = time_now;
+			peer_send_message(addr, C_LASTSEEN, config->cluster_seq_number, NULL, 0);
+		}
 
 		config->cluster_last_hb = TIME;	// Reset to ensure that we don't become master!!
 

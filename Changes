@@ -1,5 +1,9 @@
-* Sat Dec 18 2004 Brendan O'Dea <bod@optusnet.com.au> 2.1.0
+* Mon Dec 20 2004 Brendan O'Dea <bod@optusnet.com.au> 2.1.0
 - Add IPv6 support from Jonathan McDowell (work in progress).
+- Sanity check that cluster_send_session is not called from a child
+  process.
+- Throttle outgoing LASTSEEN packets to at most one per second for a
+  given seq#.
 
 * Fri Dec 17 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.13
 - Better cluster master collision resolution: keep a counter of state

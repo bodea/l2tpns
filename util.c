@@ -1,6 +1,6 @@
 /* Misc util functions */
 
-char const *cvs_id_util = "$Id: util.c,v 1.8 2004-12-16 08:49:53 bodea Exp $";
+char const *cvs_id_util = "$Id: util.c,v 1.9 2004-12-20 07:23:53 bodea Exp $";
 
 #include <unistd.h>
 #include <errno.h>
@@ -39,6 +39,7 @@ void *shared_malloc(unsigned int size)
 	return p;
 }
 
+extern int forked;
 extern int udpfd, controlfd, tunfd, snoopfd, ifrfd, cluster_sockfd;
 extern int *radfds;
 
@@ -50,6 +51,7 @@ pid_t fork_and_close()
 	if (pid)
 		return pid;
 
+	forked++;
 	if (config->scheduler_fifo)
 	{
 		struct sched_param params = {0};
