@@ -14,16 +14,12 @@ DEFINES += -DSTATEDIR='"$(statedir)"'
 OPTIM =
 OPTIM += -g
 OPTIM += -O3
-OPTIM += -funroll-loops
-OPTIM += -fomit-frame-pointer
-OPTIM += -finline-functions
-#OPTIM += -fstrength-reduce
 
 CC = gcc
 LD = gcc
 INCLUDES = -I.
 CPPFLAGS = $(INCLUDES) $(DEFINES)
-CFLAGS = -Wall $(OPTIM)
+CFLAGS = -Wall -Wformat-security -Wno-format-zero-length $(OPTIM)
 LDFLAGS =
 LDLIBS =
 INSTALL = install -c -D -o root -g root
@@ -61,16 +57,16 @@ depend:
 	mv Makefile Makefile.bak
 	mv Makefile.tmp Makefile
 
-l2tpns:	$(OBJS)
+l2tpns: $(OBJS)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LDLIBS) $($@.LIBS)
 
-nsctl:	nsctl.o control.o
+nsctl: nsctl.o control.o
 	$(LD) $(LDFLAGS) -o $@ $^ $(LDLIBS) $($@.LIBS)
 
-generateload:	test/generateload.o
+generateload: test/generateload.o
 	$(LD) $(LDFLAGS) -o $@ $^ $(LDLIBS) $($@.LIBS)
 
-bounce:	test/bounce.o
+bounce: test/bounce.o
 	$(LD) $(LDFLAGS) -o $@ $^ $(LDLIBS) $($@.LIBS)
 
 %.o: %.c
