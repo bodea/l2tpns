@@ -2,7 +2,7 @@
 .de Id
 .ds Dt \\$4 \\$5
 ..
-.Id $Id: startup-config.5,v 1.2 2004-11-27 05:19:54 bodea Exp $
+.Id $Id: startup-config.5,v 1.3 2004-11-29 06:29:28 bodea Exp $
 .TH STARTUP-CONFIG 5 "\*(Dt" L2TPNS "File Formats and Conventions"
 .SH NAME
 startup\-config \- configuration file for l2tpns
@@ -275,11 +275,8 @@ and
 .I dest
 are as described above for standard lists.
 .PP
-For
-.B tcp
-and
-.B udp
-matches, source and destination may be optionally followed by a
+For TCP and UDP matches, source and destination may be optionally
+followed by a
 .I ports
 specification:
 .IP
@@ -290,20 +287,33 @@ specification:
 range
 .I from to
 .PP
-.B tcp
-matches may also specify
 .I flags
-to match against tcp header flags:
-.IP
+may be one of:
+.RS
+.HP
 .RB { match\-any | match\-all }
 .RB { + | - }{ fin | syn | rst | psh | ack | urg }
 \&...
 .br
+Match packets with any or all of the tcp flags set
+.RB ( + )
+or clear
+.RB ( - ).
+.HP
 .B established
-.PP
-.RB ' established '
-is shorthand for
-.RB ' "match-any +ack +rst -syn" '.
+.br
+Match "established" TCP connections:  packets with
+.B RST
+or
+.B ACK
+set, and
+.B SYN
+clear.
+.HP
+.B fragments
+.br
+Match IP fragments.  May not be specified on rules with layer 4
+matches.
 .RE
 .SH SEE ALSO
 .BR l2tpns (8)
