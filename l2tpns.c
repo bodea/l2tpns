@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.60 2004-11-29 02:17:17 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.61 2004-11-29 03:55:21 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -4418,18 +4418,17 @@ int ip_filter(u8 *buf, int len, u8 filter)
     	if (len < 20) // up to end of destination address
 		return 0;
 
-	if (*buf >> 4) // IPv4
+	if ((*buf >> 4) != 4) // IPv4
 		return 0;
 
-
-	frag_offset = ntohs(*(u16 *) (buf + 0)) & 0x1fff;
+	frag_offset = ntohs(*(u16 *) (buf + 6)) & 0x1fff;
 	proto = buf[9];
 	src_ip = *(u32 *) (buf + 12);
 	dst_ip = *(u32 *) (buf + 16);
 
 	if (frag_offset == 0 && (proto == IPPROTO_TCP || proto == IPPROTO_UDP))
 	{
-	    	int l = buf[0] & 0xf;
+		int l = (buf[0] & 0xf) * 4; // length of IP header
 		if (len < l + 4) // ports
 			return 0;
 
@@ -4437,16 +4436,16 @@ int ip_filter(u8 *buf, int len, u8 filter)
 		dst_port = ntohs(*(u16 *) (buf + l + 2));
 		if (proto == IPPROTO_TCP)
 		{
-		    	if (len < l + 15) // flags
+		    	if (len < l + 14) // flags
 				return 0;
 
-			flags = buf[l + 14] & 0x3f;
+			flags = buf[l + 13] & 0x3f;
 		}
 	}
 
 	for (rule = ip_filters[filter].rules; rule->action; rule++)
 	{
-		if (proto && proto != rule->proto)
+		if (rule->proto != IPPROTO_IP && proto != rule->proto)
 			continue;
 
 		if (rule->src_wild != INADDR_BROADCAST &&

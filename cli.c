@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.34 2004-11-29 02:17:17 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.35 2004-11-29 03:55:19 bodea Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -3007,6 +3007,9 @@ static int cmd_show_access_list(struct cli_def *cli, char *command, char **argv,
 			cli_print(cli, "Access-list %s not defined", argv[i]);
 			return CLI_OK;
 		}
+
+		if (i)
+			cli_print(cli, "");
 
 		cli_print(cli, "%s IP access list %s",
 			ip_filters[f].extended ? "Extended" : "Standard",
