@@ -1,11 +1,11 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.3 2004-03-05 00:22:06 fred_nerk Exp $
+// $Id: l2tpns.h,v 1.4 2004-04-16 02:33:32 fred_nerk Exp $
 
 #include <netinet/in.h>
 #include <stdio.h>
 #include "config.h"
 
-#define VERSION	"1.1.0"
+#define VERSION	"1.1.2"
 
 // Limits
 #define MAXTUNNEL	500		// could be up to 65535
@@ -32,9 +32,9 @@
 #define HOMEDIR		"/home/l2tpns/"			// Base dir for data
 #define STATEFILE	"/tmp/l2tpns.dump"		// State dump file
 #define NOSTATEFILE	"/tmp/l2tpns.no_state_reload"	// If exists, state will not be reloaded
-#define CONFIGFILE	ETCDIR "l2tpns.cfg"	// Configuration file
-#define CLIUSERS	ETCDIR "l2tpns.users"		// CLI Users file
-#define IPPOOLFILE	ETCDIR "l2tpns.ip_pool"		// Address pool configuration
+#define CONFIGFILE	ETCDIR "/l2tpns.cfg"		// Configuration file
+#define CLIUSERS	ETCDIR "/l2tpns.users"		// CLI Users file
+#define IPPOOLFILE	ETCDIR "/l2tpns.ip_pool"	// Address pool configuration
 #ifndef LIBDIR
 #define LIBDIR		"/usr/lib/l2tpns"
 #endif

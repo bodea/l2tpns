@@ -50,7 +50,7 @@ install: all
 	$(INSTALL) -D -o root -g root -m 0644 etc/ip_pool.default $(etcdir)/l2tpns.ip_pool
 	$(INSTALL) -D -o root -g root -m 0600 etc/users.default $(etcdir)/l2tpns.users
 	for PLUGIN in $(PLUGINS); do \
-		$(INSTALL) -o root -g root -m 0755 $(PLUGIN) $(libdir)/$(PLUGIN); \
+		$(INSTALL) -D -o root -g root -m 0755 $(PLUGIN) $(libdir)/$(PLUGIN); \
 	done
 	if [ ! -e /dev/net/tun ]; then \
 		mkdir /dev/net; \
