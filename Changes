@@ -1,3 +1,42 @@
+* Tue Jul 13 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.1
+- Update INSTALL, Docs/manual.html documentation.
+- Add INTERNALS documentation.
+- Add lock_pages option.
+- TerminateAck fix from Yuri
+- Adject cli_loop args for libcli 1.8.0
+- Allow for backward compatabity in C_PING packets
+- Don't send RADIUS stop messages from sessionshutdown when called from
+  sessionkill.
+- s/tap/tun/ .
+- Fix for LASTSEEN breakage:  don't do anything in the CLI other than
+  flag changes to be made by the parent.
+- Split out master parts from cluster_check_master() into cluster_check_slaves().
+- Set hostname in CLI prompt.
+- Make cluster_hb_interval work; include interval/timeout in heartbeats
+  so that a change on the master is propagated immediately to the slaves.
+- Use fast heartbeats when there are slaves not up to date.
+- Ensure basetime of shut down master is set to zero (prevent delayed election).
+- Fix radius session leak on IPCP timeout.
+- Fix some off-by-one errors in tunnel/session loops.
+- Add "limp along" fix for when a slave drops temporarily from the mcast group.
+- Rename l2tpns.cfg as startup-config to match CONFIGFILE.
+- Update cli callbacks to work with libcli 1.6.
+  This supports privileged and unprivileged commands, as well as a configuration
+  mode.
+- Add help for all cli commands.
+- Add "show version" command.
+- Fix uptime counter display.
+- Fix nasty bug where cluster basetime can be set to 0 when sending initial
+  heartbeat.
+- Don't rmmod ip_conntrack, as this can take a lot of time.
+- Re-order logging in routeset such that the action is given before any error.
+- Use the correct gateway address when deleting routes.
+- Remove any routes when address changes.
+- Require authentication if telnet from remote ip.
+- Require enable password always.
+- Return error if show pool done on slave.
+- We MUST immediately exit if we're the wrong master!
+
 * Wed Jun 23 2004 David Parrish <david@dparrish.com> 2.0.0
 - Major release
 - Completely replace active/standby clustering with a new peer-to-peer
