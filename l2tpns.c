@@ -2199,8 +2199,9 @@ int main(int argc, char *argv[])
 	}
 
 	time(&basetime);             // start clock
-	// scan args
+	initdata();
 
+	// scan args
 	while ((o = getopt(argc, argv, "vc:h:a:")) >= 0)
 	{
 		switch (o)
@@ -2237,7 +2238,6 @@ int main(int argc, char *argv[])
 
 	initiptables();
 	initplugins();
-	initdata();
 	init_cli();
 	read_config_file();
 	log(1, 0, 0, 0, "L2TPNS Version 1.1.0 - http://l2tpns.sourceforge.net/\n");
