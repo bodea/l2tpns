@@ -44,7 +44,7 @@ OBJS =	arp.o \
 	tbf.o \
 	util.o
 
-PLUGINS = garden.so autothrottle.so autosnoop.so stripdomain.so
+PLUGINS = garden.so autothrottle.so autosnoop.so stripdomain.so setrxspeed.so
 TARGETS = l2tpns nsctl generateload bounce $(PLUGINS)
 
 all: $(TARGETS)
@@ -126,3 +126,4 @@ garden.so: garden.c l2tpns.h plugin.h control.h
 autothrottle.so: autothrottle.c l2tpns.h plugin.h control.h
 autosnoop.so: autosnoop.c l2tpns.h plugin.h control.h
 stripdomain.so: stripdomain.c l2tpns.h plugin.h
+setrxspeed.so: setrxspeed.c l2tpns.h plugin.h
