@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.27 2004-12-20 07:23:42 bodea Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.28 2004-12-22 05:30:58 bodea Exp $";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -868,7 +868,7 @@ int cluster_send_session(int sid)
 	}
 
 	if (forked) {
-		LOG(0, sid, 0, "cluster_send_session called from child process!"\n");
+		LOG(0, sid, 0, "cluster_send_session called from child process!\n");
 		return -1;
 	}
 
