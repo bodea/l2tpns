@@ -1,140 +1,197 @@
 // L2TPNS: constants
 
-char const *cvs_id_constants = "$Id: constants.c,v 1.3 2004-06-28 02:43:13 fred_nerk Exp $";
+char const *cvs_id_constants = "$Id: constants.c,v 1.4 2005-01-05 13:37:56 bodea Exp $";
 
+#include <stdio.h>
 #include "constants.h"
-#include <memory.h>
 
-const char *lcp_types[MAX_LCP_TYPE+1] = {
-	"Reserved",
-	"Maximum-Receive-Unit",
-	"Async-Control-Map",
-	"Authentication-Protocol",
-	"Quality-Protocol",
-	"Magic-Number",
-	"Reserved 6",
-	"Protocol-Field-Compression",
-	"Address-and-Control-Field-Compression",
-};
+#define CONSTANT(table, ...) \
+    static char const *table ## s[] = { \
+	__VA_ARGS__ \
+    }; \
+    char const *table(int index) \
+    { \
+	static char n[16]; \
+	if (index >= 0 && index < sizeof(table ## s) / sizeof(table ## s[0]) \
+	    && table ## s[index]) \
+		return table ## s[index]; \
+	snprintf(n, sizeof(n), "%d", index); \
+	return n; \
+    }
 
-const char *avpnames[MAX_AVPNAME+1] = {
-	"Message Type", // 0
-	"Result Code", // 1
-	"Protocol Version", // 2
-	"Framing Capabilities", // 3
-	"Bearer Capabilities", // 4
-	"Tie Breaker", // 5
-	"Firmware Revision", // 6
-	"Host Name", // 7
-	"Vendor Name", // 8
-	"Assigned Tunnel ID", // 9
-	"Receive Window Size", // 10
-	"Challenge", // 11
-	"Q.931 Cause Code", // 12
-	"Challenge Response", // 13
-	"Assigned Session ID", // 14
-	"Call Serial Number", // 15
-	"Minimum BPS", // 16
-	"Maximum BPS", // 17
-	"Bearer Type", // 18 (2 = Analog, 1 = Digital)
-	"Framing Type", // 19 (2 = Async, 1 = Sync)
-	"Reserved 20", // 20
-	"Called Number", // 21
-	"Calling Number", // 22
-	"Sub Address", // 23
-	"Tx Connect Speed", // 24
-	"Physical Channel ID", // 25
-	"Initial Received LCP CONFREQ", // 26
-	"Last Sent LCP CONFREQ", // 27
-	"Last Received LCP CONFREQ", // 28
-	"Proxy Authen Type", // 29
-	"Proxy Authen Name", // 30
-	"Proxy Authen Challenge", // 31
-	"Proxy Authen ID", // 32
-	"Proxy Authen Response", // 33
-	"Call Errors", // 34
-	"ACCM", // 35
-	"Random Vector", // 36
-	"Private Group ID", // 37
-	"Rx Connect Speed", // 38
-	"Sequencing Required", // 39
-};
+CONSTANT(lcp_type,
+    0,							// 0
+    "Maximum-Receive-Unit",				// 1
+    "Async-Control-Map",				// 2
+    "Authentication-Protocol",				// 3
+    "Quality-Protocol",					// 4
+    "Magic-Number",					// 5
+    0,							// 6
+    "Protocol-Field-Compression",			// 7
+    "Address-and-Control-Field-Compression"		// 8
+)
 
-const char *stopccn_result_codes[MAX_STOPCCN_RESULT_CODE+1] = {
-	"Reserved",
-	"General request to clear control connection",
-	"General error--Error Code indicates the problem",
-	"Control channel already exists",
-	"Requester is not authorized to establish a control channel",
-	"The protocol version of the requester is not supported",
-	"Requester is being shut down",
-	"Finite State Machine error",
-};
+CONSTANT(avp_name,
+    "Message Type",					// 0
+    "Result Code",					// 1
+    "Protocol Version",					// 2
+    "Framing Capabilities",				// 3
+    "Bearer Capabilities",				// 4
+    "Tie Breaker",					// 5
+    "Firmware Revision",				// 6
+    "Host Name",					// 7
+    "Vendor Name",					// 8
+    "Assigned Tunnel ID",				// 9
+    "Receive Window Size",				// 10
+    "Challenge",					// 11
+    "Q.931 Cause Code",					// 12
+    "Challenge Response",				// 13
+    "Assigned Session ID",				// 14
+    "Call Serial Number",				// 15
+    "Minimum BPS",					// 16
+    "Maximum BPS",					// 17
+    "Bearer Type",					// 18 (2 = Analog, 1 = Digital)
+    "Framing Type",					// 19 (2 = Async, 1 = Sync)
+    0,							// 20
+    "Called Number",					// 21
+    "Calling Number",					// 22
+    "Sub Address",					// 23
+    "Tx Connect Speed",					// 24
+    "Physical Channel ID",				// 25
+    "Initial Received LCP CONFREQ",			// 26
+    "Last Sent LCP CONFREQ",				// 27
+    "Last Received LCP CONFREQ",			// 28
+    "Proxy Authen Type",				// 29
+    "Proxy Authen Name",				// 30
+    "Proxy Authen Challenge",				// 31
+    "Proxy Authen ID",					// 32
+    "Proxy Authen Response",				// 33
+    "Call Errors",					// 34
+    "ACCM",						// 35
+    "Random Vector",					// 36
+    "Private Group ID",					// 37
+    "Rx Connect Speed",					// 38
+    "Sequencing Required"				// 39
+)
 
-const char *cdn_result_codes[MAX_CDN_RESULT_CODE+1] = {
-	"Reserved",
-	"Call disconnected due to loss of carrier",
-	"Call disconnected for the reason indicated in error code",
-	"Call disconnected for administrative reasons",
-	"Call failed due to lack of appropriate facilities being available (temporary condition)",
-	"Call failed due to lack of appropriate facilities being available (permanent condition)",
-	"Invalid destination",
-	"Call failed due to no carrier detected",
-	"Call failed due to detection of a busy signal",
-	"Call failed due to lack of a dial tone",
-	"Call was not established within time allotted by LAC",
-	"Call was connected but no appropriate framing was detected",
-};
+CONSTANT(stopccn_result_code,
+    0,							// 0
+    "General request to clear control connection",	// 1
+    "General error--Error Code indicates the problem",	// 2
+    "Control channel already exists",			// 3
+    "Requester is not authorized to establish a"
+	" control channel",				// 4
+    "The protocol version of the requester is not"
+	" supported",					// 5
+    "Requester is being shut down",			// 6
+    "Finite State Machine error"			// 7
+)
 
-const char *error_codes[MAX_ERROR_CODE+1] = {
-	"No general error",
-	"No control connection exists yet for this LAC-LNS pair",
-	"Length is wrong",
-	"One of the field values was out of range or reserved field was non-zero",
-	"Insufficient resources to handle this operation now",
-	"The Session ID is invalid in this context",
-	"A generic vendor-specific error occurred in the LAC",
-	"Try another LNS",
-	"Session or tunnel was shutdown due to receipt of an unknown AVP with the M-bit set",
-};
+CONSTANT(cdn_result_code,
+    0,							// 0
+    "Call disconnected due to loss of carrier",		// 1
+    "Call disconnected for the reason indicated in"
+	" error code",					// 2
+    "Call disconnected for administrative reasons",	// 3
+    "Call failed due to lack of appropriate facilities"
+	" being available (temporary condition)",	// 4
+    "Call failed due to lack of appropriate facilities"
+	" being available (permanent condition)",	// 5
+    "Invalid destination",				// 6
+    "Call failed due to no carrier detected",		// 7
+    "Call failed due to detection of a busy signal",	// 8
+    "Call failed due to lack of a dial tone",		// 9
+    "Call was not established within time allotted by"
+	" LAC",						// 10
+    "Call was connected but no appropriate framing was"
+	" detected"					// 11
+)
 
-const char *authtypes[MAX_AUTHTYPE+1] = {
-	"Reserved",
-	"Textual username/password exchange",
-	"PPP CHAP",
-	"PPP PAP",
-	"No Authentication",
-	"Microsoft CHAP Version 1 (MSCHAPv1)",
-};
+CONSTANT(error_code,
+    "No general error",					// 0
+    "No control connection exists yet for this LAC-LNS"
+	" pair",					// 1
+    "Length is wrong",					// 2
+    "One of the field values was out of range or"
+	" reserved field was non-zero",			// 3
+    "Insufficient resources to handle this operation"
+	" now",						// 4
+    "The Session ID is invalid in this context",	// 5
+    "A generic vendor-specific error occurred in the"
+	" LAC",						// 6
+    "Try another LNS",					// 7
+    "Session or tunnel was shutdown due to receipt of"
+	" an unknown AVP with the M-bit set"		// 8
+)
 
-const char *radius_states[MAX_RADIUS_STATE+1] = {
-	"RADIUSNULL",
-	"RADIUSCHAP",
-	"RADIUSAUTH",
-	"RADIUSIPCP",
-	"RADIUSSTART",
-	"RADIUSSTOP",
-	"RADIUSWAIT",
-	NULL
-};
+CONSTANT(auth_type,
+    0,							// 0
+    "Textual username/password exchange",		// 1
+    "PPP CHAP",						// 2
+    "PPP PAP",						// 3
+    "No Authentication",				// 4
+    "Microsoft CHAP Version 1 (MSCHAPv1)"		// 5
+)
 
-const char *l2tp_message_types[MAX_L2TP_MESSAGE_TYPE+1] = {
-	"reserved",
-	"SCCRQ",
-	"SCCRP",
-	"SCCCN",
-	"StopCCN", // 4
-	"reserved",
-	"HELLO",
-	"OCRQ",
-	"OCRP",
-	"OCCN",
-	"ICRQ", // 10
-	"ICRP",
-	"ICCN",
-	"reserved",
-	"CDN",
-	"WEN", // 15
-	"SLI",
-};
+CONSTANT(ppp_lcp_type,
+    0,							// 0
+    "ConfigReq",					// 1
+    "ConfigAck",					// 2
+    "ConfigNak",					// 3
+    "ConfigRej",					// 4
+    "TerminateReq",					// 5
+    "TerminateAck",					// 6
+    "CodeRej",						// 7
+    "ProtocolRej",					// 8
+    "EchoReq",						// 9
+    "EchoReply",					// 10
+    "DiscardRequest",					// 11
+    "IdentRequest"					// 12
+)
 
+CONSTANT(radius_state,
+    "RADIUSNULL",					// 0
+    "RADIUSCHAP",					// 1
+    "RADIUSAUTH",					// 2
+    "RADIUSIPCP",					// 3
+    "RADIUSSTART",					// 4
+    "RADIUSSTOP",					// 5
+    "RADIUSWAIT"					// 6
+)
+
+CONSTANT(radius_code,
+    0,							// 0
+    "Access-Request",					// 1
+    "Access-Accept",					// 2
+    "Access-Reject",					// 3
+    "Accounting-Request",				// 4
+    "Accounting-Response",				// 5
+    0,							// 6
+    0,							// 7
+    0,							// 8
+    0,							// 9
+    0,							// 10
+    "Access-Challenge",					// 11
+    "Status-Server (experimental)",			// 12
+    "Status-Client (experimental)"			// 13
+)
+
+CONSTANT(l2tp_message_type,
+    0,							// 0
+    "SCCRQ",						// 1
+    "SCCRP",						// 2
+    "SCCCN",						// 3
+    "StopCCN",						// 4
+    0,							// 5
+    "HELLO",						// 6
+    "OCRQ",						// 7
+    "OCRP",						// 8
+    "OCCN",						// 9
+    "ICRQ",						// 10
+    "ICRP",						// 11
+    "ICCN",						// 12
+    0,							// 13
+    "CDN",						// 14
+    "WEN",						// 15
+    "SLI"						// 16
+)
