@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.11 2004-09-02 04:18:07 fred_nerk Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.12 2004-09-21 04:30:46 fred_nerk Exp $";
 
 #include <stdio.h>
 #include <sys/file.h>
@@ -256,12 +256,12 @@ int peer_send_message(u32 peer, int type, int more, char * data, int size)
 // Forward a state changing packet to the master.
 //
 // The master just processes the payload as if it had
-// received it off the tap device.
+// received it off the tun device.
 //
-int master_forward_packet(char * data, int size, u32 addr, int port)
+int master_forward_packet(char *data, int size, u32 addr, int port)
 {
 	char buf[65536];	// Vast overkill.
-	char * p = buf;
+	char *p = buf;
 
 	if (!config->cluster_master_address) // No election has been held yet. Just skip it.
 		return -1;
