@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.38 2004-12-01 02:51:06 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.39 2004-12-03 06:41:11 bodea Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -1861,42 +1861,44 @@ static int cmd_set(struct cli_def *cli, char *command, char **argv, int argc)
 
 int regular_stuff(struct cli_def *cli)
 {
-	int i = debug_rb_tail;
-	int reprompt = 0;
+	int out = 0;
+	int i;
 
 #ifdef RINGBUFFER
-	while (i != ringbuffer->tail)
+	for (i = debug_rb_tail; i != ringbuffer->tail; i = (i + 1) % RINGBUFFER_SIZE)
 	{
-		int show_message = 0;
+		char *m = ringbuffer->buffer[i].message;
+		char *p;
+		int show = 0;
 
-		if (*ringbuffer->buffer[i].message)
+		if (!*m) continue;
+
+		switch (ringbuffer->buffer[i].level)
 		{
-			// Always show messages if we are doing general debug
-			if (ringbuffer->buffer[i].level == 0 && debug_flags.critical) show_message = 1;
-			if (ringbuffer->buffer[i].level == 1 && debug_flags.error)    show_message = 1;
-			if (ringbuffer->buffer[i].level == 2 && debug_flags.warning)  show_message = 1;
-			if (ringbuffer->buffer[i].level == 3 && debug_flags.info)     show_message = 1;
-			if (ringbuffer->buffer[i].level == 4 && debug_flags.calls)    show_message = 1;
-			if (ringbuffer->buffer[i].level == 5 && debug_flags.data)     show_message = 1;
+		case 0: show = debug_flags.critical;	break;
+		case 1: show = debug_flags.error;	break;
+		case 2: show = debug_flags.warning;	break;
+		case 3: show = debug_flags.info;	break;
+		case 4: show = debug_flags.calls;	break;
+		case 5: show = debug_flags.data;	break;
 		}
 
-		if (show_message)
-		{
-			cli_print(cli, "\r%s-%u-%u %s",
-					debug_levels[(int)ringbuffer->buffer[i].level],
-					ringbuffer->buffer[i].tunnel,
-					ringbuffer->buffer[i].session,
-					ringbuffer->buffer[i].message);
+		if (!show) continue;
 
-			reprompt = 1;
-		}
+		if (!(p = strchr(m, '\n')))
+			p = m + strlen(p);
 
-		if (++i == ringbuffer->tail) break;
-		if (i == RINGBUFFER_SIZE) i = 0;
+		cli_print(cli, "\r%s-%u-%u %.*s",
+			debug_levels[(int)ringbuffer->buffer[i].level],
+			ringbuffer->buffer[i].tunnel,
+			ringbuffer->buffer[i].session,
+			p - m, m);
+
+		out++;
 	}
 
 	debug_rb_tail = ringbuffer->tail;
-	if (reprompt)
+	if (out)
 		cli_reprompt(cli);
 #endif
 	return CLI_OK;

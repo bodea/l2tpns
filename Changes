@@ -3,6 +3,7 @@
   changes, propagated in the heartbeats; the master with the highest #
   of changes (that has kept in contact with the LAC through the
   outage) prevails.
+- Skip newlines in ringbuffer messages to CLI.
 
 * Wed Dec 1 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.12
 - The "This time, for sure!" release.
