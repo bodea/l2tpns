@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.20 2004-12-03 06:40:02 bodea Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.21 2004-12-09 00:38:44 bodea Exp $";
 
 #include <stdio.h>
 #include <sys/file.h>
@@ -896,7 +896,7 @@ static int cluster_catchup_slave(int seq, u32 slave)
 		diff += HB_MAX_SEQ;
 
 	if (diff >= HB_HISTORY_SIZE) {	// Ouch. We don't have the packet to send it!
-		LOG(0, 0, 0, "A slaved asked for message %d when our seq number is %d. Killing it.\n",
+		LOG(0, 0, 0, "A slave asked for message %d when our seq number is %d. Killing it.\n",
 			seq, config->cluster_seq_number);
 		return peer_send_message(slave, C_KILL, seq, NULL, 0);// Kill the slave. Nothing else to do.
 	}
