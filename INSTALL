@@ -2,40 +2,39 @@ Brief Installation guide for L2TPNS
 
 1. Requirements
 
-    * libcli 1.5.0 or greater
-      You can get it from http://sourceforge.net/projects/libcli.
+  * libcli 1.7.0 or greater
+    You can get it from http://sourceforge.net/projects/libcli.
 
-    * A kernel with iptables support
-
-    * If you want to use throttling, you must have a kernel and a tc (iproute) which supports HTB.
+  * A kernel with iptables support.
 
 
 2. Compile
 
-make
+  * make
 
 
 3. Install
 
-    * make install. This does:
-	* Install the binaries into /usr/bin (l2tpns, cluster_master and nsctl)
-	* Create config dir /etc/l2tpns and create default config files
-	* Ensures that /dev/net/tun exists
+  * make install.  This process:
+    - Installs the binaries into /usr/sbin (l2tpns and nsctl).
+    - Creates the config dir /etc/l2tpns installs default config files.
+    - Ensures that /dev/net/tun exists.
 
-    * Modify config file. You probably need to change most of the config options.
+  * Modify config file.  You probably need to change most of the config
+    options.
 
-    * Set up basic firewall rules. This should be done in an init script.
+  * Set up basic firewall rules.  The l2tpns process listens on a bunch of
+    ports:
 
-	iptables -t nat -N l2tpns
-	iptables -t nat -A PREROUTING -j l2tpns
-	iptables -t mangle -N l2tpns
-	iptables -t mangle -A PREROUTING -j l2tpns
+	23/tcp		command line interface
+	1701/udp	l2tp (on bind_address)
+	1702/udp	control port (nsctl)
+	32792/udp	clustering messages
 
-    * Set up walled garden firewall rules. This should be done in an init
-      script. This is not required unless you are using the garden plugin.
+  * If you are using the garden plugin, setup the walled garden firewall
+    rules.  These should be in /etc/l2tpns/build-garden, which is run by the
+    plugin after creating/flushing the "garden" nat table.
 
-	iptables -t nat -N garden >/dev/null 2>&1
-	iptables -t nat -F garden
 	iptables -t nat -A garden -p tcp -m tcp --dport 25 -j DNAT --to 192.168.1.1
 	iptables -t nat -A garden -p udp -m udp --dport 53 -j DNAT --to 192.168.1.1
 	iptables -t nat -A garden -p tcp -m tcp --dport 53 -j DNAT --to 192.168.1.1
@@ -46,24 +45,28 @@ make
 	iptables -t nat -A garden -p icmp -j ACCEPT
 	iptables -t nat -A garden -j DROP
 
-    * Set up IP address pools in /etc/l2tpns/ip_pool
+  * Set up IP address pools in /etc/l2tpns/ip_pool
 
-    * Set up clustering
+  * Set up routing.
+    - If you are running a single instance, you can simply statically route
+      the IP pools to the bind_address (l2tpns will send a gratuitous arp).
 
-	* Run cluster_master on a separate machine
-	* Set the "cluster master" and "bind address" parameters in /etc/l2tpns/l2tpns.cfg
+    - For a cluster, configure the members as BGP neighbours on your router
+      and configure multi-path load-balancing (on Cisco use "maximum-paths").
 
-    * Make l2tpns run on startup
+  * Make l2tpns run on startup.  In a clustered environment running from
+    inittab is recomended:
 
-    * Test it out
+	l2tp:2345:respawn:/home/l2tpns/src/l2tpns >/dev/null 2>&1
+
+  * Test it out.
 
 
 
-
-This software is quite stable and is being used in a production
-environment at a quite large ISP. However, you may have problems
-setting it up, and if so, I would appreciate it if you would file
-useful bug reports on the Source Forge page:
+This software is quite stable and is being used in a production environment at
+a quite large ISP.  However, you may have problems setting it up, and if so, I
+would appreciate it if you would file useful bug reports on the Source Forge
+page:
 
 http://sourceforge.net/projects/l2tpns/
 
