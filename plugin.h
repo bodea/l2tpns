@@ -14,7 +14,9 @@ enum
 	PLUGIN_NEW_SESSION,
 	PLUGIN_KILL_SESSION,
 	PLUGIN_CONTROL,
-	PLUGIN_RADIUS_RESPONSE
+	PLUGIN_RADIUS_RESPONSE,
+	PLUGIN_BECOME_MASTER,
+	PLUGIN_NEW_SESSION_MASTER,
 };
 
 #define PLUGIN_RET_ERROR	0
@@ -115,4 +117,4 @@ struct param_radius_response
 	char *value;
 };
 
-#endif
+#endif /* __PLUGIN_H__ */

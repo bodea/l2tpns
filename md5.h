@@ -1,5 +1,8 @@
-/* GLOBAL.H - RSAREF types and constants
+/* RSAREF types and constants
  */
+
+#ifndef __MD5_H__
+#define __MD5_H__
 
 /* PROTOTYPES should be set to one if and only if the compiler supports
   function argument prototyping.
@@ -68,3 +71,4 @@ void MD5Update PROTO_LIST
   ((MD5_CTX *, unsigned char *, unsigned int));
 void MD5Final PROTO_LIST ((unsigned char [16], MD5_CTX *));
 
+#endif /* __MD5_H__ */

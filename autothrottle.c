@@ -8,7 +8,7 @@
 #include "control.h"
 
 int __plugin_api_version = 1;
-struct pluginfuncs p;
+struct pluginfuncs *p;
 
 int plugin_radius_response(struct param_radius_response *data)
 {
@@ -16,12 +16,12 @@ int plugin_radius_response(struct param_radius_response *data)
 	{
 		if (strcmp(data->value, "yes") == 0)
 		{
-			p.log(3, 0, 0, 0, "         Throttling user\n");
+			p->log(3, 0, 0, 0, "         Throttling user\n");
 			data->s->throttle = 1;
 		}
 		else if (strcmp(data->value, "no") == 0)
 		{
-			p.log(3, 0, 0, 0, "         Not throttling user\n");
+			p->log(3, 0, 0, 0, "         Not throttling user\n");
 			data->s->throttle = 0;
 		}
 	}
@@ -30,10 +30,7 @@ int plugin_radius_response(struct param_radius_response *data)
 
 int plugin_init(struct pluginfuncs *funcs)
 {
-	if (!funcs) return 0;
-	memcpy(&p, funcs, sizeof(p));
-
-	return 1;
+	return ((p = funcs)) ? 1 : 0;
 }
 
 void plugin_done()

@@ -1,6 +1,7 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <asm/types.h>
 #include <linux/ip.h>
 #include <linux/icmp.h>
 #include <stdio.h>
@@ -9,9 +10,8 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <memory.h>
-#include "l2tpns.h"
 
-extern ipt myip;
+#include "l2tpns.h"
 
 __u16 _checksum(unsigned char *addr, int count);
 

@@ -15,4 +15,4 @@ int send_packet(int sockfd, int dest_ip, int dest_port, char *packet, int len);
 void dump_packet(char *packet, FILE *stream);
 int read_packet(int sockfd, char *packet);
 
-#endif
+#endif /* __CONTROL_H__ */

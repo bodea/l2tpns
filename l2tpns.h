@@ -1,19 +1,34 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.6 2004-05-24 04:33:35 fred_nerk Exp $
+// $Id: l2tpns.h,v 1.7 2004-06-23 03:52:24 fred_nerk Exp $
+
+#ifndef __L2TPNS_H__
+#define __L2TPNS_H__
 
 #include <netinet/in.h>
-#include <stdio.h>
 #include <execinfo.h>
+#include <stdio.h>
+#include <signal.h>
+#include <stdlib.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <sys/types.h>
+#include <libcli.h>
 #include "config.h"
 
-#define VERSION	"1.2.0"
+#define VERSION	"2.0.0"
 
 // Limits
 #define MAXTUNNEL	500		// could be up to 65535
 #define MAXSESSION	50000		// could be up to 65535
+#define MAXTBFS		6000		// Maximum token bucket filters. Might need up to 2 * session.
+
 #define RADIUS_SHIFT	5
 #define RADIUS_MASK	((unsigned short)(((unsigned short)~0) >> (16 - RADIUS_SHIFT)))
 #define	MAXRADIUS	((2 << (RADIUS_SHIFT - 1)) * 255)
+
+#define T_UNDEF		(0xffff)	// A tunnel ID that won't ever be used. Mark session as undefined.
+#define T_FREE		(0)		// A tunnel ID that won't ever be used. Mark session as free.
 
 #define	MAXCONTROL	1000		// max length control message we ever send...
 #define	MAXETHER	(1500+18)	// max packet we try sending to tap
@@ -28,20 +43,28 @@
 #define IDLE_TIMEOUT	240		// Time between last packet sent and LCP ECHO generation
 
 // Constants
-#define STATISTICS
-#define STAT_CALLS
-#define RINGBUFFER
+#ifndef PLUGINDIR
+#define PLUGINDIR	LIBDIR			// Plugins
+#endif
+
+#ifndef PLUGINCONF
+#define PLUGINCONF	ETCDIR			// Plugin config dir
+#endif
+
+#ifndef DATADIR
+#define DATADIR		"/tmp"
+#endif
+
+#ifndef FLASHDIR
+#define FLASHDIR	ETCDIR
+#endif
+
 #define TAPDEVICE	"/dev/net/tun"
 #define	UDP		17
-#define HOMEDIR		"/home/l2tpns/"			// Base dir for data
-#define STATEFILE	"/tmp/l2tpns.dump"              // State dump file
-#define NOSTATEFILE	"/tmp/l2tpns.no_state_reload"   // If exists, state will not be reloaded
-#define CONFIGFILE	ETCDIR "/l2tpns.cfg"            // Configuration file
-#define CLIUSERS	ETCDIR "/l2tpns.users"          // CLI Users file
-#define IPPOOLFILE	ETCDIR "/l2tpns.ip_pool"        // Address pool configuration
-#ifndef LIBDIR
-#define LIBDIR		"/usr/lib/l2tpns"
-#endif
+#define STATEFILE	DATADIR "/state.dump"		// State dump file
+#define CONFIGFILE	FLASHDIR "/startup-config"	// Configuration file
+#define CLIUSERS	FLASHDIR "/users"		// CLI Users file
+#define IPPOOLFILE	FLASHDIR "/ip_pool"		// Address pool configuration
 #define ACCT_TIME	3000		// 5 minute accounting interval
 #define	L2TPPORT	1701		// L2TP port
 #define RADPORT		1645		// old radius port...
@@ -56,7 +79,7 @@
 #define	PPPCCP		0x80FD
 #define PPPIP		0x0021
 #define PPPMP		0x003D
-#define MIN_IP_SIZE	0x20
+#define MIN_IP_SIZE	0x19
 enum
 {
 	ConfigReq = 1,
@@ -102,20 +125,13 @@ typedef struct controls         // control message
 }
 controlt;
 
-typedef struct stbft
-{
-    char handle[10];
-    char in_use;
-} tbft;
-
-
 // 336 bytes per session
 typedef struct sessions
 {
 	sessionidt next;		// next session in linked list
 	sessionidt far;			// far end session ID
 	tunnelidt tunnel;		// tunnel ID
-	ipt ip;				// IP of session set by RADIUS response
+	ipt ip;				// IP of session set by RADIUS response (host byte order).
 	int ip_pool_index;		// index to IP pool
 	unsigned long sid;		// session id for hsddb
 	u16 nr;				// next receive
@@ -126,27 +142,39 @@ typedef struct sessions
 	u32 total_cin;			// This counter is never reset while a session is open
 	u32 total_cout;			// This counter is never reset while a session is open
 	u32 id;				// session id
+	u32 throttle;			// non-zero if this session is throttled.
 	clockt opened;			// when started
 	clockt die;			// being closed, when to finally free
 	time_t last_packet;		// Last packet from the user (used for idle timeouts)
 	ipt dns1, dns2;			// DNS servers
 	routet route[MAXROUTE];		// static routes
 	u16 radius;			// which radius session is being used (0 for not waiting on authentication)
-	u8 flags;			// various bit flags
-	u8 snoop;			// are we snooping this session?
-	u8 throttle;			// is this session throttled?
-	u8 walled_garden;		// is this session gardened?
 	u16 mru;			// maximum receive unit
-	u16 tbf;			// filter bucket for throttling
+	u16 tbf_in;			// filter bucket for throttling in from the user.
+	u16 tbf_out;			// filter bucket for throttling out to the user.
+	u8 l2tp_flags;			// various bit flags from the ICCN on the l2tp tunnel.
+	u8 walled_garden;		// is this session gardened?
+	u8 flags1;			// additional flags (currently unused);
 	char random_vector[MAXTEL];
 	int random_vector_length;
-	char user[129];			// user (needed in seesion for radius stop messages)
+	char user[129];			// user (needed in seesion for radius stop messages) (can we reduce this? --mo)
 	char called[MAXTEL];		// called number
 	char calling[MAXTEL];		// calling number
-	unsigned long tx_connect_speed;
-	unsigned long rx_connect_speed;
+	u32 tx_connect_speed;
+	u32 rx_connect_speed;
+	u32 flags;			// Various session flags.
+	ipt snoop_ip;			// Interception destination IP
+	u16 snoop_port;			// Interception destination port
+	char reserved[28];		// Space to expand structure without changing HB_VERSION
 }
 sessiont;
+
+#define SF_IPCP_ACKED	(1<<0)		// Has this session seen an IPCP Ack?
+
+typedef struct {
+	u32	cin;
+	u32	cout;
+} sessioncountt;
 
 #define	SESSIONPFC	1            // PFC negotiated flags
 #define	SESSIONACFC	2           // ACFC negotiated flags
@@ -191,7 +219,7 @@ radiust;
 
 typedef struct
 {
-	ipt		address;
+	ipt		address;	// Host byte order..
 	char		assigned;	// 1 if assigned, 0 if free
 	sessionidt	session;
 	clockt		last;		// last used
@@ -223,7 +251,8 @@ enum
 	TUNNELFREE,		// Not in use
 	TUNNELOPEN,		// Active tunnel
 	TUNNELDIE,		// Currently closing
-	TUNNELOPENING		// Busy opening
+	TUNNELOPENING,		// Busy opening
+	TUNNELUNDEF,		// Undefined
 };
 
 enum
@@ -234,7 +263,8 @@ enum
 	RADIUSIPCP,             // sending IPCP to end user
 	RADIUSSTART,            // sending start accounting to RADIUS server
 	RADIUSSTOP,             // sending stop accounting to RADIUS server
-	RADIUSWAIT		// waiting timeout before available, in case delayed replies
+	RADIUSWAIT,		// waiting timeout before available, in case delayed replies
+	RADIUSDEAD,		// errored while talking to radius server.
 };
 
 struct Tstats
@@ -278,6 +308,9 @@ struct Tstats
 
     unsigned long	ip_allocated;
     unsigned long	ip_freed;
+
+    unsigned long	c_forwarded;
+    unsigned long	recv_forward;
 #ifdef STAT_CALLS
     unsigned long	call_processtap;
     unsigned long	call_processarp;
@@ -326,6 +359,7 @@ struct configt
 	int		debug;				// debugging level
 	time_t		start_time;			// time when l2tpns was started
 	char		bandwidth[256];			// current bandwidth
+	clockt		current_time;
 
 	char		config_file[128];
 	int		reload_config;			// flag to re-read config (set by cli)
@@ -344,21 +378,43 @@ struct configt
 
 	ipt		default_dns1, default_dns2;
 
-	ipt		snoop_destination_host;
-	u16		snoop_destination_port;
-
 	unsigned long	rl_rate;
 	int		save_state;
-	uint32_t	cluster_address;
-	int		ignore_cluster_updates;
 	char		accounting_dir[128];
 	ipt		bind_address;
+	int		send_garp;			// Set to true to garp for vip address on startup
+
 	int		target_uid;
 	int		dump_speed;
 	char		plugins[64][MAXPLUGINS];
 	char		old_plugins[64][MAXPLUGINS];
 
 	int		next_tbf;			// Next HTB id available to use
+	int		scheduler_fifo;			// If 1, will force scheduler to use SCHED_FIFO.
+							// Don't use this unless you have a dual processor machine!
+	int		icmp_rate;			// Max number of ICMP unreachable per second to send
+
+	u32	cluster_address;		// Multicast address of cluster.
+							// Send to this address to have everyone hear.
+	char		cluster_interface[64];		// Which interface to listen for multicast on.
+	int		cluster_iam_master;		// Are we the cluster master???
+	int		cluster_iam_uptodate;		// Set if we've got a full set of state from the master.
+	u32	cluster_master_address;		// The network address of the cluster master.
+							// Zero if i am the cluster master.
+	int		cluster_seq_number;		// Sequence number of the next heartbeat we'll send out
+							// (or the seq number we're next expecting if we're a slave).
+	int		cluster_undefined_sessions;	// How many sessions we're yet to receive from the master.
+	int		cluster_undefined_tunnels;	// How many tunnels we're yet to receive from the master.
+	int		cluster_highest_sessionid;
+	int		cluster_highest_tunnelid;
+	clockt		cluster_last_hb;		// Last time we saw a heartbeat from the master.
+	int		cluster_num_changes;		// Number of changes queued.
+
+#ifdef BGP
+	u16		as_number;
+	char		bgp_peer[2][64];
+	u16		bgp_peer_as[2];
+#endif
 };
 
 struct config_descriptt
@@ -381,10 +437,10 @@ void processipcp(tunnelidt t, sessionidt s, u8 * p, u16 l);
 void processipin(tunnelidt t, sessionidt s, u8 * p, u16 l);
 void processccp(tunnelidt t, sessionidt s, u8 * p, u16 l);
 void sendchap(tunnelidt t, sessionidt s);
-u8 *makeppp(u8 * b, u8 * p, int l, tunnelidt t, sessionidt s, u16 mtype);
+u8 *makeppp(u8 * b, int size, u8 * p, int l, tunnelidt t, sessionidt s, u16 mtype);
 u8 *findppp(u8 * b, u8 mtype);
 void initlcp(tunnelidt t, sessionidt s);
-void dumplcp(char *p, int l);
+void dumplcp(u8 *p, int l);
 
 
 // radius.c
@@ -410,7 +466,7 @@ void rl_destroy_tbf(u16 t);
 // l2tpns.c
 clockt now(void);
 clockt backoff(u8 try);
-void routeset(ipt ip, ipt mask, ipt gw, u8 add);
+void routeset(sessionidt, ipt ip, ipt mask, ipt gw, u8 add);
 void inittap(void);
 void initudp(void);
 void initdata(void);
@@ -439,9 +495,13 @@ void processtap(u8 * buf, int len);
 void processcontrol(u8 * buf, int len, struct sockaddr_in *addr);
 int assign_ip_address(sessionidt s);
 void free_ip_address(sessionidt s);
-void snoop_send_packet(char *packet, u16 size);
+void snoop_send_packet(char *packet, u16 size, ipt destination, u16 port);
 void dump_acct_info();
 void mainloop(void);
+int cmd_show_ipcache(struct cli_def *cli, char *command, char **argv, int argc);
+int cmd_show_hist_idle(struct cli_def *cli, char *command, char **argv, int argc);
+int cmd_show_hist_open(struct cli_def *cli, char *command, char **argv, int argc);
+
 #define log _log
 #ifndef log_hex
 #define log_hex(a,b,c,d) do{if (a <= config->debug) _log_hex(a,0,0,0,b,c,d);}while (0)
@@ -449,7 +509,7 @@ void mainloop(void);
 void _log(int level, ipt address, sessionidt s, tunnelidt t, const char *format, ...) __attribute__((format (printf, 5, 6)));
 void _log_hex(int level, ipt address, sessionidt s, tunnelidt t, const char *title, const char *data, int maxsize);
 void build_chap_response(char *challenge, u8 id, u16 challenge_length, char **challenge_response);
-int sessionsetup(tunnelidt t, sessionidt s, u8 routes);
+int sessionsetup(tunnelidt t, sessionidt s);
 int cluster_send_session(int s);
 int cluster_send_tunnel(int t);
 int cluster_send_goodbye();
@@ -459,15 +519,23 @@ void cli_do(int sockfd);
 #ifdef RINGBUFFER
 void ringbuffer_dump(FILE *stream);
 #endif
-void initplugins();
+void initplugins(void);
 int run_plugins(int plugin_type, void *data);
 void add_plugin(char *plugin_name);
 void remove_plugin(char *plugin_name);
+void plugins_done(void);
 void tunnelclear(tunnelidt t);
 void host_unreachable(ipt destination, u16 id, ipt source, char *packet, int packet_len);
-
+void fix_address_pool(int sid);
+void rebuild_address_pool(void);
+void send_ipin(sessionidt s, u8 * buf, int len);
+int throttle_session(sessionidt s, int throttle);
+int load_session(sessionidt, sessiont *);
+void become_master(void);	// We're the master; kick off any required master initializations.
 extern tunnelt *tunnel;
 extern sessiont *session;
+extern sessioncountt *sess_count;
+extern ippoolt *ip_address_pool;
 #define sessionfree (session[0].next)
 
 #define log_backtrace(count, max) \
@@ -485,3 +553,12 @@ if (count++ < max) { \
 	free(strings); \
 }
 
+
+extern struct configt *config;
+extern time_t basetime;		// Time when this process started.
+extern time_t time_now;		// Seconds since EPOCH.
+extern u32 last_sid;
+extern struct Tstats *_statistics;
+extern ipt my_address;
+extern int tun_write(u8 *data, int size);
+#endif /* __L2TPNS_H__ */

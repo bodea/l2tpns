@@ -8,21 +8,28 @@
 #include "control.h"
 
 int __plugin_api_version = 1;
-struct pluginfuncs p;
+static struct pluginfuncs *p = 0;
 
-char *init_commands[] = {
-	// This is for incoming connections to a gardened user
-	"iptables -t nat -N garden_users 2>&1 >/dev/null",
+static int iam_master = 0;	// We're all slaves! Slaves I tell you!
+
+char *up_commands[] = {
+	"iptables -t nat -N garden >/dev/null 2>&1",	// Create a chain that all gardened users will go through
+	"iptables -t nat -F garden",
+	". " PLUGINCONF "/build-garden",		// Populate with site-specific DNAT rules
+	"iptables -t nat -N garden_users >/dev/null 2>&1",// Empty chain, users added/removed by garden_session
 	"iptables -t nat -F garden_users",
-	"iptables -t nat -N garden 2>&1", /* Don't flush - init script sets this up */
-	"iptables -t nat -A l2tpns -j garden_users",
-	NULL
+	"iptables -t nat -A PREROUTING -j garden_users",	// DNAT any users on the garden_users chain
+	NULL,
 };
 
-char *done_commands[] = {
-	"iptables -t nat -F garden_users 2>&1 >/dev/null",
-	"iptables -t nat -D l2tpns -j garden_users",
-	NULL
+char *down_commands[] = {
+	"iptables -t nat -F PREROUTING",
+	"iptables -t nat -F garden_users",
+	"iptables -t nat -X garden_users",
+	"iptables -t nat -F garden",
+	"iptables -t nat -X garden",
+	"rmmod iptable_nat ip_conntrack",
+	NULL,
 };
 
 int garden_session(sessiont *s, int flag);
@@ -32,7 +39,7 @@ int plugin_post_auth(struct param_post_auth *data)
 	// Ignore if user authentication was successful
 	if (data->auth_allowed) return PLUGIN_RET_OK;
 
-	p.log(3, 0, 0, 0, "Walled Garden allowing login\n");
+	p->log(3, 0, 0, 0, "Walled Garden allowing login\n");
 	data->auth_allowed = 1;
 	data->s->walled_garden = 1;
 	return PLUGIN_RET_OK;
@@ -40,13 +47,23 @@ int plugin_post_auth(struct param_post_auth *data)
 
 int plugin_new_session(struct param_new_session *data)
 {
-	if (data->s->walled_garden) garden_session(data->s, 1);
+	if (!iam_master)
+		return PLUGIN_RET_OK;	// Slaves don't do walled garden processing.
+
+	if (data->s->walled_garden)
+		garden_session(data->s, 1);
+
 	return PLUGIN_RET_OK;
 }
 
 int plugin_kill_session(struct param_new_session *data)
 {
-	if (data->s->walled_garden) garden_session(data->s, 0);
+	if (!iam_master)
+		return PLUGIN_RET_OK;	// Slaves don't do walled garden processing.
+
+	if (data->s->walled_garden)
+		garden_session(data->s, 0);
+
 	return PLUGIN_RET_OK;
 }
 
@@ -55,12 +72,21 @@ int plugin_control(struct param_control *data)
 	sessiont *s;
 	sessionidt session;
 
-	if (data->type != PKT_GARDEN && data->type != PKT_UNGARDEN) return PLUGIN_RET_OK;
-	if (!data->data && data->data_length) return PLUGIN_RET_OK;
+	if (!iam_master)	// All garden processing happens on the master.
+		return PLUGIN_RET_OK;
+
+	if (data->type != PKT_GARDEN && data->type != PKT_UNGARDEN)
+		return PLUGIN_RET_OK;
+
+	if (!data->data && data->data_length)
+		return PLUGIN_RET_OK;
+
 	session = atoi((char*)(data->data));
-	if (!session) return PLUGIN_RET_OK; // Really?
+	if (!session)
+		return PLUGIN_RET_OK;
+
 	data->send_response = 1;
-	s = p.get_session_by_id(session);
+	s = p->get_session_by_id(session);
 	if (!s || !s->ip)
 	{
 		char *errormsg = "Session not connected";
@@ -68,7 +94,7 @@ int plugin_control(struct param_control *data)
 		sprintf((data->response + data->response_length), "%s", errormsg);
 		data->response_length += strlen(errormsg) + 1;
 
-		p.log(3, 0, 0, 0, "Unknown session %d\n", session);
+		p->log(3, 0, 0, 0, "Unknown session %d\n", session);
 		return PLUGIN_RET_STOP;
 	}
 	*(short *)(data->response + 2) = ntohs(PKT_RESP_OK);
@@ -80,7 +106,31 @@ int plugin_control(struct param_control *data)
 		sprintf((data->response + data->response_length), "%s", errormsg);
 		data->response_length += strlen(errormsg) + 1;
 	}
+
 	return PLUGIN_RET_STOP;
+}
+
+int plugin_become_master(void)
+{
+	int i;
+	iam_master = 1;	// We just became the master. Wow!
+
+	for (i = 0; up_commands[i] && *up_commands[i]; i++)
+	{
+		p->log(3, 0, 0, 0, "Running %s\n", up_commands[i]);
+		system(up_commands[i]);
+	}
+
+	return PLUGIN_RET_OK;
+}
+
+// Called for each active session after becoming master
+int plugin_new_session_master(sessiont * s)
+{	
+	if (s->walled_garden)
+		garden_session(s, 1);
+
+	return PLUGIN_RET_OK;
 }
 
 int garden_session(sessiont *s, int flag)
@@ -90,34 +140,11 @@ int garden_session(sessiont *s, int flag)
 	if (!s) return 0;
 	if (!s->opened) return 0;
 
-	/* Note that we don't handle throttling/snooping/etc here
-	 * To do that, we'd need to send an end accounting record
-	 * then a radius auth, then start accouting again.
-	 * That means that we need the password (which garden has)
-	 * and a lot of code to check that the new set of params
-	 * (routes, IP, ACLs, etc) 'matched' the old one in a
-	 * 'compatable' way. (ie user's system doesn't need to be told
-	 * of the change)
-	 *
-	 * Thats a lot of pain/code for very little gain.
-	 * If we want them redone from scratch, just sessionkill them -
-	 * a user on garden isn't going to have any open TCP
-	 * connections which are worth caring about, anyway.
-	 *
-	 * Note that the user will be rethrottled shortly by the scan
-	 * script thingy if appropriate.
-	 *
-	 * Currently, garden only directly ungardens someone if
-	 * they haven't paid their bill, and then subsequently do so
-	 * online. This isn't something which can be set up by a malicious
-	 * customer at will.
-	 */
 	if (flag == 1)
 	{
-		// Gardened User
-		p.log(2, 0, 0, s->tunnel, "Trap user %s (%s) in walled garden\n", s->user, p.inet_toa(ntohl(s->ip)));
-		snprintf(cmd, 2048, "iptables -t nat -A garden_users -s %s -j garden", p.inet_toa(ntohl(s->ip)));
-		p.log(3, 0, 0, s->tunnel, "%s\n", cmd);
+		p->log(2, 0, 0, s->tunnel, "Garden user %s (%s)\n", s->user, p->inet_toa(htonl(s->ip)));
+		snprintf(cmd, 2048, "iptables -t nat -A garden_users -s %s -j garden", p->inet_toa(htonl(s->ip)));
+		p->log(3, 0, 0, s->tunnel, "%s\n", cmd);
 		system(cmd);
 		s->walled_garden = 1;
 	}
@@ -127,18 +154,18 @@ int garden_session(sessiont *s, int flag)
 		int count = 40;
 
 		// Normal User
-		p.log(2, 0, 0, s->tunnel, "Release user %s (%s) from walled garden\n", s->user, p.inet_toa(ntohl(s->ip)));
+		p->log(2, 0, 0, s->tunnel, "Un-Garden user %s (%s)\n", s->user, p->inet_toa(htonl(s->ip)));
 		// Kick off any duplicate usernames
 		// but make sure not to kick off ourself
-		if (s->ip && !s->die && (other = p.get_session_by_username(s->user)) && s != p.get_session_by_id(other)) {
-			p.sessionkill(other, "Duplicate session when user un-gardened");
+		if (s->ip && !s->die && (other = p->get_session_by_username(s->user)) && s != p->get_session_by_id(other)) {
+			p->sessionkill(other, "Duplicate session when user released from walled garden");
 		}
 		/* Clean up counters */
 		s->cin = s->cout = 0;
 		s->pin = s->pout = 0;
 
-		snprintf(cmd, 2048, "iptables -t nat -D garden_users -s %s -j garden", p.inet_toa(ntohl(s->ip)));
-		p.log(3, 0, 0, s->tunnel, "%s\n", cmd);
+		snprintf(cmd, 2048, "iptables -t nat -D garden_users -s %s -j garden", p->inet_toa(htonl(s->ip)));
+		p->log(3, 0, 0, s->tunnel, "%s\n", cmd);
 		while (--count)
 		{
 			int status = system(cmd);
@@ -149,8 +176,8 @@ int garden_session(sessiont *s, int flag)
 
 		if (!s->die) {
 			/* OK, we're up! */
-			u16 r = p.radiusnew(p.get_id_by_session(s));
-			p.radiussend(r, RADIUSSTART);
+			u16 r = p->radiusnew(p->get_id_by_session(s));
+			p->radiussend(r, RADIUSSTART);
 		}
 	}
 	s->walled_garden = flag;
@@ -159,15 +186,32 @@ int garden_session(sessiont *s, int flag)
 
 int plugin_init(struct pluginfuncs *funcs)
 {
-	int i;
+	FILE *tables;
+	int found_nat = 0;
 
-	if (!funcs) return 0;
-	memcpy(&p, funcs, sizeof(p));
+	if (!funcs)
+		return 0;
 
-	for (i = 0; init_commands[i] && *init_commands[i]; i++)
+	p = funcs;
+
+	if ((tables = fopen("/proc/net/ip_tables_names", "r")))
 	{
-		p.log(3, 0, 0, 0, "Running %s\n", init_commands[i]);
-		system(init_commands[i]);
+		char buf[1024];
+		while (fgets(buf, sizeof(buf), tables) && !found_nat)
+			found_nat = !strcmp(buf, "nat\n");
+
+		fclose(tables);
+	}
+
+	/* master killed/crashed? */
+	if (found_nat)
+	{
+		int i;
+		for (i = 0; down_commands[i] && *down_commands[i]; i++)
+		{
+			p->log(3, 0, 0, 0, "Running %s\n", down_commands[i]);
+			system(down_commands[i]);
+		}
 	}
 
 	return 1;
@@ -176,10 +220,14 @@ int plugin_init(struct pluginfuncs *funcs)
 void plugin_done()
 {
 	int i;
-	for (i = 0; done_commands[i] && *done_commands[i]; i++)
+
+	if (!iam_master)	// Never became master. nothing to do.
+		return;
+
+	for (i = 0; down_commands[i] && *down_commands[i]; i++)
 	{
-		p.log(3, 0, 0, 0, "Running %s\n", done_commands[i]);
-		system(done_commands[i]);
+		p->log(3, 0, 0, 0, "Running %s\n", down_commands[i]);
+		system(down_commands[i]);
 	}
 }
 

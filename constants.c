@@ -4,7 +4,7 @@
 const char *lcp_types[MAX_LCP_TYPE+1] = {
 	"Reserved",
 	"Maximum-Receive-Unit",
-	"Reserved 2",
+	"Async-Control-Map",
 	"Authentication-Protocol",
 	"Quality-Protocol",
 	"Magic-Number",

@@ -1,5 +1,5 @@
 // L2TPNS Linked List Stuff
-// $Id: ll.c,v 1.2 2004-03-05 00:09:03 fred_nerk Exp $
+// $Id: ll.c,v 1.3 2004-06-23 03:52:24 fred_nerk Exp $
 
 #include <stdio.h>
 #include <sys/file.h>

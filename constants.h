@@ -1,5 +1,5 @@
-
-// enum these ?
+#ifndef __CONSTANTS_H__
+#define __CONSTANTS_H__
 
 #define MAX_LCP_TYPE 8
 extern const char *lcp_types[MAX_LCP_TYPE+1];
@@ -25,3 +25,5 @@ extern const char *radius_states[MAX_RADIUS_STATE+1];
 
 #define MAX_L2TP_MESSAGE_TYPE 16
 extern const char *l2tp_message_types[MAX_L2TP_MESSAGE_TYPE+1];
+
+#endif /* __CONSTANTS_H__ */

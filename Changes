@@ -1,3 +1,32 @@
+* Wed Jun 23 2004 David Parrish <david@dparrish.com> 2.0.0
+- Major release
+- Completely replace active/standby clustering with a new peer-to-peer
+  clustering method which allows much greater throughput and is a lot more fault
+  tolerant
+- Add internal tbf implementation for throttling without relying on tc and
+  kernel HTB
+- Add support for iBGP and eBGP to advertise routes
+- Add cli commands "show cluster", "show bgp", "show ipcache", "show throttle",
+  "show tbf", "suspend bgp", "restart bgp", "show user"
+- Interception destination must be set per-user
+- If SMP machine, allow use of SCHED_FIFO, which should improve performance
+- Added config option to send GARP at startup
+- Added plugin_become_master and plugin_new_session_master plugin hooks
+- Remove useless sessionsendarp(). This isn't needed now that we are using TUN
+  instead of TAP.
+- ICMP rate limiting so not every unreachable packet is replied with an ICMP
+  unreachable message
+- mangle table is not required on anything but the cluster master, so slaves
+  will drop the mangle table and attempt to unload the ip_conntrack module
+- Statically assigned IP addresses (by Radius) work now
+- Add -d command-line flag to detach and become a daemon
+- Configuration file is now "/etc/l2tpns/startup-config"
+- Reduced MIN_IP_SIZE to 0x19 to stop a pile of Short IP warnings
+- Resend initial IPCP request until it's acknowleged by the client
+- Better radius session cleanup logic
+- Many miscellaenous bugfixes and performance enhancements
+- Thanks to Michael O'Reilly and Brendan O'Dea for most of these new features
+
 * Mon May 24 2004 David Parrish <david@dparrish.com> 1.2.0
 - Fix SEGFAULT in garden module
 - Use multiple radius sockets to allow more concurrent authentication requests

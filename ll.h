@@ -25,4 +25,4 @@ void *ll_next(linked_list *l);
 int ll_size(linked_list *l);
 int ll_contains(linked_list *l, void *search);
 
-#endif
+#endif /* __LL_H__ */
