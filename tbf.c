@@ -1,6 +1,6 @@
 // L2TPNS: token bucket filters
 
-char const *cvs_id_tbf = "$Id: tbf.c,v 1.6 2004-09-02 04:18:07 fred_nerk Exp $";
+char const *cvs_id_tbf = "$Id: tbf.c,v 1.7 2004-10-28 03:26:41 bodea Exp $";
 
 #define _GNU_SOURCE
 
@@ -21,7 +21,7 @@ static void tbf_run_queue(int tbf_id);
 
 void init_tbf(void)
 {
-	if ((filter_list = shared_malloc(sizeof(*filter_list) * MAXTBFS)) == MAP_FAILED)
+	if (!(filter_list = shared_malloc(sizeof(*filter_list) * MAXTBFS)))
 		return;
 
 	filter_list_size = MAXTBFS;
