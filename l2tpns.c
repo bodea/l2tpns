@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.48 2004-11-11 03:07:42 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.49 2004-11-16 07:54:32 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -58,31 +58,32 @@ struct configt *config = NULL;	// all configuration
 int tunfd = -1;			// tun interface file handle. (network device)
 int udpfd = -1;			// UDP file handle
 int controlfd = -1;		// Control signal handle
+int clifd = -1;			// Socket listening for CLI connections.
 int snoopfd = -1;		// UDP file handle for sending out intercept data
 int *radfds = NULL;		// RADIUS requests file handles
 int ifrfd = -1;			// File descriptor for routing, etc
 time_t basetime = 0;		// base clock
 char hostname[1000] = "";	// us.
-int tunidx;			// ifr_ifindex of tun device
-u32 sessionid = 0;		// session id for radius accounting
-int syslog_log = 0;		// are we logging to syslog
-FILE *log_stream = NULL;	// file handle for direct logging (i.e. direct into file, not via syslog).
+static u32 sessionid = 0;	// session id for radius accounting
+static int syslog_log = 0;	// are we logging to syslog
+static FILE *log_stream = NULL;	// file handle for direct logging (i.e. direct into file, not via syslog).
 extern int cluster_sockfd;	// Intra-cluster communications socket.
 u32 last_id = 0;		// Last used PPP SID. Can I kill this?? -- mo
-int clifd = 0;			// Socket listening for CLI connections.
 
 struct cli_session_actions *cli_session_actions = NULL;	// Pending session changes requested by CLI
 struct cli_tunnel_actions *cli_tunnel_actions = NULL;	// Pending tunnel changes required by CLI
 
 static void *ip_hash[256];	// Mapping from IP address to session structures.
 
-u32 udp_tx = 0, udp_rx = 0, udp_rx_pkt = 0;	// Global traffic counters.
-u32 eth_tx = 0, eth_rx = 0, eth_rx_pkt = 0;
-u32 ip_pool_size = 1;		// Size of the pool of addresses used for dynamic address allocation.
-time_t time_now = 0;		// Current time in seconds since epoch.
-char time_now_string[64] = {0};	// Current time as a string.
-char main_quit = 0;		// True if we're in the process of exiting.
-char *_program_name = NULL;
+// Traffic counters.
+static u32 udp_rx = 0, udp_rx_pkt = 0, udp_tx = 0;
+static u32 eth_rx = 0, eth_rx_pkt = 0;
+u32 eth_tx = 0;
+
+static u32 ip_pool_size = 1;		// Size of the pool of addresses used for dynamic address allocation.
+time_t time_now = 0;			// Current time in seconds since epoch.
+static char time_now_string[64] = {0};	// Current time as a string.
+static char main_quit = 0;		// True if we're in the process of exiting.
 linked_list *loaded_plugins;
 linked_list *plugins[MAX_PLUGIN_TYPES];
 
@@ -123,7 +124,7 @@ struct config_descriptt config_values[] = {
 	{ NULL, 0, 0, 0 },
 };
 
-char *plugin_functions[] = {
+static char *plugin_functions[] = {
 	NULL,
 	"plugin_pre_auth",
 	"plugin_post_auth",
@@ -145,30 +146,36 @@ sessiont *session = NULL;		// Array of session structures.
 sessioncountt *sess_count = NULL;	// Array of partial per-session traffic counters.
 radiust *radius = NULL;			// Array of radius structures.
 ippoolt *ip_address_pool = NULL;	// Array of dynamic IP addresses.
-controlt *controlfree = 0;
+static controlt *controlfree = 0;
 struct Tstats *_statistics = NULL;
 #ifdef RINGBUFFER
 struct Tringbuffer *ringbuffer = NULL;
 #endif
 
-void sigalrm_handler(int);
-void sighup_handler(int);
-void sigterm_handler(int);
-void sigquit_handler(int);
-void sigchild_handler(int);
-void read_config_file();
-void read_state();
-void dump_state();
-void tunnel_clean();
-tunnelidt new_tunnel();
-void update_config();
-int unhide_avp(u8 *avp, tunnelidt t, sessionidt s, u16 length);
-
 static void cache_ipmap(ipt ip, int s);
 static void uncache_ipmap(ipt ip);
+static void free_ip_address(sessionidt s);
+static void dump_acct_info(void);
+static void sighup_handler(int sig);
+static void sigalrm_handler(int sig);
+static void sigterm_handler(int sig);
+static void sigquit_handler(int sig);
+static void sigchild_handler(int sig);
+static void read_state(void);
+static void dump_state(void);
+static void build_chap_response(char *challenge, u8 id, u16 challenge_length, char **challenge_response);
+static void update_config(void);
+static void read_config_file(void);
+static void initplugins(void);
+static void add_plugin(char *plugin_name);
+static void remove_plugin(char *plugin_name);
+static void plugins_done(void);
+static void processcontrol(u8 * buf, int len, struct sockaddr_in *addr);
+static tunnelidt new_tunnel(void);
+static int unhide_avp(u8 *avp, tunnelidt t, sessionidt s, u16 length);
 
 // return internal time (10ths since process startup)
-clockt now(void)
+static clockt now(void)
 {
 	struct timeval t;
 	gettimeofday(&t, 0);
@@ -286,12 +293,12 @@ void _log_hex(int level, const char *title, const char *data, int maxsize)
 // Add a route
 //
 // This adds it to the routing table, advertises it
-// via iBGP if enabled, and stuffs it into the
+// via BGP if enabled, and stuffs it into the
 // 'sessionbyip' cache.
 //
 // 'ip' and 'mask' must be in _host_ order.
 //
-void routeset(sessionidt s, ipt ip, ipt mask, ipt gw, u8 add)
+static void routeset(sessionidt s, ipt ip, ipt mask, ipt gw, u8 add)
 {
 	struct rtentry r;
 	int i;
@@ -331,7 +338,7 @@ void routeset(sessionidt s, ipt ip, ipt mask, ipt gw, u8 add)
 #endif /* BGP */
 
 		// Add/Remove the IPs to the 'sessionbyip' cache.
-		// Note that we add the zero address in the case of 
+		// Note that we add the zero address in the case of
 		// a network route. Roll on CIDR.
 
 		// Note that 's == 0' implies this is the address pool.
@@ -350,7 +357,7 @@ void routeset(sessionidt s, ipt ip, ipt mask, ipt gw, u8 add)
 
 //
 // Set up TUN interface
-void inittun(void)
+static void inittun(void)
 {
 	struct ifreq ifr;
 	struct sockaddr_in sin = {0};
@@ -398,16 +405,10 @@ void inittun(void)
 		LOG(0, 0, 0, 0, "Error setting tun flags: %s\n", strerror(errno));
 		exit(1);
 	}
-	if (ioctl(ifrfd, SIOCGIFINDEX, (void *) &ifr) < 0)
-	{
-		LOG(0, 0, 0, 0, "Error setting tun ifindex: %s\n", strerror(errno));
-		exit(1);
-	}
-	tunidx = ifr.ifr_ifindex;
 }
 
 // set up UDP port
-void initudp(void)
+static void initudp(void)
 {
 	int on = 1;
 	struct sockaddr_in addr;
@@ -458,7 +459,7 @@ void initudp(void)
 // IP address.
 //
 
-int lookup_ipmap(ipt ip)
+static int lookup_ipmap(ipt ip)
 {
 	u8 *a = (u8 *)&ip;
 	char **d = (char **) ip_hash;
@@ -619,13 +620,13 @@ void send_garp(ipt ip)
 }
 
 // Find session by username, 0 for not found
-sessiont *sessiontbysessionidt(sessionidt s)
+static sessiont *sessiontbysessionidt(sessionidt s)
 {
 	if (!s || s > MAXSESSION) return NULL;
 	return &session[s];
 }
 
-sessionidt sessionidtbysessiont(sessiont *s)
+static sessionidt sessionidtbysessiont(sessiont *s)
 {
 	sessionidt val = s-session;
 	if (s < session || val > MAXSESSION) return 0;
@@ -700,7 +701,7 @@ int tun_write(u8 * data, int size)
 
 // process outgoing (to tunnel) IP
 //
-void processipout(u8 * buf, int len)
+static void processipout(u8 * buf, int len)
 {
 	sessionidt s;
 	sessiont *sp;
@@ -805,7 +806,7 @@ void processipout(u8 * buf, int len)
 // Helper routine for the TBF filters.
 // Used to send queued data in to the user!
 //
-void send_ipout(sessionidt s, u8 *buf, int len)
+static void send_ipout(sessionidt s, u8 *buf, int len)
 {
 	sessiont *sp;
 	tunnelidt t;
@@ -856,7 +857,7 @@ void send_ipout(sessionidt s, u8 *buf, int len)
 }
 
 // add an AVP (16 bit)
-void control16(controlt * c, u16 avp, u16 val, u8 m)
+static void control16(controlt * c, u16 avp, u16 val, u8 m)
 {
 	u16 l = (m ? 0x8008 : 0x0008);
 	*(u16 *) (c->buf + c->length + 0) = htons(l);
@@ -867,7 +868,7 @@ void control16(controlt * c, u16 avp, u16 val, u8 m)
 }
 
 // add an AVP (32 bit)
-void control32(controlt * c, u16 avp, u32 val, u8 m)
+static void control32(controlt * c, u16 avp, u32 val, u8 m)
 {
 	u16 l = (m ? 0x800A : 0x000A);
 	*(u16 *) (c->buf + c->length + 0) = htons(l);
@@ -878,7 +879,7 @@ void control32(controlt * c, u16 avp, u32 val, u8 m)
 }
 
 // add an AVP (32 bit)
-void controls(controlt * c, u16 avp, char *val, u8 m)
+static void controls(controlt * c, u16 avp, char *val, u8 m)
 {
 	u16 l = ((m ? 0x8000 : 0) + strlen(val) + 6);
 	*(u16 *) (c->buf + c->length + 0) = htons(l);
@@ -889,7 +890,7 @@ void controls(controlt * c, u16 avp, char *val, u8 m)
 }
 
 // add a binary AVP
-void controlb(controlt * c, u16 avp, char *val, unsigned int len, u8 m)
+static void controlb(controlt * c, u16 avp, char *val, unsigned int len, u8 m)
 {
 	u16 l = ((m ? 0x8000 : 0) + len + 6);
 	*(u16 *) (c->buf + c->length + 0) = htons(l);
@@ -900,7 +901,7 @@ void controlb(controlt * c, u16 avp, char *val, unsigned int len, u8 m)
 }
 
 // new control connection
-controlt *controlnew(u16 mtype)
+static controlt *controlnew(u16 mtype)
 {
 	controlt *c;
 	if (!controlfree)
@@ -920,7 +921,7 @@ controlt *controlnew(u16 mtype)
 
 // send zero block if nothing is waiting
 // (ZLB send).
-void controlnull(tunnelidt t)
+static void controlnull(tunnelidt t)
 {
 	u8 buf[12];
 	if (tunnel[t].controlc)	// Messages queued; They will carry the ack.
@@ -936,7 +937,7 @@ void controlnull(tunnelidt t)
 }
 
 // add a control message to a tunnel, and send if within window
-void controladd(controlt * c, tunnelidt t, sessionidt s)
+static void controladd(controlt * c, tunnelidt t, sessionidt s)
 {
 	*(u16 *) (c->buf + 2) = htons(c->length); // length
 	*(u16 *) (c->buf + 4) = htons(tunnel[t].far); // tunnel
@@ -1008,7 +1009,6 @@ void throttle_session(sessionidt s, int rate_in, int rate_out)
 // start tidy shutdown of session
 void sessionshutdown(sessionidt s, char *reason)
 {
-	int dead = session[s].die;
 	int walled_garden = session[s].walled_garden;
 
 
@@ -1020,18 +1020,15 @@ void sessionshutdown(sessionidt s, char *reason)
 		return;                   // not a live session
 	}
 
-	if (!dead)
-		LOG(2, 0, s, session[s].tunnel, "Shutting down session %d: %s\n", s, reason);
-
-	session[s].die = now() + 150; // Clean up in 15 seconds
-
+	if (!session[s].die)
 	{
 		struct param_kill_session data = { &tunnel[session[s].tunnel], &session[s] };
+		LOG(2, 0, s, session[s].tunnel, "Shutting down session %d: %s\n", s, reason);
 		run_plugins(PLUGIN_KILL_SESSION, &data);
 	}
 
 	// RADIUS Stop message
-	if (session[s].opened && !walled_garden && !dead)
+	if (session[s].opened && !walled_garden && !session[s].die)
 	{
 		u16 r = session[s].radius;
 		if (!r)
@@ -1057,7 +1054,7 @@ void sessionshutdown(sessionidt s, char *reason)
 		int r;
 		for (r = 0; r < MAXROUTE && session[s].route[r].ip; r++)
 		{
-			routeset(s, session[s].route[r].ip, session[s].route[r].mask, session[s].ip, 0);
+			routeset(s, session[s].route[r].ip, session[s].route[r].mask, 0, 0);
 			session[s].route[r].ip = 0;
 		}
 
@@ -1079,6 +1076,9 @@ void sessionshutdown(sessionidt s, char *reason)
 		control16(c, 14, s, 1);   // assigned session (our end)
 		controladd(c, session[s].tunnel, s); // send the message
 	}
+
+	if (!session[s].die)
+		session[s].die = now() + 150; // Clean up in 15 seconds
 
 	cluster_send_session(s);
 }
@@ -1129,7 +1129,7 @@ void sendipcp(tunnelidt t, sessionidt s)
 }
 
 // kill a session now
-void sessionkill(sessionidt s, char *reason)
+static void sessionkill(sessionidt s, char *reason)
 {
 
 	CSTAT(call_sessionkill);
@@ -1149,8 +1149,15 @@ void sessionkill(sessionidt s, char *reason)
 	cluster_send_session(s);
 }
 
+static void tunnelclear(tunnelidt t)
+{
+	if (!t) return;
+	memset(&tunnel[t], 0, sizeof(tunnel[t]));
+	tunnel[t].state = TUNNELFREE;
+}
+
 // kill a tunnel now
-void tunnelkill(tunnelidt t, char *reason)
+static void tunnelkill(tunnelidt t, char *reason)
 {
 	sessionidt s;
 	controlt *c;
@@ -1181,7 +1188,7 @@ void tunnelkill(tunnelidt t, char *reason)
 }
 
 // shut down a tunnel cleanly
-void tunnelshutdown(tunnelidt t, char *reason)
+static void tunnelshutdown(tunnelidt t, char *reason)
 {
 	sessionidt s;
 
@@ -1198,7 +1205,7 @@ void tunnelshutdown(tunnelidt t, char *reason)
 	// close session
 	for (s = 1; s < MAXSESSION; s++)
 		if (session[s].tunnel == t)
-			sessionkill(s, reason);
+			sessionshutdown(s, reason);
 
 	tunnel[t].state = TUNNELDIE;
 	tunnel[t].die = now() + 700; // Clean up in 70 seconds
@@ -1921,7 +1928,7 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 }
 
 // read and process packet on tun
-void processtun(u8 * buf, int len)
+static void processtun(u8 * buf, int len)
 {
 	LOG_HEX(5, "Receive TUN Data", buf, len);
 	STAT(tun_rx_packets);
@@ -1949,7 +1956,7 @@ void processtun(u8 * buf, int len)
 // at once.
 #define MAX_ACTIONS 500
 
-int regular_cleanups(void)
+static int regular_cleanups(void)
 {
 	static sessionidt s = 0;	// Next session to check for actions on.
 	tunnelidt t;
@@ -2149,7 +2156,7 @@ int regular_cleanups(void)
 // Are we in the middle of a tunnel update, or radius
 // requests??
 //
-int still_busy(void)
+static int still_busy(void)
 {
 	int i;
 	static clockt last_talked = 0;
@@ -2199,7 +2206,7 @@ static fd_set readset;
 static int readset_n = 0;
 
 // main loop - gets packets on tun or udp and processes them
-void mainloop(void)
+static void mainloop(void)
 {
 	int i;
 	u8 buf[65536];
@@ -2474,7 +2481,7 @@ static void stripdomain(char *host)
 }
 
 // Init data structures
-void initdata(int optdebug, char *optconfig)
+static void initdata(int optdebug, char *optconfig)
 {
 	int i;
 
@@ -2583,7 +2590,7 @@ void initdata(int optdebug, char *optconfig)
 #endif /* BGP */
 }
 
-int assign_ip_address(sessionidt s)
+static int assign_ip_address(sessionidt s)
 {
 	u32 i;
 	int best = -1;
@@ -2640,9 +2647,12 @@ int assign_ip_address(sessionidt s)
 	return 1;
 }
 
-void free_ip_address(sessionidt s)
+static void free_ip_address(sessionidt s)
 {
 	int i = session[s].ip_pool_index;
+
+
+	CSTAT(call_free_ip_address);
 
 	if (!session[s].ip)
 		return; // what the?
@@ -2656,10 +2666,6 @@ void free_ip_address(sessionidt s)
 	ip_address_pool[i].assigned = 0;
 	ip_address_pool[i].session = 0;
 	ip_address_pool[i].last = time_now;
-
-
-	CSTAT(call_free_ip_address);
-
 }
 
 //
@@ -2726,7 +2732,7 @@ void rebuild_address_pool(void)
 //
 // Fix the address pool to match a changed session.
 // (usually when the master sends us an update).
-void fix_address_pool(int sid)
+static void fix_address_pool(int sid)
 {
 	int ipid;
 
@@ -2747,7 +2753,7 @@ void fix_address_pool(int sid)
 //
 // Add a block of addresses to the IP pool to hand out.
 //
-void add_to_ip_pool(u32 addr, u32 mask)
+static void add_to_ip_pool(u32 addr, u32 mask)
 {
 	int i;
 	if (mask == 0)
@@ -2775,7 +2781,7 @@ void add_to_ip_pool(u32 addr, u32 mask)
 }
 
 // Initialize the IP address pool
-void initippool()
+static void initippool()
 {
 	FILE *f;
 	char *p;
@@ -2861,7 +2867,7 @@ void snoop_send_packet(char *packet, u16 size, ipt destination, u16 port)
 	STAT(packets_snooped);
 }
 
-void dump_acct_info()
+static void dump_acct_info()
 {
 	char filename[1024];
 	char timestr[64];
@@ -2920,8 +2926,6 @@ int main(int argc, char *argv[])
 	int i;
 	int optdebug = 0;
 	char *optconfig = CONFIGFILE;
-
-	_program_name = strdup(argv[0]);
 
 	time(&basetime);             // start clock
 
@@ -3012,7 +3016,7 @@ int main(int argc, char *argv[])
 	}
 
 	/* Set up the cluster communications port. */
-	if (cluster_init(config->bind_address) < 0)
+	if (cluster_init() < 0)
 		exit(1);
 
 #ifdef BGP
@@ -3081,7 +3085,7 @@ int main(int argc, char *argv[])
 	return 0;
 }
 
-void sighup_handler(int junk)
+static void sighup_handler(int sig)
 {
 	if (log_stream && log_stream != stderr)
 	{
@@ -3092,7 +3096,7 @@ void sighup_handler(int junk)
 	read_config_file();
 }
 
-void sigalrm_handler(int junk)
+static void sigalrm_handler(int sig)
 {
 	// Log current traffic stats
 
@@ -3125,7 +3129,7 @@ void sigalrm_handler(int junk)
 
 }
 
-void sigterm_handler(int junk)
+static void sigterm_handler(int sig)
 {
 	LOG(1, 0, 0, 0, "Shutting down cleanly\n");
 	if (config->save_state)
@@ -3134,7 +3138,7 @@ void sigterm_handler(int junk)
 	main_quit++;
 }
 
-void sigquit_handler(int junk)
+static void sigquit_handler(int sig)
 {
 	int i;
 
@@ -3153,13 +3157,13 @@ void sigquit_handler(int junk)
 	main_quit++;
 }
 
-void sigchild_handler(int signal)
+static void sigchild_handler(int sig)
 {
 	while (waitpid(-1, NULL, WNOHANG) > 0)
 	    ;
 }
 
-void read_state()
+static void read_state()
 {
 	struct stat sb;
 	int i;
@@ -3284,7 +3288,7 @@ void read_state()
 	LOG(0, 0, 0, 0, "Loaded saved state information\n");
 }
 
-void dump_state()
+static void dump_state()
 {
 	FILE *f;
 	u32 buf[2];
@@ -3335,7 +3339,7 @@ void dump_state()
 	unlink(STATEFILE);
 }
 
-void build_chap_response(char *challenge, u8 id, u16 challenge_length, char **challenge_response)
+static void build_chap_response(char *challenge, u8 id, u16 challenge_length, char **challenge_response)
 {
 	MD5_CTX ctx;
 	*challenge_response = NULL;
@@ -3370,7 +3374,7 @@ static int facility_value(char *name)
 	return 0;
 }
 
-void update_config()
+static void update_config()
 {
 	int i;
 	static int timeout = 0;
@@ -3511,7 +3515,7 @@ void update_config()
 	config->reload_config = 0;
 }
 
-void read_config_file()
+static void read_config_file()
 {
 	FILE *f;
 
@@ -3584,7 +3588,7 @@ int sessionsetup(tunnelidt t, sessionidt s)
 		cache_ipmap(session[s].ip, s);
 
 	for (r = 0; r < MAXROUTE && session[s].route[r].ip; r++)
-		routeset(s, session[s].route[r].ip, session[s].route[r].mask, session[s].ip, 1);
+		routeset(s, session[s].route[r].ip, session[s].route[r].mask, 0, 1);
 
 	if (!session[s].unique_id)
 	{
@@ -3653,7 +3657,7 @@ int load_session(sessionidt s, sessiont *new)
 			// Remove any routes if the IP has changed
 			for (i = 0; i < MAXROUTE && session[s].route[i].ip; i++)
 			{
-				routeset(s, session[s].route[i].ip, session[s].route[i].mask, session[s].ip, 0);
+				routeset(s, session[s].route[i].ip, session[s].route[i].mask, 0, 0);
 				session[s].route[i].ip = 0;
 			}
 
@@ -3681,10 +3685,10 @@ int load_session(sessionidt s, sessiont *new)
 			continue;
 
 		if (session[s].route[i].ip) // Remove the old one if it exists.
-			routeset(s, session[s].route[i].ip, session[s].route[i].mask, session[s].ip, 0);
+			routeset(s, session[s].route[i].ip, session[s].route[i].mask, 0, 0);
 
 		if (new->route[i].ip)	// Add the new one if it exists.
-			routeset(s, new->route[i].ip, new->route[i].mask, new->ip, 1);
+			routeset(s, new->route[i].ip, new->route[i].mask, 0, 1);
 	}
 
 	if (new->tunnel && s > config->cluster_highest_sessionid)	// Maintain this in the slave. It's used
@@ -3706,22 +3710,7 @@ int load_session(sessionidt s, sessiont *new)
 	return 1;
 }
 
-#ifdef RINGBUFFER
-void ringbuffer_dump(FILE *stream)
-{
-	int i = ringbuffer->head;
-
-	while (i != ringbuffer->tail)
-	{
-		if (*ringbuffer->buffer[i].message)
-			fprintf(stream, "%d-%s", ringbuffer->buffer[i].level, ringbuffer->buffer[i].message);
-		if (++i == ringbuffer->tail) break;
-		if (i == RINGBUFFER_SIZE) i = 0;
-	}
-}
-#endif
-
-void initplugins()
+static void initplugins()
 {
 	int i;
 
@@ -3763,7 +3752,7 @@ static void *getconfig(char *key, enum config_typet type)
 	return 0;
 }
 
-void add_plugin(char *plugin_name)
+static void add_plugin(char *plugin_name)
 {
 	static struct pluginfuncs funcs = {
 		_log,
@@ -3837,7 +3826,7 @@ static void run_plugin_done(void *plugin)
 		donefunc();
 }
 
-void remove_plugin(char *plugin_name)
+static void remove_plugin(char *plugin_name)
 {
 	void *p = open_plugin(plugin_name, 0);
 	int i;
@@ -3878,7 +3867,7 @@ int run_plugins(int plugin_type, void *data)
 	return 1;
 }
 
-void plugins_done()
+static void plugins_done()
 {
 	void *p;
 
@@ -3887,7 +3876,7 @@ void plugins_done()
 		run_plugin_done(p);
 }
 
-void processcontrol(u8 * buf, int len, struct sockaddr_in *addr)
+static void processcontrol(u8 * buf, int len, struct sockaddr_in *addr)
 {
 	char *resp;
 	int l;
@@ -3922,14 +3911,7 @@ void processcontrol(u8 * buf, int len, struct sockaddr_in *addr)
 	free(resp);
 }
 
-void tunnelclear(tunnelidt t)
-{
-	if (!t) return;
-	memset(&tunnel[t], 0, sizeof(tunnel[t]));
-	tunnel[t].state = TUNNELFREE;
-}
-
-tunnelidt new_tunnel()
+static tunnelidt new_tunnel()
 {
 	tunnelidt i;
 	for (i = 1; i < MAXTUNNEL; i++)
@@ -3976,7 +3958,6 @@ void become_master(void)
 	// add radius fds
 	for (i = 0; i < config->num_radfds; i++)
 	{
-		if (!radfds[i]) continue;
 		FD_SET(radfds[i], &readset);
 		if (radfds[i] > readset_n)
 			readset_n = radfds[i];
@@ -4070,7 +4051,7 @@ int cmd_show_hist_open(struct cli_def *cli, char *command, char **argv, int argc
  *
  * Based on code from rp-l2tpd by Roaring Penguin Software Inc.
  */
-int unhide_avp(u8 *avp, tunnelidt t, sessionidt s, u16 length)
+static int unhide_avp(u8 *avp, tunnelidt t, sessionidt s, u16 length)
 {
 	MD5_CTX ctx;
 	u8 *cursor;

@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.17 2004-11-09 03:09:12 bodea Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.18 2004-11-16 07:54:32 bodea Exp $";
 
 #include <stdio.h>
 #include <sys/file.h>
@@ -67,8 +67,8 @@ static struct {
 } peers[CLUSTER_MAX_SIZE];	// List of all the peers we've heard from.
 static int num_peers;		// Number of peers in list.
 
-int rle_decompress(u8 ** src_p, int ssize, u8 *dst, int dsize);
-int rle_compress(u8 ** src_p, int ssize, u8 *dst, int dsize);
+static int rle_decompress(u8 ** src_p, int ssize, u8 *dst, int dsize);
+static int rle_compress(u8 ** src_p, int ssize, u8 *dst, int dsize);
 
 //
 // Create a listening socket
@@ -147,7 +147,7 @@ int cluster_init()
 // address ).
 //
 
-int cluster_send_data(void *data, int datalen)
+static int cluster_send_data(void *data, int datalen)
 {
 	struct sockaddr_in addr = {0};
 
@@ -200,7 +200,7 @@ static void advertise(void)
 			send_garp(config->bind_address);	// Start taking traffic.
 }
 
-void cluster_uptodate(void)
+static void cluster_uptodate(void)
 {
 	if (config->cluster_iam_uptodate)
 		return;
@@ -218,7 +218,7 @@ void cluster_uptodate(void)
 // Send a unicast UDP packet to a peer with 'data' as the
 // contents.
 //
-int peer_send_data(u32 peer, char * data, int size)
+static int peer_send_data(u32 peer, char * data, int size)
 {
 	struct sockaddr_in addr = {0};
 
@@ -246,7 +246,7 @@ int peer_send_data(u32 peer, char * data, int size)
 //
 // Send a structured message to a peer with a single element of type 'type'.
 //
-int peer_send_message(u32 peer, int type, int more, char * data, int size)
+static int peer_send_message(u32 peer, int type, int more, char * data, int size)
 {
 	char buf[65536];	// Vast overkill.
 	char * p = buf;
@@ -681,7 +681,7 @@ static void cluster_check_sessions(int highsession, int freesession_ptr, int hig
 		cluster_uptodate();
 }
 
-int hb_add_type(char **p, int type, int id)
+static int hb_add_type(char **p, int type, int id)
 {
 	switch (type) {
 		case C_CSESSION: { // Compressed C_SESSION.
@@ -831,7 +831,7 @@ void cluster_heartbeat()
 //
 // A structure of type 'type' has changed; Add it to the queue to send.
 //
-int type_changed(int type, int id)
+static int type_changed(int type, int id)
 {
 	int i;
 
@@ -879,7 +879,7 @@ int cluster_send_tunnel(int tid)
 // missed a packet. We'll resend it every packet since
 // the last one it's seen.
 //
-int cluster_catchup_slave(int seq, u32 slave)
+static int cluster_catchup_slave(int seq, u32 slave)
 {
 	int s;
 	int diff;
@@ -914,7 +914,7 @@ int cluster_catchup_slave(int seq, u32 slave)
 // We've heard from another peer! Add it to the list
 // that we select from at election time.
 //
-int cluster_add_peer(u32 peer, time_t basetime, pingt *pp, int size)
+static int cluster_add_peer(u32 peer, time_t basetime, pingt *pp, int size)
 {
 	int i;
 	u32 clusterid;
@@ -998,7 +998,7 @@ int cluster_add_peer(u32 peer, time_t basetime, pingt *pp, int size)
 // Note that we don't mark the session as dirty; We rely on
 // the slow table walk to propogate this back out to the slaves.
 //
-int cluster_handle_bytes(char * data, int size)
+static int cluster_handle_bytes(char * data, int size)
 {
 	bytest * b;
 
@@ -1451,7 +1451,7 @@ int cmd_show_cluster(struct cli_def *cli, char *command, char **argv, int argc)
 //
 // Worst case is a 50% expansion in space required (trying to
 // compress { 0x00, 0x01 } * N )
-int rle_compress(u8 ** src_p, int ssize, u8 *dst, int dsize)
+static int rle_compress(u8 ** src_p, int ssize, u8 *dst, int dsize)
 {
 	int count;
 	int orig_dsize = dsize;
@@ -1497,7 +1497,7 @@ int rle_compress(u8 ** src_p, int ssize, u8 *dst, int dsize)
 // Return the number of dst bytes used.
 // Updates the 'src_p' pointer to point to the
 // first un-used byte.
-int rle_decompress(u8 ** src_p, int ssize, u8 *dst, int dsize)
+static int rle_decompress(u8 ** src_p, int ssize, u8 *dst, int dsize)
 {
 	int count;
 	int orig_dsize = dsize;

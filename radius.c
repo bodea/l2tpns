@@ -1,6 +1,6 @@
 // L2TPNS Radius Stuff
 
-char const *cvs_id_radius = "$Id: radius.c,v 1.11 2004-11-05 04:55:27 bodea Exp $";
+char const *cvs_id_radius = "$Id: radius.c,v 1.12 2004-11-16 07:54:32 bodea Exp $";
 
 #include <time.h>
 #include <stdio.h>
@@ -25,7 +25,7 @@ extern u32 sessionid;
 extern struct configt *config;
 extern int *radfds;
 
-const char *radius_state(int state)
+static const char *radius_state(int state)
 {
 	static char *tmp = NULL;
 	int i;
@@ -46,7 +46,7 @@ void initrad(void)
 	for (i = 0; i < config->num_radfds; i++)
 	{
 		int flags;
-		if (!radfds[i]) radfds[i] = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+		radfds[i] = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 		flags = fcntl(radfds[i], F_GETFL, 0);
 		fcntl(radfds[i], F_SETFL, flags | O_NONBLOCK);
 	}
@@ -656,21 +656,5 @@ void radiusretry(u16 r)
 			radiusclear(r, s);
 			LOG(3, 0, s, session[s].tunnel, "Freeing up radius session %d\n", r);
 			break;
-	}
-}
-
-void radius_clean()
-{
-	int i;
-
-	LOG(1, 0, 0, 0, "Cleaning radius session array\n");
-
-	for (i = 1; i < MAXRADIUS; i++)
-	{
-		if (radius[i].retry == 0
-				|| !session[radius[i].session].opened
-				|| session[radius[i].session].die
-				|| session[radius[i].session].tunnel == 0)
-			radiusclear(i, radius[i].session);
 	}
 }

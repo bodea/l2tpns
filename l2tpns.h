@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.34 2004-11-15 07:01:54 bodea Exp $
+// $Id: l2tpns.h,v 1.35 2004-11-16 07:54:32 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -15,7 +15,7 @@
 #include <sys/types.h>
 #include <libcli.h>
 
-#define VERSION	"2.0.7"
+#define VERSION	"2.0.8"
 
 // Limits
 #define MAXTUNNEL	500		// could be up to 65535
@@ -493,9 +493,8 @@ void processipin(tunnelidt t, sessionidt s, u8 * p, u16 l);
 void processccp(tunnelidt t, sessionidt s, u8 * p, u16 l);
 void sendchap(tunnelidt t, sessionidt s);
 u8 *makeppp(u8 * b, int size, u8 * p, int l, tunnelidt t, sessionidt s, u16 mtype);
-u8 *findppp(u8 * b, u8 mtype);
 void initlcp(tunnelidt t, sessionidt s);
-void dumplcp(u8 *p, int l);
+void send_ipin(sessionidt s, u8 * buf, int len);
 
 
 // radius.c
@@ -508,40 +507,15 @@ void radiusclear(u16 r, sessionidt s);
 
 
 // l2tpns.c
-clockt now(void);
 clockt backoff(u8 try);
-void routeset(sessionidt, ipt ip, ipt mask, ipt gw, u8 add);
-void inittun(void);
-void initudp(void);
-void initdata(int optdebug, char *optconfig);
-void initippool();
 sessionidt sessionbyip(ipt ip);
 sessionidt sessionbyuser(char *username);
 void sessionshutdown(sessionidt s, char *reason);
-void sessionsendarp(sessionidt s);
 void send_garp(ipt ip);
-void sessionkill(sessionidt s, char *reason);
-void control16(controlt * c, u16 avp, u16 val, u8 m);
-void control32(controlt * c, u16 avp, u32 val, u8 m);
-void controls(controlt * c, u16 avp, char *val, u8 m);
-void controlb(controlt * c, u16 avp, char *val, unsigned int len, u8 m);
-controlt *controlnew(u16 mtype);
-void controlnull(tunnelidt t);
-void controladd(controlt * c, tunnelidt t, sessionidt s);
 void tunnelsend(u8 * buf, u16 l, tunnelidt t);
-void tunnelkill(tunnelidt t, char *reason);
-void tunnelshutdown(tunnelidt t, char *reason);
 void sendipcp(tunnelidt t, sessionidt s);
-void processipout(u8 * buf, int len);
-void processarp(u8 * buf, int len);
 void processudp(u8 * buf, int len, struct sockaddr_in *addr);
-void processtun(u8 * buf, int len);
-void processcontrol(u8 * buf, int len, struct sockaddr_in *addr);
-int assign_ip_address(sessionidt s);
-void free_ip_address(sessionidt s);
 void snoop_send_packet(char *packet, u16 size, ipt destination, u16 port);
-void dump_acct_info();
-void mainloop(void);
 int cmd_show_ipcache(struct cli_def *cli, char *command, char **argv, int argc);
 int cmd_show_hist_idle(struct cli_def *cli, char *command, char **argv, int argc);
 int cmd_show_hist_open(struct cli_def *cli, char *command, char **argv, int argc);
@@ -554,31 +528,25 @@ int cmd_show_hist_open(struct cli_def *cli, char *command, char **argv, int argc
 void _log(int level, ipt address, sessionidt s, tunnelidt t, const char *format, ...) __attribute__((format (printf, 5, 6)));
 void _log_hex(int level, const char *title, const char *data, int maxsize);
 
-void build_chap_response(char *challenge, u8 id, u16 challenge_length, char **challenge_response);
 int sessionsetup(tunnelidt t, sessionidt s);
-int cluster_send_session(int s);
-int cluster_send_tunnel(int t);
-int cluster_send_goodbye();
+int run_plugins(int plugin_type, void *data);
+void rebuild_address_pool(void);
+void throttle_session(sessionidt s, int rate_in, int rate_out);
+int load_session(sessionidt, sessiont *);
+void become_master(void);	// We're the master; kick off any required master initializations.
+
+
+// cli.c
 void init_cli(char *hostname);
 void cli_do_file(FILE *fh);
 void cli_do(int sockfd);
 int cli_arg_help(struct cli_def *cli, int cr_ok, char *entry, ...);
-#ifdef RINGBUFFER
-void ringbuffer_dump(FILE *stream);
-#endif
-void initplugins(void);
-int run_plugins(int plugin_type, void *data);
-void add_plugin(char *plugin_name);
-void remove_plugin(char *plugin_name);
-void plugins_done(void);
-void tunnelclear(tunnelidt t);
+
+
+// icmp.c
 void host_unreachable(ipt destination, u16 id, ipt source, char *packet, int packet_len);
-void fix_address_pool(int sid);
-void rebuild_address_pool(void);
-void send_ipin(sessionidt s, u8 * buf, int len);
-void throttle_session(sessionidt s, int rate_in, int rate_out);
-int load_session(sessionidt, sessiont *);
-void become_master(void);	// We're the master; kick off any required master initializations.
+
+
 extern tunnelt *tunnel;
 extern sessiont *session;
 extern sessioncountt *sess_count;

@@ -1,5 +1,5 @@
 // L2TPNS Clustering Stuff
-// $Id: cluster.h,v 1.6 2004-11-11 03:07:42 bodea Exp $
+// $Id: cluster.h,v 1.7 2004-11-16 07:54:32 bodea Exp $
 
 #ifndef __CLUSTER_H__
 #define __CLUSTER_H__
@@ -65,16 +65,14 @@ typedef struct {
 	u32	basetime;	// start time of this peer.
 } pingt;
 
-int cluster_init();
+int cluster_init(void);
 int processcluster(char *buf, int size, u32 addr);
-int cluster_forward_packet(char *buf, int size, u32 addr);
 int cluster_send_session(int sid);
 int cluster_send_tunnel(int tid);
-int master_forward_packet(char * data, int size, u32 addr, int port);
-int master_throttle_packet(int tid, char * data, int size);
-int master_garden_packet(sessionidt s, char * data, int size);
+int master_forward_packet(char *data, int size, u32 addr, int port);
+int master_throttle_packet(int tid, char *data, int size);
+int master_garden_packet(sessionidt s, char *data, int size);
 void master_update_counts(void);
-
 void cluster_send_ping(time_t basetime);
 void cluster_heartbeat(void);
 void cluster_check_master(void);

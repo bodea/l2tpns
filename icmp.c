@@ -1,6 +1,6 @@
 // L2TPNS: icmp
 
-char const *cvs_id_icmp = "$Id: icmp.c,v 1.4 2004-11-15 02:26:20 bodea Exp $";
+char const *cvs_id_icmp = "$Id: icmp.c,v 1.5 2004-11-16 07:54:32 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -17,7 +17,7 @@ char const *cvs_id_icmp = "$Id: icmp.c,v 1.4 2004-11-15 02:26:20 bodea Exp $";
 
 #include "l2tpns.h"
 
-__u16 _checksum(unsigned char *addr, int count);
+static __u16 _checksum(unsigned char *addr, int count);
 
 void host_unreachable(ipt destination, u16 id, ipt source, char *packet, int packet_len)
 {
@@ -68,7 +68,7 @@ void host_unreachable(ipt destination, u16 id, ipt source, char *packet, int pac
 	close(icmp_socket);
 }
 
-__u16 _checksum(unsigned char *addr, int count)
+static __u16 _checksum(unsigned char *addr, int count)
 {
 	register long sum = 0;
 

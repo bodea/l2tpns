@@ -1,6 +1,6 @@
 /* Misc util functions */
 
-char const *cvs_id_util = "$Id: util.c,v 1.5 2004-11-05 04:55:27 bodea Exp $";
+char const *cvs_id_util = "$Id: util.c,v 1.6 2004-11-16 07:54:32 bodea Exp $";
 
 #include <unistd.h>
 #include <errno.h>
@@ -34,7 +34,7 @@ void *shared_malloc(unsigned int size)
 	return p;
 }
 
-extern int udpfd, tunfd, snoopfd, ifrfd, cluster_sockfd;
+extern int udpfd, controlfd, tunfd, snoopfd, ifrfd, cluster_sockfd;
 extern int *radfds;
 
 pid_t fork_and_close()
@@ -66,14 +66,16 @@ pid_t fork_and_close()
 	signal(SIGTERM, SIG_DFL);
 
 	// Close sockets
-	if (udpfd) close(udpfd); udpfd = 0;
-	if (tunfd) close(tunfd); tunfd = 0;
-	if (snoopfd) close(snoopfd); snoopfd = 0;
-	for (i = 0; i < config->num_radfds; i++)
-		if (radfds[i]) close(radfds[i]);
-	if (ifrfd) close(ifrfd); ifrfd = 0;
-	if (cluster_sockfd) close(cluster_sockfd); cluster_sockfd = 0;
-	if (clifd) close(clifd); clifd = 0;
+	if (tunfd != -1)          close(tunfd);
+	if (udpfd != -1)          close(udpfd);
+	if (controlfd != -1)      close(controlfd);
+	if (snoopfd != -1)        close(snoopfd);
+	if (ifrfd != -1)          close(ifrfd);
+	if (cluster_sockfd != -1) close(cluster_sockfd);
+	if (clifd != -1)          close(clifd);
+
+	for (i = 0; radfds && i < config->num_radfds; i++)
+		close(radfds[i]);
 #ifdef BGP
 	for (i = 0; i < BGP_NUM_PEERS; i++)
 		if (bgp_peers[i].sock != -1)

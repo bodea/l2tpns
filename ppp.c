@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.25 2004-11-09 05:49:08 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.26 2004-11-16 07:54:32 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -23,7 +23,7 @@ extern u32 eth_tx;
 extern time_t time_now;
 extern struct configt *config;
 
-void sendccp(tunnelidt t, sessionidt s);
+static void sendccp(tunnelidt t, sessionidt s);
 
 // Process PAP messages
 void processpap(tunnelidt t, sessionidt s, u8 *p, u16 l)
@@ -224,7 +224,7 @@ void processchap(tunnelidt t, sessionidt s, u8 *p, u16 l)
 	radiussend(r, RADIUSAUTH);
 }
 
-char *ppp_lcp_types[] = {
+static char *ppp_lcp_types[] = {
 	NULL,
 	"ConfigReq",
 	"ConfigAck",
@@ -240,7 +240,7 @@ char *ppp_lcp_types[] = {
 	"IdentRequest",
 };
 
-void dumplcp(u8 *p, int l)
+static void dumplcp(u8 *p, int l)
 {
 	int x = l - 4;
 	u8 *o = (p + 4);
@@ -541,6 +541,26 @@ void processlcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 		STAT(tunnel_rx_errors);
 		return ;
 	}
+}
+
+// find a PPP option, returns point to option, or 0 if not found
+static u8 *findppp(u8 *b, u8 mtype)
+{
+	u16 l = ntohs(*(u16 *) (b + 2));
+	if (l < 4)
+		return 0;
+	b += 4;
+	l -= 4;
+	while (l)
+	{
+		if (l < b[1] || !b[1])
+			return 0;		// faulty
+		if (*b == mtype)
+			return b;
+		l -= b[1];
+		b += b[1];
+	}
+	return 0;
 }
 
 // Process IPCP messages
@@ -910,26 +930,6 @@ u8 *makeppp(u8 *b, int size, u8 *p, int l, tunnelidt t, sessionidt s, u16 mtype)
 	return b;
 }
 
-// find a PPP option, returns point to option, or 0 if not found
-u8 *findppp(u8 *b, u8 mtype)
-{
-	u16 l = ntohs(*(u16 *) (b + 2));
-	if (l < 4)
-		return 0;
-	b += 4;
-	l -= 4;
-	while (l)
-	{
-		if (l < b[1] || !b[1])
-			return 0;		// faulty
-		if (*b == mtype)
-			return b;
-		l -= b[1];
-		b += b[1];
-	}
-	return 0;
-}
-
 // Send initial LCP ConfigReq
 void initlcp(tunnelidt t, sessionidt s)
 {
@@ -955,7 +955,7 @@ void initlcp(tunnelidt t, sessionidt s)
 }
 
 // Send CCP reply
-void sendccp(tunnelidt t, sessionidt s)
+static void sendccp(tunnelidt t, sessionidt s)
 {
 	char *q, b[500] = {0};
 

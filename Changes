@@ -1,3 +1,9 @@
+* Tue Nov 16 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.8
+- Ignore gateway address in Framed-Route (from Jonathan McDowell).
+- Call sessionshutdown() when a tunnel is dropped rather than
+  sessionkill() to ensure that RADIUS stop records are sent.
+- Cleanup: make a bunch of global functions/variables static.
+
 * Mon Nov 15 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.7
 - Fix socket creation in host_unreachable() (thanks to Bjørn Augestad)
 - Don't assume BGP peer sends back negotiated hold time, pick smallest

@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.27 2004-11-11 06:13:29 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.28 2004-11-16 07:54:32 bodea Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -37,8 +37,7 @@ extern sessiont *session;
 extern radiust *radius;
 extern ippoolt *ip_address_pool;
 extern struct Tstats *_statistics;
-struct cli_def *cli = NULL;
-int cli_quit = 0;
+static struct cli_def *cli = NULL;
 extern struct configt *config;
 extern struct config_descriptt config_values[];
 #ifdef RINGBUFFER
@@ -48,7 +47,7 @@ extern struct cli_session_actions *cli_session_actions;
 extern struct cli_tunnel_actions *cli_tunnel_actions;
 extern tbft *filter_list;
 
-char *debug_levels[] = {
+static char *debug_levels[] = {
 	"CRIT",
 	"ERROR",
 	"WARN",
@@ -67,10 +66,9 @@ struct
 	char data;
 } debug_flags;
 
-int debug_session;
-int debug_tunnel;
-int debug_rb_tail;
-FILE *save_config_fh;
+static int debug_session;
+static int debug_tunnel;
+static int debug_rb_tail;
 
 static int cmd_show_session(struct cli_def *cli, char *command, char **argv, int argc);
 static int cmd_show_tunnels(struct cli_def *cli, char *command, char **argv, int argc);
@@ -301,7 +299,7 @@ void cli_do(int sockfd)
 	exit(0);
 }
 
-void cli_print_log(struct cli_def *cli, char *string)
+static void cli_print_log(struct cli_def *cli, char *string)
 {
 	LOG(3, 0, 0, 0, "%s\n", string);
 }
@@ -826,7 +824,8 @@ static int cmd_show_pool(struct cli_def *cli, char *command, char **argv, int ar
 	return CLI_OK;
 }
 
-void print_save_config(struct cli_def *cli, char *string)
+static FILE *save_config_fh = 0;
+static void print_save_config(struct cli_def *cli, char *string)
 {
 	if (save_config_fh)
 		fprintf(save_config_fh, "%s\n", string);
@@ -844,6 +843,7 @@ static int cmd_write_memory(struct cli_def *cli, char *command, char **argv, int
 		cmd_show_run(cli, command, argv, argc);
 		cli_print_callback(cli, NULL);
 		fclose(save_config_fh);
+		save_config_fh = 0;
 	}
 	else
 	{
@@ -1647,7 +1647,7 @@ static int cmd_remove_plugin(struct cli_def *cli, char *command, char **argv, in
 	return CLI_OK;
 }
 
-char *duration(time_t secs)
+static char *duration(time_t secs)
 {
 	static char *buf = NULL;
 	int p = 0;
@@ -1875,15 +1875,6 @@ static int cmd_router_bgp(struct cli_def *cli, char *command, char **argv, int a
 	cli_set_configmode(cli, MODE_CONFIG_BGP, "router");
 
 	return CLI_OK;
-}
-
-static int cmd_router_bgp_exit(struct cli_def *cli, char *command, char **argv, int argc)
-{
-	if (CLI_HELP_REQUESTED)
-		return CLI_HELP_NO_ARGS;
-
-	cli_set_configmode(cli, MODE_CONFIG, NULL);
-    	return CLI_OK;
 }
 
 static int find_bgp_neighbour(char *name)
