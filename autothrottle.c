@@ -4,7 +4,7 @@
 
 /* set up throttling based on RADIUS reply */
 
-char const *cvs_id = "$Id: autothrottle.c,v 1.10 2004-11-29 02:17:17 bodea Exp $";
+char const *cvs_id = "$Id: autothrottle.c,v 1.11 2004-11-30 00:46:36 bodea Exp $";
 
 int plugin_api_version = PLUGIN_API_VERSION;
 struct pluginfuncs *p;
@@ -17,19 +17,32 @@ int plugin_radius_response(struct param_radius_response *data)
 	int i = 0;
 	int rate;
 
-	if (strncmp(data->key, THROTTLE_KEY, strlen(THROTTLE_KEY)) == 0)
+	if (strncmp(data->key, THROTTLE_KEY, sizeof(THROTTLE_KEY) - 1) == 0)
 	{
-		char *pt = strdup(data->value);
+		char *pt;
+
+		if (strncmp(data->value, "serv", 4))
+			return PLUGIN_RET_OK;
+
+		pt = strdup(data->value);
 		while ((t = strsep(&pt, " ")) != NULL)
 		{
 			if (strcmp(t, "serv") == 0)
 				i = 1;
-			else if (strcmp(t, "o") && i == 1)
-				i = 2;
-			else if (strcmp(t, "i") && i == 1)
+			else if (strcmp(t, "o") == 0 && i == 1)
 				i = 3;
-			else if (i > 1 && (rate = atoi(t)) > 0)
+			else if (strcmp(t, "i") == 0 && i == 1)
+				i = 2;
+			else if (i > 1 )
 			{
+				if ((rate = strtol(t, (char **)NULL, 10)) < 0 )
+				{
+					p->log(3, p->get_id_by_session(data->s), data->s->tunnel,
+						 "Syntax Error: rate is not a number %s\n", t);
+					free(pt);
+					return PLUGIN_RET_OK;
+				}
+
 				switch (i)
 				{
 					case 2: // output
@@ -56,18 +69,13 @@ int plugin_radius_response(struct param_radius_response *data)
 						return PLUGIN_RET_OK;
 				}
 			}
-			else
-			{
-				free(pt);
-				p->log(1, p->get_id_by_session(data->s), data->s->tunnel,
-					"Syntax error in rate limit AV pair: %s=%s\n",
-					data->key, data->value);
-
-				return PLUGIN_RET_OK;
-			}
 		}
+
+		p->log(3, p->get_id_by_session(data->s), data->s->tunnel,
+			"Unknown lcp:interface-config AV pair %s=%s\n",data->key, data->value);
 		free(pt);
-	}
+		return PLUGIN_RET_OK;
+	} 
 	else if (strcmp(data->key, "throttle") == 0)
 	{
 		if (strcmp(data->value, "yes") == 0)
