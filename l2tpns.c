@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.85 2005-03-10 03:08:08 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.86 2005-03-10 05:47:24 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -1264,7 +1264,7 @@ static void control32(controlt * c, uint16_t avp, uint32_t val, uint8_t m)
 	c->length += 10;
 }
 
-// add an AVP (32 bit)
+// add an AVP (string)
 static void controls(controlt * c, uint16_t avp, char *val, uint8_t m)
 {
 	uint16_t l = ((m ? 0x8000 : 0) + strlen(val) + 6);
@@ -1654,12 +1654,12 @@ static void tunnelkill(tunnelidt t, char *reason)
 	// free tunnel
 	tunnelclear(t);
 	LOG(1, 0, t, "Kill tunnel %d: %s\n", t, reason);
-	cli_tunnel_actions[s].action = 0;
+	cli_tunnel_actions[t].action = 0;
 	cluster_send_tunnel(t);
 }
 
 // shut down a tunnel cleanly
-static void tunnelshutdown(tunnelidt t, char *reason)
+static void tunnelshutdown(tunnelidt t, char *reason, int result, int error, char *msg)
 {
 	sessionidt s;
 
@@ -1682,11 +1682,32 @@ static void tunnelshutdown(tunnelidt t, char *reason)
 	tunnel[t].die = TIME + 700; // Clean up in 70 seconds
 	cluster_send_tunnel(t);
 	// TBA - should we wait for sessions to stop?
-	{                            // Send StopCCN
-		controlt *c = controlnew(4); // sending StopCCN
-		control16(c, 1, 1, 1);    // result code (admin reasons - TBA make error, general error, add message)
-		control16(c, 9, t, 1);    // assigned tunnel (our end)
-		controladd(c, t, 0);      // send the message
+	if (result) 
+	{
+		controlt *c = controlnew(4);	// sending StopCCN
+		if (error)
+		{
+			char buf[64];
+			int l = 4;
+			*(uint16_t *) buf     = htons(result);
+			*(uint16_t *) (buf+2) = htons(error);
+			if (msg)
+			{
+				int m = strlen(msg);
+				if (m + 4 > sizeof(buf))
+				    m = sizeof(buf) - 4;
+
+				memcpy(buf+4, msg, m);
+				l += m;
+			}
+
+			controlb(c, 1, buf, l, 1);
+		}
+		else
+			control16(c, 1, result, 1);
+
+		control16(c, 9, t, 1);		// assigned tunnel (our end)
+		controladd(c, t, 0);		// send the message
 	}
 }
 
@@ -1890,6 +1911,10 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 		}
 		if (l)
 		{                     // if not a null message
+			int result = 0;
+			int error = 0;
+			char *msg = 0;
+
 			// process AVPs
 			while (l && !(fatal & 0x80)) // 0x80 = mandatory AVP
 			{
@@ -1909,6 +1934,9 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 				{
 					LOG(1, s, t, "Unrecognised AVP flags %02X\n", *b);
 					fatal = flags;
+					result = 2; // general error
+					error = 3; // reserved field non-zero
+					msg = 0;
 					continue; // next
 				}
 				b += 2;
@@ -1916,6 +1944,9 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 				{
 					LOG(2, s, t, "Unknown AVP vendor %d\n", ntohs(*(uint16_t *) (b)));
 					fatal = flags;
+					result = 2; // general error
+					error = 6; // generic vendor-specific error
+					msg = "unsupported vendor-specific";
 					continue; // next
 				}
 				b += 2;
@@ -1932,18 +1963,27 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 					{
 						LOG(1, s, t, "Hidden AVP requested, but no L2TP secret.\n");
 						fatal = flags;
+						result = 2; // general error
+						error = 6; // generic vendor-specific error
+						msg = "secret not specified";
 						continue;
 					}
 					if (!session[s].random_vector_length)
 					{
 						LOG(1, s, t, "Hidden AVP requested, but no random vector.\n");
 						fatal = flags;
+						result = 2; // general error
+						error = 6; // generic
+						msg = "no random vector";
 						continue;
 					}
 					if (n < 8)
 					{
 						LOG(2, s, t, "Short hidden AVP.\n");
 						fatal = flags;
+						result = 2; // general error
+						error = 2; // length is wrong
+						msg = 0;
 						continue;
 					}
 
@@ -1955,7 +1995,13 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 					orig_len = ntohs(*(uint16_t *) b);
 					if (orig_len > n + 2)
 					{
+						LOG(1, s, t, "Original length %d too long in hidden AVP of length %d; wrong secret?\n",
+						    orig_len, n);
+
 						fatal = flags;
+						result = 2; // general error
+						error = 2; // length is wrong
+						msg = 0;
 						continue;
 					}
 
@@ -2004,6 +2050,9 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 						{   // allow 0.0 and 1.0
 							LOG(1, s, t, "   Bad protocol version %04X\n", version);
 							fatal = flags;
+							result = 5; // unspported protocol version
+							error = 0x0100; // supported version
+							msg = 0;
 							continue; // next
 						}
 					}
@@ -2180,14 +2229,20 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 					session[s].random_vector_length = n;
 					break;
 				default:
-					LOG(2, s, t, "   Unknown AVP type %d\n", mtype);
-					fatal = flags;
-					continue; // next
+					{
+						static char e[] = "unknown AVP 0xXXXX";
+						LOG(2, s, t, "   Unknown AVP type %d\n", mtype);
+						fatal = flags;
+						result = 2; // general error
+						error = 8; // unknown mandatory AVP
+						sprintf((msg = e) + 14, "%04x", mtype);
+						continue; // next
+					}
 				}
 			}
 			// process message
 			if (fatal & 0x80)
-				tunnelshutdown(t, "Unknown Mandatory AVP");
+				tunnelshutdown(t, "Invalid mandatory AVP", result, error, msg);
 			else
 				switch (message)
 				{
@@ -2212,8 +2267,7 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 					break;
 				case 4:       // StopCCN
 					controlnull(t); // ack
-					tunnelshutdown(t, "Stopped"); // Shut down cleanly
-					tunnelkill(t, "Stopped"); // Immediately force everything dead
+					tunnelshutdown(t, "Stopped", 0, 0, 0); // Shut down cleanly
 					break;
 				case 6:       // HELLO
 					controlnull(t); // simply ACK
@@ -2295,7 +2349,7 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 				default:
 					STAT(tunnel_rx_errors);
 					if (mandatory)
-						tunnelshutdown(t, "Unknown message type");
+						tunnelshutdown(t, "Unknown message type", 2, 6, "unknown message type");
 					else
 						LOG(1, s, t, "Unknown message type %d\n", message);
 					break;
@@ -2540,7 +2594,7 @@ static int regular_cleanups(void)
 			if (a & CLI_TUN_KILL)
 			{
 				LOG(2, 0, t, "Dropping tunnel by CLI\n");
-				tunnelshutdown(t, "Requested by administrator");
+				tunnelshutdown(t, "Requested by administrator", 1, 0, 0);
 			}
 		}
 
@@ -3773,7 +3827,7 @@ static void sigquit_handler(int sig)
 		for (i = 1; i < MAXTUNNEL; i++)
 		{
 			if (tunnel[i].ip || tunnel[i].state)
-				tunnelshutdown(i, "L2TPNS Closing");
+				tunnelshutdown(i, "L2TPNS Closing", 6, 0, 0);
 		}
 	}
 
