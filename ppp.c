@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.36 2004-11-30 01:10:44 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.37 2004-11-30 01:35:19 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -666,7 +666,8 @@ void processipcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 				{
 					*(u32 *) (i + 2) = htonl(session[s].dns1);
 					*p = ConfigNak;
-					LOG(5, s, t, "   DNS1 = %s\n", fmtaddr(session[s].dns1, 0));
+					LOG(5, s, t, "   DNS1 = %s\n",
+						fmtaddr(htonl(session[s].dns1), 0));
 				}
 			}
 			if ((i = findppp(p, 0x83))) // Secondary DNS address (TBA, is it)
@@ -675,7 +676,8 @@ void processipcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 				{
 					*(u32 *) (i + 2) = htonl(session[s].dns2);
 					*p = ConfigNak;
-					LOG(5, s, t, "   DNS2 = %s\n", fmtaddr(session[s].dns2, 0));
+					LOG(5, s, t, "   DNS2 = %s\n",
+						fmtaddr(htonl(session[s].dns2), 0));
 				}
 			}
 			i = findppp(p, 3);		// IP address
