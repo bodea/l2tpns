@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.16 2004-07-26 00:20:41 fred_nerk Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.17 2004-07-28 04:01:12 fred_nerk Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -1558,6 +1558,8 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 					memset(calling, 0, MAXTEL);
 					memcpy(calling, b, (n >= MAXTEL) ? (MAXTEL-1) : n);
 					log(4, ntohl(addr->sin_addr.s_addr), s, t, "   Calling <%s>\n", calling);
+					break;
+				case 23:    // subtype
 					break;
 				case 24:    // tx connect speed
 					if (n == 4)
