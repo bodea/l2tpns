@@ -9,7 +9,7 @@
 
 /* walled garden */
 
-char const *cvs_id = "$Id: garden.c,v 1.18 2004-11-30 21:54:23 bodea Exp $";
+char const *cvs_id = "$Id: garden.c,v 1.19 2004-12-01 02:52:46 bodea Exp $";
 
 int plugin_api_version = PLUGIN_API_VERSION;
 static struct pluginfuncs *p = 0;
@@ -40,6 +40,10 @@ char *down_commands[] = {
 	NULL,
 };
 
+#define F_UNGARDEN	0
+#define F_GARDEN	1
+#define F_CLEANUP	2
+
 int garden_session(sessiont *s, int flag);
 
 int plugin_post_auth(struct param_post_auth *data)
@@ -59,7 +63,7 @@ int plugin_new_session(struct param_new_session *data)
 		return PLUGIN_RET_OK;	// Slaves don't do walled garden processing.
 
 	if (data->s->walled_garden)
-		garden_session(data->s, 1);
+		garden_session(data->s, F_GARDEN);
 
 	return PLUGIN_RET_OK;
 }
@@ -70,7 +74,7 @@ int plugin_kill_session(struct param_new_session *data)
 		return PLUGIN_RET_OK;	// Slaves don't do walled garden processing.
 
 	if (data->s->walled_garden)
-		garden_session(data->s, 0);
+		garden_session(data->s, F_CLEANUP);
 
 	return PLUGIN_RET_OK;
 }
@@ -97,7 +101,7 @@ int plugin_control(struct param_control *data)
 	if (!iam_master)
 		return PLUGIN_RET_NOTMASTER;
 
-	flag = data->argv[0][0] != 'u';
+	flag = data->argv[0][0] == 'g' ? F_GARDEN : F_UNGARDEN;
 
 	if (data->argc != 2)
 	{
@@ -158,10 +162,7 @@ int plugin_become_master(void)
 int plugin_new_session_master(sessiont *s)
 {	
 	if (s->walled_garden)
-	{
-		s->walled_garden = 0;
-		garden_session(s, 1);
-	}
+		garden_session(s, F_GARDEN);
 
 	return PLUGIN_RET_OK;
 }
@@ -175,7 +176,7 @@ int garden_session(sessiont *s, int flag)
 	if (!s->opened) return 0;
 
 	sess = p->get_id_by_session(s);
-	if (flag == 1)
+	if (flag == F_GARDEN)
 	{
 		p->log(2, sess, s->tunnel, "Garden user %s (%s)\n", s->user, p->fmtaddr(htonl(s->ip), 0));
 		snprintf(cmd, sizeof(cmd), "iptables -t nat -A garden_users -s %s -j garden", p->fmtaddr(htonl(s->ip), 0));
@@ -209,13 +210,14 @@ int garden_session(sessiont *s, int flag)
 
 		s->walled_garden = 0;
 
-		if (!s->die) {
+		if (flag != F_CLEANUP)
+		{
 			/* OK, we're up! */
 			u16 r = p->radiusnew(p->get_id_by_session(s));
 			p->radiussend(r, RADIUSSTART);
 		}
 	}
-	s->walled_garden = flag;
+
 	return 1;
 }
 
