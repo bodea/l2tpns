@@ -1,3 +1,9 @@
+* Thu Nov 25 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.9
+- Drop sendccp.  If client sends a CCP request for compression just NAK it.
+- Don't copy the old buffer into Config{Nak,Rej} LCP responses (oops);
+  add length checks when appending.
+- Have makeppp print a backtrace on overflow.
+
 * Sat Nov 20 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.8
 - Ignore gateway address in Framed-Route (from Jonathan McDowell).
 - Don't route Framed-IP-Address if contained in a Framed-Route.

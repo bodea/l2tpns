@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.27 2004-11-18 13:15:28 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.28 2004-11-25 02:45:27 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -22,8 +22,6 @@ extern char hostname[];
 extern u32 eth_tx;
 extern time_t time_now;
 extern struct configt *config;
-
-static void sendccp(tunnelidt t, sessionidt s);
 
 // Process PAP messages
 void processpap(tunnelidt t, sessionidt s, u8 *p, u16 l)
@@ -75,10 +73,8 @@ void processpap(tunnelidt t, sessionidt s, u8 *p, u16 l)
 		u8 b[MAXCONTROL];
 		u8 id = p[1];
 		u8 *p = makeppp(b, sizeof(b), 0, 0, t, s, PPPPAP);
-		if (!p) {	// Failed to make ppp header!
-			LOG(1,0,0,0, "Failed to make PPP header in process pap!\n");
-			return;
-		}
+		if (!p) return;
+
 		if (session[s].ip)
 			*p = 2;			// ACK
 		else
@@ -384,14 +380,17 @@ void processlcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 					LOG(2, session[s].ip, s, t, "    Remote requesting asyncmap.  Rejecting.\n");
 					if (!response)
 					{
-						q = makeppp(b, sizeof(b), p, l, t, s, PPPLCP);
-						if (!q)
-						{
-							LOG(2, session[s].ip, s, t, " Failed to send packet.\n");
-							break;
-						}
+						q = makeppp(b, sizeof(b), NULL, 0, t, s, PPPLCP);
+						if (!q) break;
 						response = *q++ = ConfigNak;
 					}
+
+					if ((q - b + 11) > sizeof(b))
+					{
+						LOG(2, session[s].ip, s, t, "LCP overflow for asyncmap ConfigNak.\n");
+						break;
+					}
+
 					*q++ = type;
 					*q++ = 6;
 					memset(q, 0, 4); // asyncmap 0
@@ -417,14 +416,17 @@ void processlcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 
 						if (!response)
 						{
-							q = makeppp(b, sizeof(b), p, l, t, s, PPPLCP);
-							if (!q)
-							{
-								LOG(2, session[s].ip, s, t, " Failed to send packet.\n");
-								break;
-							}
+							q = makeppp(b, sizeof(b), NULL, 0, t, s, PPPLCP);
+							if (!q) break;
 							response = *q++ = ConfigNak;
 						}
+
+						if ((q - b + length) > sizeof(b))
+						{
+							LOG(2, session[s].ip, s, t, "LCP overflow for %s ConfigNak.\n", proto_name);
+							break;
+						}
+
 						memcpy(q, o, length);
 						*(u16 *)(q += 2) = htons(PPPPAP); // NAK -> Use PAP instead
 						q += length;
@@ -444,13 +446,15 @@ void processlcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 					LOG(2, session[s].ip, s, t, "    Rejecting PPP LCP Option type %d\n", type);
 					if (!response || response != ConfigRej) // drop nak in favour of rej
 					{
-						q = makeppp(b, sizeof(b), p, l, t, s, PPPLCP);
-						if (!q)
-						{
-							LOG(2, session[s].ip, s, t, " Failed to send packet.\n");
-							break;
-						}
+						q = makeppp(b, sizeof(b), NULL, 0, t, s, PPPLCP);
+						if (!q) return;
 						response = *q++ = ConfigRej;
+					}
+
+					if ((q - b + length) > sizeof(b))
+					{
+						LOG(2, session[s].ip, s, t, "LCP overflow for ConfigRej (type=%d).\n", type);
+						break;
 					}
 
 					memcpy(q, o, length);
@@ -464,11 +468,7 @@ void processlcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 		{
 			// Send back a ConfigAck
 			q = makeppp(b, sizeof(b), p, l, t, s, PPPLCP);
-			if (!q)
-			{
-				LOG(3, session[s].ip, s, t, " failed to create packet.\n");
-				return;
-			}
+			if (!q) return;
 			response = *q = ConfigAck;
 		}
 
@@ -480,22 +480,18 @@ void processlcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 	}
 	else if (*p == ConfigNak)
 	{
-		LOG(1, session[s].ip, s, t, "Remote end sent a ConfigNak. Ignoring\n");
+		LOG(1, session[s].ip, s, t, "Remote end sent a ConfigNak.  Ignoring\n");
 		if (config->debug > 3) dumplcp(p, l);
 		return ;
 	}
 	else if (*p == TerminateReq)
 	{
+		LOG(3, session[s].ip, s, t, "LCP: Received TerminateReq.  Sending TerminateAck\n");
 		*p = TerminateAck;	// close
 		q = makeppp(b, sizeof(b),  p, l, t, s, PPPLCP);
-		if (!q)
-		{
-			LOG(3, session[s].ip, s, t, "Failed to create PPP packet in processlcp.\n");
-			return;
-		}
-		LOG(3, session[s].ip, s, t, "LCP: Received TerminateReq. Sending TerminateAck\n");
-		sessionshutdown(s, "Remote end closed connection.");
+		if (!q) return;
 		tunnelsend(b, l + (q - b), t); // send it
+		sessionshutdown(s, "Remote end closed connection.");
 	}
 	else if (*p == TerminateAck)
 	{
@@ -503,15 +499,11 @@ void processlcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 	}
 	else if (*p == EchoReq)
 	{
+		LOG(5, session[s].ip, s, t, "LCP: Received EchoReq.  Sending EchoReply\n");
 		*p = EchoReply;		// reply
 		*(u32 *) (p + 4) = htonl(session[s].magic); // our magic number
 		q = makeppp(b, sizeof(b), p, l, t, s, PPPLCP);
-		if (!q)
-		{
-			LOG(3, session[s].ip, s, t, " failed to send EchoReply.\n");
-			return;
-		}
-		LOG(5, session[s].ip, s, t, "LCP: Received EchoReq. Sending EchoReply\n");
+		if (!q) return;
 		tunnelsend(b, l + (q - b), t); // send it
 	}
 	else if (*p == EchoReply)
@@ -527,11 +519,7 @@ void processlcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 			l = 1400;
 		}
 		q = makeppp(b, sizeof(b), p, l, t, s, PPPLCP);
-		if (!q)
-		{
-			LOG(3, session[s].ip, s, t, "Failed to create IdentRej.\n");
-			return;
-		}
+		if (!q) return;
 		LOG_HEX(5, "LCPIdentRej", q, l + 4);
 		tunnelsend(b, 12 + 4 + l, t);
 	}
@@ -639,10 +627,8 @@ void processipcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 			u16 n = 4;
 			i = p + l;
 			if (!(q = makeppp(b, sizeof(b), p, l, t, s, PPPIPCP)))
-			{
-				LOG(2, 0, s, t, "Failed to send IPCP ConfigRej\n");
 				return;
-			}
+
 			*q = ConfigRej;
 			p += 4;
 			while (p < i && p[1])
@@ -696,10 +682,8 @@ void processipcp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 						inet_toa(htonl(session[s].ip)));
 			}
 			if (!(q = makeppp(b, sizeof(b), p, l, t, s, PPPIPCP)))
-			{
-				LOG(2, 0, s, t, " Failed to send IPCP packet.\n");
 				return;
-			}
+
 			tunnelsend(b, l + (q - b), t); // send it
 		}
 	}
@@ -814,41 +798,40 @@ void send_ipin(sessionidt s, u8 *buf, int len)
 // Process CCP messages
 void processccp(tunnelidt t, sessionidt s, u8 *p, u16 l)
 {
+	u8 b[MAXCONTROL];
+	u8 *q;
 
 	CSTAT(call_processccp);
 
 	LOG_HEX(5, "CCP", p, l);
-	if (l < 2 || (*p != ConfigReq && *p != TerminateReq))
+	switch (l > 1 ? *p : 0)
 	{
-		LOG(1, 0, s, t, "Unexpected CCP request code %d\n", *p);
-		STAT(tunnel_rx_errors);
-		return ;
-	}
-	// reject
-	{
-		u8 b[MAXCONTROL];
-		u8 *q;
-		if (*p == ConfigReq)
-		{
-			if (l < 6)
-			{
-				*p = ConfigAck;		// accept no compression
-			}
-			else
-			{
-				*p = ConfigRej;		// reject
-				sendccp(t, s);
-			}
-		}
+	case ConfigReq:
+		if (l < 6)
+			*p = ConfigAck;		// accept no compression
 		else
-			*p = TerminateAck;		// close
-		if (!(q = makeppp(b, sizeof(b), p, l, t, s, PPPCCP)))
-		{
-			LOG(1,0,0,0, "Failed to send CCP packet.\n");
-			return;
-		}
-		tunnelsend(b, l + (q - b), t); // send it
+			*p = ConfigRej;		// reject
+
+		break;
+
+	case TerminateReq:
+	    	*p = TerminateAck;
+		break;
+
+	default:
+		if (l > 1)
+			LOG(1, 0, s, t, "Unexpected CCP request code %d\n", *p);
+		else
+			LOG(1, 0, s, t, "Short CCP packet\n");
+
+		STAT(tunnel_rx_errors);
+		return;
 	}
+
+	if (!(q = makeppp(b, sizeof(b), p, l, t, s, PPPCCP)))
+		return;
+
+	tunnelsend(b, l + (q - b), t); // send it
 }
 
 // send a CHAP PP packet
@@ -886,11 +869,8 @@ void sendchap(tunnelidt t, sessionidt s)
 		return ;
 	}
 	q = makeppp(b, sizeof(b), 0, 0, t, s, PPPCHAP);
-	if (!q)
-	{
-		LOG(1, 0, s, t, "failed to send CHAP challenge.\n");
-		return;
-	}
+	if (!q) return;
+
 	*q = 1;					// challenge
 	q[1] = radius[r].id;			// ID
 	q[4] = 16;				// length
@@ -905,8 +885,13 @@ void sendchap(tunnelidt t, sessionidt s)
 // returns start of PPP frame
 u8 *makeppp(u8 *b, int size, u8 *p, int l, tunnelidt t, sessionidt s, u16 mtype)
 {
-	if (size < 12)
-		return NULL;	// Need more space than this!!
+	if (size < 12) // Need more space than this!!
+	{
+		static int backtrace_count = 0;
+		LOG(0, session[s].ip, s, t, "makeppp buffer too small for L2TP header (size=%d)\n", size);
+		log_backtrace(backtrace_count, 5)
+		return NULL;
+	}
 
 	*(u16 *) (b + 0) = htons(0x0002); // L2TP with no options
 	*(u16 *) (b + 2) = htons(tunnel[t].far); // tunnel
@@ -925,12 +910,17 @@ u8 *makeppp(u8 *b, int size, u8 *p, int l, tunnelidt t, sessionidt s, u16 mtype)
 		b += 2;
 	}
 
-	if (l + 12 > size) {
-		LOG(3,0,0,0, "Would have overflowed the buffer in makeppp: size %d, len %d.\n", size, l);
-		return NULL;	// Run out of room to hold the packet!
+	if (l + 12 > size)
+	{
+		static int backtrace_count = 0;
+		LOG(2, session[s].ip, s, t, "makeppp would overflow buffer (size=%d, header+payload=%d)\n", size, l + 12);
+		log_backtrace(backtrace_count, 5)
+		return NULL;
 	}
+
 	if (p && l)
 		memcpy(b, p, l);
+
 	return b;
 }
 
@@ -939,12 +929,9 @@ void initlcp(tunnelidt t, sessionidt s)
 {
 	char b[500] = {0}, *q;
 
-	q = makeppp(b, sizeof(b), NULL, 0, t, s, PPPLCP);
-	if (!q)
-	{
-		LOG(1, 0, s, t, "Failed to send LCP ConfigReq.\n");
+	if (!(q = makeppp(b, sizeof(b), NULL, 0, t, s, PPPLCP)))
 		return;
-	}
+
 	LOG(4, 0, s, t, "Sending LCP ConfigReq for PAP\n");
 	*q = ConfigReq;
 	*(u8 *)(q + 1) = (time_now % 255) + 1; // ID
@@ -957,17 +944,3 @@ void initlcp(tunnelidt t, sessionidt s)
 	*(u16 *)(q + 12) = htons(PPPPAP); // PAP
 	tunnelsend(b, 12 + 14, t);
 }
-
-// Send CCP reply
-static void sendccp(tunnelidt t, sessionidt s)
-{
-	char *q, b[500] = {0};
-
-	q = makeppp(b, sizeof(b), NULL, 0, t, s, PPPCCP);
-	*q = ConfigReq;
-	*(u8 *)(q + 1) = (time_now % 255) + 1; // ID
-	*(u16 *)(q + 2) = htons(4); // Length
-	LOG_HEX(5, "PPPCCP", q, 4);
-	tunnelsend(b, (q - b) + 4 , t);
-}
-

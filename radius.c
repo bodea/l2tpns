@@ -1,6 +1,6 @@
 // L2TPNS Radius Stuff
 
-char const *cvs_id_radius = "$Id: radius.c,v 1.12 2004-11-16 07:54:32 bodea Exp $";
+char const *cvs_id_radius = "$Id: radius.c,v 1.13 2004-11-25 02:45:27 bodea Exp $";
 
 #include <time.h>
 #include <stdio.h>
@@ -426,9 +426,8 @@ void processrad(u8 *buf, int len, char socket_index)
 			{
 				// CHAP
 				u8 *p = makeppp(b, sizeof(b), 0, 0, t, s, PPPCHAP);
-				if (!p) {
-					return;	// Abort!
-				}
+				if (!p) return;	// Abort!
+
 				{
 					struct param_post_auth packet = { &tunnel[t], &session[s], session[s].user, (*buf == 2), PPPCHAP };
 					run_plugins(PLUGIN_POST_AUTH, &packet);
@@ -446,8 +445,7 @@ void processrad(u8 *buf, int len, char socket_index)
 			{
 				// PAP
 				u8 *p = makeppp(b, sizeof(b), 0, 0, t, s, PPPPAP);
-				if (!p)
-					return;		// Abort!
+				if (!p) return;		// Abort!
 
 				{
 					struct param_post_auth packet = { &tunnel[t], &session[s], session[s].user, (*buf == 2), PPPPAP };

@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.54 2004-11-18 09:02:29 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.55 2004-11-25 02:45:27 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -657,6 +657,7 @@ void tunnelsend(u8 * buf, u16 l, tunnelidt t)
 		STAT(tunnel_tx_errors);
 		return;
 	}
+
 	memset(&addr, 0, sizeof(addr));
 	addr.sin_family = AF_INET;
 	*(u32 *) & addr.sin_addr = htonl(tunnel[t].ip);
@@ -783,11 +784,7 @@ static void processipout(u8 * buf, int len)
 	// Add on L2TP header
 	{
 		u8 *p = makeppp(b, sizeof(b), buf, len, t, s, PPPIP);
-		if (!p)
-		{
-			LOG(3, session[s].ip, s, t, "failed to send packet in processipout.\n");
-			return;
-		}
+		if (!p) return;
 		tunnelsend(b, len + (p-b), t); // send it...
 	}
 
@@ -837,11 +834,7 @@ static void send_ipout(sessionidt s, u8 *buf, int len)
 	// Add on L2TP header
 	{
 		u8 *p = makeppp(b, sizeof(b),  buf, len, t, s, PPPIP);
-		if (!p)
-		{
-			LOG(3, session[s].ip, s, t, "failed to send packet in send_ipout.\n");
-			return;
-		}
+		if (!p) return;
 		tunnelsend(b, len + (p-b), t); // send it...
 	}
 
@@ -1114,11 +1107,7 @@ void sendipcp(tunnelidt t, sessionidt s)
 	}
 
 	q = makeppp(buf,sizeof(buf), 0, 0, t, s, PPPIPCP);
-	if (!q)
-	{
-		LOG(3, session[s].ip, s, t, "failed to send packet in sendipcp.\n");
-		return;
-	}
+	if (!q) return;
 
 	*q = ConfigReq;
 	q[1] = r << RADIUS_SHIFT;                    // ID, dont care, we only send one type of request
@@ -2072,11 +2061,7 @@ static int regular_cleanups(void)
 			u8 b[MAXCONTROL] = {0};
 
 			u8 *q = makeppp(b, sizeof(b), 0, 0, session[s].tunnel, s, PPPLCP);
-			if (!q)
-			{
-				LOG(3, session[s].ip, s, t, "failed to send ECHO packet.\n");
-				continue;
-			}
+			if (!q) return;
 
 			*q = EchoReq;
 			*(u8 *)(q + 1) = (time_now % 255); // ID
