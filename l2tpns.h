@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.8 2004-06-28 02:43:13 fred_nerk Exp $
+// $Id: l2tpns.h,v 1.9 2004-07-02 07:31:23 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -14,7 +14,6 @@
 #include <arpa/inet.h>
 #include <sys/types.h>
 #include <libcli.h>
-#include "config.h"
 
 #define VERSION	"2.0.0"
 
@@ -43,6 +42,7 @@
 #define IDLE_TIMEOUT	240		// Time between last packet sent and LCP ECHO generation
 
 // Constants
+#include "config.h"
 #ifndef PLUGINDIR
 #define PLUGINDIR	LIBDIR			// Plugins
 #endif
@@ -403,12 +403,12 @@ struct configt
 							// Don't use this unless you have a dual processor machine!
 	int		icmp_rate;			// Max number of ICMP unreachable per second to send
 
-	u32	cluster_address;		// Multicast address of cluster.
+	u32		cluster_address;		// Multicast address of cluster.
 							// Send to this address to have everyone hear.
 	char		cluster_interface[64];		// Which interface to listen for multicast on.
 	int		cluster_iam_master;		// Are we the cluster master???
 	int		cluster_iam_uptodate;		// Set if we've got a full set of state from the master.
-	u32	cluster_master_address;		// The network address of the cluster master.
+	u32		cluster_master_address;		// The network address of the cluster master.
 							// Zero if i am the cluster master.
 	int		cluster_seq_number;		// Sequence number of the next heartbeat we'll send out
 							// (or the seq number we're next expecting if we're a slave).

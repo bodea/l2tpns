@@ -1,6 +1,6 @@
 // L2TPNS: token bucket filters
 
-char const *cvs_id_tbf = "$Id: tbf.c,v 1.2 2004-06-28 02:43:13 fred_nerk Exp $";
+char const *cvs_id_tbf = "$Id: tbf.c,v 1.3 2004-07-02 07:31:23 bodea Exp $";
 
 #include <malloc.h>
 #include <string.h>
@@ -406,4 +406,3 @@ int cmd_show_tbf(struct cli_def *cli, char *command, char **argv, int argc)
 	cli_print(cli, "%d tbf entries used, %d total", count, filter_list_size);
 	return CLI_OK;
 }
-

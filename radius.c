@@ -1,6 +1,6 @@
 // L2TPNS Radius Stuff
 
-char const *cvs_id_radius = "$Id: radius.c,v 1.5 2004-06-28 02:43:13 fred_nerk Exp $";
+char const *cvs_id_radius = "$Id: radius.c,v 1.6 2004-07-02 07:31:23 bodea Exp $";
 
 #include <time.h>
 #include <stdio.h>
@@ -74,10 +74,10 @@ static u16 new_radius()
 		{
 			return next_radius_id;
 		}
-	
-		}
-				log(0, 0, 0, 0, "Can't find a free radius session! This is very bad!\n");
-				return 0;
+	}
+
+	log(0, 0, 0, 0, "Can't find a free radius session! This is very bad!\n");
+	return 0;
 }
 
 u16 radiusnew(sessionidt s)

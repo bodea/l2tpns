@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.9 2004-06-28 02:43:13 fred_nerk Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.10 2004-07-02 07:31:23 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -896,11 +896,11 @@ void send_ipout(sessionidt s, u8 *buf, int len)
 	t = session[s].tunnel;
 	sp = &session[s];
 
+	log(5, session[s].ip, s, t, "Ethernet -> Tunnel (%d bytes)\n", len);
+
 	// Snooping this session, send it to intercept box
 	if (sp->snoop_ip && sp->snoop_port)
 		snoop_send_packet(buf, len, sp->snoop_ip, sp->snoop_port);
-
-	log(5, session[s].ip, s, t, "Ethernet -> Tunnel (%d bytes)\n", len);
 
 	// Add on L2TP header
 	{
@@ -3545,8 +3545,6 @@ int load_session(sessionidt s, sessiont *new)
 			routeset(s, new->route[i].ip, new->route[i].mask, new->ip, 1);
 	}
 
-
-
 	if (new->tunnel && s > config->cluster_highest_sessionid)	// Maintain this in the slave. It's used
 					// for walking the sessions to forward byte counts to the master.
 		config->cluster_highest_sessionid = s;
@@ -3556,6 +3554,7 @@ int load_session(sessionidt s, sessiont *new)
 		// Do fixups into address pool.
 	if (new->ip_pool_index != -1)
 		fix_address_pool(s);
+
 	return 1;
 }
 
@@ -3725,7 +3724,7 @@ void processcontrol(u8 * buf, int len, struct sockaddr_in *addr)
 
 	if (log_stream && config->debug >= 4)
 	{
-	log(4, ntohl(addr->sin_addr.s_addr), 0, 0, "Received ");
+		log(4, ntohl(addr->sin_addr.s_addr), 0, 0, "Received ");
 		dump_packet(buf, log_stream);
 	}
 
