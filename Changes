@@ -1,4 +1,4 @@
-* ? Brendan O'Dea <bod@optusnet.com.au> 2.0.7
+* Mon Nov 15 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.7
 - Fix socket creation in host_unreachable() (thanks to Bjørn Augestad)
 - Don't assume BGP peer sends back negotiated hold time, pick smallest
 
