@@ -1,6 +1,6 @@
 // L2TPNS Radius Stuff
 
-char const *cvs_id_radius = "$Id: radius.c,v 1.9 2004-07-26 00:20:41 fred_nerk Exp $";
+char const *cvs_id_radius = "$Id: radius.c,v 1.10 2004-09-02 04:18:07 fred_nerk Exp $";
 
 #include <time.h>
 #include <stdio.h>
@@ -606,7 +606,7 @@ void processrad(u8 *buf, int len, char socket_index)
 			}
 
 			// Valid Session, set it up
-			session[s].sid = 0;
+			session[s].unique_id = 0;
 			sessionsetup(t, s);
 		}
 		else

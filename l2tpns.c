@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.24 2004-08-26 06:22:37 fred_nerk Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.25 2004-09-02 04:18:07 fred_nerk Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -63,7 +63,7 @@ u32 sessionid = 0;		// session id for radius accounting
 int syslog_log = 0;		// are we logging to syslog
 FILE *log_stream = NULL;	// file handle for direct logging (i.e. direct into file, not via syslog).
 extern int cluster_sockfd;	// Intra-cluster communications socket.
-u32 last_sid = 0;		// Last used PPP SID. Can I kill this?? -- mo
+u32 last_id = 0;		// Last used PPP SID. Can I kill this?? -- mo
 int clifd = 0;			// Socket listening for CLI connections.
 
 struct cli_session_actions *cli_session_actions = NULL;	// Pending session changes requested by CLI
@@ -1811,7 +1811,7 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 					// TBA
 					break;
 				case 12:      // ICCN
-					if ( amagic == 0) amagic = time_now;
+					if (amagic == 0) amagic = time_now;
 					session[s].magic = amagic; // set magic number
 					session[s].l2tp_flags = aflags; // set flags received
 					log(3, ntohl(addr->sin_addr.s_addr), s, t, "Magic %X Flags %X\n", amagic, aflags);
@@ -2449,74 +2449,69 @@ void initdata(void)
 {
 	int i;
 
-	_statistics = mmap(NULL, sizeof(struct Tstats), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, 0, 0);
-	if (_statistics == MAP_FAILED)
+	if ((_statistics = shared_malloc(sizeof(struct Tstats))) == MAP_FAILED)
 	{
-		log(0, 0, 0, 0, "Error doing mmap for _statistics: %s\n", strerror(errno));
+		log(0, 0, 0, 0, "Error doing malloc for _statistics: %s\n", strerror(errno));
 		exit(1);
 	}
-	config = mmap(NULL, sizeof(struct configt), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, 0, 0);
-	if (config == MAP_FAILED)
+	if ((config = shared_malloc(sizeof(struct configt))) == MAP_FAILED)
 	{
-		log(0, 0, 0, 0, "Error doing mmap for configuration: %s\n", strerror(errno));
+		log(0, 0, 0, 0, "Error doing malloc for configuration: %s\n", strerror(errno));
 		exit(1);
 	}
 	memset(config, 0, sizeof(struct configt));
 	time(&config->start_time);
 	strncpy(config->config_file, CONFIGFILE, sizeof(config->config_file) - 1);
-	tunnel = mmap(NULL, sizeof(tunnelt) * MAXTUNNEL, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, 0, 0);
-	if (tunnel == MAP_FAILED)
+	if ((tunnel = shared_malloc(sizeof(tunnelt) * MAXTUNNEL)) == MAP_FAILED);
 	{
-		log(0, 0, 0, 0, "Error doing mmap for tunnels: %s\n", strerror(errno));
+		log(0, 0, 0, 0, "Error doing malloc for tunnels: %s\n", strerror(errno));
 		exit(1);
 	}
-	session = mmap(NULL, sizeof(sessiont) * MAXSESSION, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, 0, 0);
-	if (session == MAP_FAILED)
+	if ((session = shared_malloc(sizeof(sessiont) * MAXSESSION)) == MAP_FAILED)
 	{
-		log(0, 0, 0, 0, "Error doing mmap for sessions: %s\n", strerror(errno));
-		exit(1);
-	}
-
-	sess_count = mmap(NULL, sizeof(sessioncountt) * MAXSESSION, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, 0, 0);
-	if (sess_count == MAP_FAILED)
-	{
-		log(0, 0, 0, 0, "Error doing mmap for sessions_count: %s\n", strerror(errno));
+		log(0, 0, 0, 0, "Error doing malloc for sessions: %s\n", strerror(errno));
 		exit(1);
 	}
 
-	radius = mmap(NULL, sizeof(radiust) * MAXRADIUS, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, 0, 0);
-	if (radius == MAP_FAILED)
+	if ((sess_count = shared_malloc(sizeof(sessioncountt) * MAXSESSION)) == MAP_FAILED)
 	{
-		log(0, 0, 0, 0, "Error doing mmap for radius: %s\n", strerror(errno));
+		log(0, 0, 0, 0, "Error doing malloc for sessions_count: %s\n", strerror(errno));
 		exit(1);
 	}
-	ip_address_pool = mmap(NULL, sizeof(ippoolt) * MAXIPPOOL, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, 0, 0);
-	if (ip_address_pool == MAP_FAILED)
+
+	if ((radius = shared_malloc(sizeof(radiust) * MAXRADIUS)) == MAP_FAILED)
 	{
-		log(0, 0, 0, 0, "Error doing mmap for ip_address_pool: %s\n", strerror(errno));
+		log(0, 0, 0, 0, "Error doing malloc for radius: %s\n", strerror(errno));
 		exit(1);
 	}
+
+	if ((ip_address_pool = shared_malloc(sizeof(ippoolt) * MAXIPPOOL)) == MAP_FAILED)
+	{
+		log(0, 0, 0, 0, "Error doing malloc for ip_address_pool: %s\n", strerror(errno));
+		exit(1);
+	}
+
 #ifdef RINGBUFFER
-	ringbuffer = mmap(NULL, sizeof(struct Tringbuffer), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, 0, 0);
-	if (ringbuffer == MAP_FAILED)
+	if ((ringbuffer = shared_malloc(sizeof(struct Tringbuffer))) == MAP_FAILED)
 	{
-		log(0, 0, 0, 0, "Error doing mmap for ringbuffer: %s\n", strerror(errno));
+		log(0, 0, 0, 0, "Error doing malloc for ringbuffer: %s\n", strerror(errno));
 		exit(1);
 	}
 	memset(ringbuffer, 0, sizeof(struct Tringbuffer));
 #endif
 
-	cli_session_actions = mmap(NULL, sizeof(struct cli_session_actions) * MAXSESSION, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, 0, 0);
-	if (cli_session_actions == MAP_FAILED)
+	if ((cli_session_actions = shared_malloc(sizeof(struct cli_session_actions) * MAXSESSION))
+			== MAP_FAILED)
 	{
-		log(0, 0, 0, 0, "Error doing mmap for cli session actions: %s\n", strerror(errno));
+		log(0, 0, 0, 0, "Error doing malloc for cli session actions: %s\n", strerror(errno));
 		exit(1);
 	}
 	memset(cli_session_actions, 0, sizeof(struct cli_session_actions) * MAXSESSION);
-	cli_tunnel_actions = mmap(NULL, sizeof(struct cli_tunnel_actions) * MAXSESSION, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, 0, 0);
-	if (cli_tunnel_actions == MAP_FAILED)
+
+	if ((cli_tunnel_actions = shared_malloc(sizeof(struct cli_tunnel_actions) * MAXSESSION))
+			== MAP_FAILED)
 	{
-		log(0, 0, 0, 0, "Error doing mmap for cli tunnel actions: %s\n", strerror(errno));
+		log(0, 0, 0, 0, "Error doing malloc for cli tunnel actions: %s\n", strerror(errno));
 		exit(1);
 	}
 	memset(cli_tunnel_actions, 0, sizeof(struct cli_tunnel_actions) * MAXSESSION);
@@ -2549,10 +2544,9 @@ void initdata(void)
 	_statistics->start_time = _statistics->last_reset = time(NULL);
 
 #ifdef BGP
-	bgp_peers = mmap(NULL, sizeof(struct bgp_peer) * BGP_NUM_PEERS, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, 0, 0);
-	if (bgp_peers == MAP_FAILED)
+	if ((bgp_peers = shared_malloc(sizeof(struct bgp_peer) * BGP_NUM_PEERS)) == MAP_FAILED)
 	{
-		log(0, 0, 0, 0, "Error doing mmap for bgp: %s\n", strerror(errno));
+		log(0, 0, 0, 0, "Error doing malloc for bgp: %s\n", strerror(errno));
 		exit(1);
 	}
 #endif /* BGP */
@@ -3567,12 +3561,12 @@ int sessionsetup(tunnelidt t, sessionidt s)
 	for (r = 0; r < MAXROUTE && session[s].route[r].ip; r++)
 		routeset(s, session[s].route[r].ip, session[s].route[r].mask, session[s].ip, 1);
 
-	if (!session[s].sid)
+	if (!session[s].unique_id)
 	{
 		// did this session just finish radius?
 		log(3, session[s].ip, s, t, "Sending initial IPCP to client\n");
 		sendipcp(t, s);
-		session[s].sid = ++last_sid;
+		session[s].unique_id = ++last_id;
 	}
 
 	// Run the plugin's against this new session.

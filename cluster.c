@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.10 2004-08-02 06:06:28 fred_nerk Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.11 2004-09-02 04:18:07 fred_nerk Exp $";
 
 #include <stdio.h>
 #include <sys/file.h>
@@ -470,7 +470,7 @@ void cluster_check_slaves(void)
 //
 void cluster_check_master(void)
 {
-	int i, count, tcount, high_sid = 0;
+	int i, count, tcount, high_unique_id = 0;
 	int last_free = 0;
 	clockt t = TIME;
 	static int probed = 0;
@@ -557,7 +557,7 @@ void cluster_check_master(void)
 		// Re-string the free list.
 		// Find the ID of the highest session.
 	last_free = 0;
-	high_sid = 0;
+	high_unique_id = 0;
 	config->cluster_highest_sessionid = 0;
 	for (i = 0, count = 0; i < MAXSESSION; ++i) {
 		if (session[i].tunnel == T_UNDEF) {
@@ -584,8 +584,8 @@ void cluster_check_master(void)
 
 		session[i].radius = 0;	// Reset authentication as the radius blocks aren't up to date.
 
-		if (session[i].sid >= high_sid)	// This is different to the index into the session table!!!
-			high_sid = session[i].sid+1;
+		if (session[i].unique_id >= high_unique_id)	// This is different to the index into the session table!!!
+			high_unique_id = session[i].unique_id+1;
 
 
 		session[i].tbf_in = session[i].tbf_out = 0; // Remove stale pointers from old master.
@@ -603,7 +603,7 @@ void cluster_check_master(void)
 	}
 
 	session[last_free].next = 0;	// End of chain.
-	last_sid = high_sid;		// Keep track of the highest used session ID.
+	last_id = high_unique_id;		// Keep track of the highest used session ID.
 
 	become_master();
 
@@ -1389,7 +1389,7 @@ int processcluster(char * data, int size, u32 addr)
 	return 0;
 
 shortpacket:
-	log(0,0,0,0, "I got an cluster heartbeat packet! This means I'm probably out of sync!!\n");
+	log(0,0,0,0, "I got a _short_ cluster heartbeat packet! This means I'm probably out of sync!!\n");
 	return -1;
 }
 

@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.13 2004-08-26 04:44:26 fred_nerk Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.14 2004-09-02 04:18:07 fred_nerk Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -676,7 +676,7 @@ void processipin(tunnelidt t, sessionidt s, u8 * p, u16 l)
 
 	if (session[s].snoop_ip && session[s].snoop_port)
 	{
-		// Snooping this session, send it to ASIO
+		// Snooping this session
 		snoop_send_packet(p, l, session[s].snoop_ip, session[s].snoop_port);
 	}
 	STAT(tun_tx_packets);
@@ -814,7 +814,6 @@ void sendchap(tunnelidt t, sessionidt s)
 // returns start of PPP frame
 u8 *makeppp(u8 * b, int size, u8 * p, int l, tunnelidt t, sessionidt s, u16 mtype)
 {
-
 	if (size < 12)
 		return NULL;	// Need more space than this!!
 

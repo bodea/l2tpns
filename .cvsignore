@@ -3,4 +3,5 @@ l2tpns
 nsctl
 state.dump
 *.swp
-cluster_master
+bounce
+generateload

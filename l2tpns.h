@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.16 2004-08-26 04:44:26 fred_nerk Exp $
+// $Id: l2tpns.h,v 1.17 2004-09-02 04:18:07 fred_nerk Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -24,7 +24,7 @@
 
 #define RADIUS_SHIFT	5
 #define RADIUS_MASK	((unsigned short)(((unsigned short)~0) >> (16 - RADIUS_SHIFT)))
-#define	MAXRADIUS	((2 << (RADIUS_SHIFT - 1)) * 255)
+#define	MAXRADIUS	((unsigned long)(1L << RADIUS_SHIFT) * 255)
 
 #define T_UNDEF		(0xffff)	// A tunnel ID that won't ever be used. Mark session as undefined.
 #define T_FREE		(0)		// A tunnel ID that won't ever be used. Mark session as free.
@@ -149,10 +149,10 @@ typedef struct sessions
 {
 	sessionidt next;		// next session in linked list
 	sessionidt far;			// far end session ID
-	tunnelidt tunnel;		// tunnel ID
+	tunnelidt tunnel;		// near end tunnel ID
 	ipt ip;				// IP of session set by RADIUS response (host byte order).
 	int ip_pool_index;		// index to IP pool
-	unsigned long sid;		// session id for hsddb
+	unsigned long unique_id;	// unique session id
 	u16 nr;				// next receive
 	u16 ns;				// next send
 	u32 magic;			// ppp magic number
@@ -172,6 +172,7 @@ typedef struct sessions
 	u16 tbf_in;			// filter bucket for throttling in from the user.
 	u16 tbf_out;			// filter bucket for throttling out to the user.
 	u8 l2tp_flags;			// various bit flags from the ICCN on the l2tp tunnel.
+	u8 reserved_old_snoop;		// No longer used - remove at some time
 	u8 walled_garden;		// is this session gardened?
 	u8 flags1;			// additional flags (currently unused);
 	char random_vector[MAXTEL];
@@ -184,7 +185,8 @@ typedef struct sessions
 	u32 flags;			// Various session flags.
 	ipt snoop_ip;			// Interception destination IP
 	u16 snoop_port;			// Interception destination port
-	char reserved[28];		// Space to expand structure without changing HB_VERSION
+	u16 sid;			// near end session id.
+	char reserved[20];		// Space to expand structure without changing HB_VERSION
 }
 sessiont;
 
@@ -589,7 +591,7 @@ if (count++ < max) { \
 extern struct configt *config;
 extern time_t basetime;		// Time when this process started.
 extern time_t time_now;		// Seconds since EPOCH.
-extern u32 last_sid;
+extern u32 last_id;
 extern struct Tstats *_statistics;
 extern ipt my_address;
 extern int tun_write(u8 *data, int size);

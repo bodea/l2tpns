@@ -1,6 +1,6 @@
 /* Misc util functions */
 
-char const *cvs_id_util = "$Id: util.c,v 1.2 2004-06-28 02:43:13 fred_nerk Exp $";
+char const *cvs_id_util = "$Id: util.c,v 1.3 2004-09-02 04:18:07 fred_nerk Exp $";
 
 #include "l2tpns.h"
 
@@ -8,6 +8,7 @@ char const *cvs_id_util = "$Id: util.c,v 1.2 2004-06-28 02:43:13 fred_nerk Exp $
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <string.h>
+#include <sys/mman.h>
 
 char *inet_toa(unsigned long addr)
 {
@@ -16,3 +17,13 @@ char *inet_toa(unsigned long addr)
 	return inet_ntoa(in);
 }
 
+void *shared_malloc(unsigned int size)
+{
+	void * p;
+	p = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, 0, 0);
+
+	if (p == MAP_FAILED)
+		p = NULL;
+
+	return p;
+}
