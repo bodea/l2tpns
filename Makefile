@@ -4,7 +4,7 @@ etcdir = $(PREFIX)/etc/l2tpns
 libdir = $(PREFIX)/usr/lib/l2tpns
 
 CC = gcc
-CFLAGS=-Wall -g -O2
+CFLAGS=-Wall -g -O3 -funroll-loops -fomit-frame-pointer -finline-functions
 LDFLAGS = 
 LIBS = -lm -ldl -lcli
 INSTALL = /usr/bin/install -c
