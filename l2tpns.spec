@@ -33,7 +33,7 @@ rm -rf %{buildroot}
 
 %files
 %defattr(-,root,root)
-%doc Changes INSTALL INTERNALS COPYING Docs/manual.html
+%doc Changes INSTALL INTERNALS COPYING THANKS Docs/manual.html
 %dir /etc/l2tpns
 %config(noreplace) /etc/l2tpns/users
 %config(noreplace) /etc/l2tpns/startup-config

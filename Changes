@@ -9,7 +9,9 @@
 - Implement named access-lists which may be applied to a session
   either via Filter-Id RADIUS responses, or using the CLI.
 - Drop ip address from LOG.
-- autothrottle:  ignore non-"serv" lcp:interface-config avpairs (Yuri).
+- autothrottle: revise parsing; ignore lcp:interface-config avpairs
+  which don't start with serv[ice-policy].
+- Add THANKS file.
 
 * Sat Nov 20 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.8
 - Ignore gateway address in Framed-Route (from Jonathan McDowell).
