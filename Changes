@@ -1,9 +1,11 @@
-* Fri Dec 3 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.13
+* Mon Dec 6 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.13
 - Better cluster master collision resolution: keep a counter of state
   changes, propagated in the heartbeats; the master with the highest #
   of changes (that has kept in contact with the LAC through the
   outage) prevails.
 - Skip newlines in ringbuffer messages to CLI.
+- Drop "Session N is closing" message level to 4; don't process PPPIP
+  packets in this state.
 
 * Wed Dec 1 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.12
 - The "This time, for sure!" release.

@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.61 2004-11-29 03:55:21 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.62 2004-12-05 23:45:04 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -1731,7 +1731,7 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 				case 39:    // seq required - we control it as an LNS anyway...
 					break;
 				case 36:    // Random Vector
-					LOG(4, s, t, "   Random Vector received. Enabled AVP Hiding.\n");
+					LOG(4, s, t, "   Random Vector received.  Enabled AVP Hiding.\n");
 					memset(session[s].random_vector, 0, sizeof(session[s].random_vector));
 					memcpy(session[s].random_vector, b, n);
 					session[s].random_vector_length = n;
@@ -1912,12 +1912,6 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 			return;
 		}
 
-		if (session[s].die)
-		{
-			LOG(3, s, t, "Session %d is closing. Don't process PPP packets\n", s);
-// I'm pretty sure this isn't right -- mo.
-//			return;              // closing session, PPP not processed
-		}
 		if (prot == PPPPAP)
 		{
 			session[s].last_packet = time_now;
@@ -1950,12 +1944,19 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 		}
 		else if (prot == PPPIP)
 		{
+			if (session[s].die)
+			{
+				LOG(4, s, t, "Session %d is closing.  Don't process PPP packets\n", s);
+				return;              // closing session, PPP not processed
+			}
+
 			session[s].last_packet = time_now;
 			if (session[s].walled_garden && !config->cluster_iam_master)
 			{
 				master_forward_packet(buf, len, addr->sin_addr.s_addr, addr->sin_port);
 				return;
 			}
+
 			processipin(t, s, p, l);
 		}
 		else
@@ -2232,7 +2233,7 @@ static int still_busy(void)
 	// We stop waiting for radius after BUSY_WAIT_TIME 1/10th seconds
 	if (abs(TIME - start_busy_wait) > BUSY_WAIT_TIME)
 	{
-		LOG(1, 0, 0, "Giving up waiting for RADIUS to be empty. Shutting down anyway.\n");
+		LOG(1, 0, 0, "Giving up waiting for RADIUS to be empty.  Shutting down anyway.\n");
 		return 0;
 	}
 
@@ -2266,7 +2267,7 @@ static void mainloop(void)
 	clockt next_cluster_ping = 0;	// send initial ping immediately
 	time_t next_clean = time_now + config->cleanup_interval;
 
-	LOG(4, 0, 0, "Beginning of main loop. udpfd=%d, tunfd=%d, cluster_sockfd=%d, controlfd=%d\n",
+	LOG(4, 0, 0, "Beginning of main loop.  udpfd=%d, tunfd=%d, cluster_sockfd=%d, controlfd=%d\n",
 		udpfd, tunfd, cluster_sockfd, controlfd);
 
 	FD_ZERO(&readset);
@@ -3069,7 +3070,7 @@ int main(int argc, char *argv[])
 		{
 			if ((ret = sched_setscheduler(0, SCHED_FIFO, &params)) == 0)
 			{
-				LOG(1, 0, 0, "Using FIFO scheduler. Say goodbye to any other processes running\n");
+				LOG(1, 0, 0, "Using FIFO scheduler.  Say goodbye to any other processes running\n");
 			}
 			else
 			{
@@ -3612,11 +3613,11 @@ int sessionsetup(tunnelidt t, sessionidt s)
 		assign_ip_address(s);
 		if (!session[s].ip)
 		{
-			LOG(0, s, t, "   No IP allocated. The IP address pool is FULL!\n");
+			LOG(0, s, t, "   No IP allocated.  The IP address pool is FULL!\n");
 			sessionshutdown(s, "No IP addresses available");
 			return 0;
 		}
-		LOG(3, s, t, "   No IP allocated. Assigned %s from pool\n",
+		LOG(3, s, t, "   No IP allocated.  Assigned %s from pool\n",
 			fmtaddr(htonl(session[s].ip), 0));
 	}
 
