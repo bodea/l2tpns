@@ -52,13 +52,12 @@ fi
 %defattr(-,root,root)
 %doc Changes INSTALL INTERNALS COPYING Docs/manual.html
 %dir /etc/l2tpns
-%dir /usr/lib/l2tpns
 %config(noreplace) /etc/l2tpns/users
 %config(noreplace) /etc/l2tpns/startup-config
 %config(noreplace) /etc/l2tpns/ip_pool
-/usr/sbin/l2tpns
+%attr(700,root,root) /usr/sbin/l2tpns
+%attr(755,root,root) /usr/lib/l2tpns
 
 %changelog
 * Thu Sep 02 2004 David Parrish <david@dparrish.com> 2.0.2
 - Initial SPEC file generation
-
