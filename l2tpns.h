@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.58 2005-03-10 03:31:25 bodea Exp $
+// $Id: l2tpns.h,v 1.59 2005-03-10 05:46:55 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -151,9 +151,6 @@ struct cli_tunnel_actions {
 };
 
 #define CLI_TUN_KILL		0x01
-
-// dump header: update number if internal format changes
-#define DUMP_MAGIC "L2TPNS#" VERSION "#"
 
 // structures
 typedef struct			// route
