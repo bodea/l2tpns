@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.82 2005-02-09 00:16:17 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.83 2005-02-09 00:45:34 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -3134,7 +3134,7 @@ static void initdata(int optdebug, char *optconfig)
 	memset(ip_address_pool, 0, sizeof(ippoolt) * MAXIPPOOL);
 
 		// Put all the sessions on the free list marked as undefined.
-	for (i = 1; i < MAXSESSION - 1; i++)
+	for (i = 1; i < MAXSESSION; i++)
 	{
 		session[i].next = i + 1;
 		session[i].tunnel = T_UNDEF;	// mark it as not filled in.
@@ -3143,7 +3143,7 @@ static void initdata(int optdebug, char *optconfig)
 	sessionfree = 1;
 
 		// Mark all the tunnels as undefined (waiting to be filled in by a download).
-	for (i = 1; i < MAXTUNNEL- 1; i++)
+	for (i = 1; i < MAXTUNNEL; i++)
 		tunnel[i].state = TUNNELUNDEF;	// mark it as not filled in.
 
 	if (!*hostname)
