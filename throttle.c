@@ -1,5 +1,5 @@
 // L2TPNS Throttle Stuff
-// $Id: throttle.c,v 1.2 2004-03-05 00:09:03 fred_nerk Exp $
+// $Id: throttle.c,v 1.3 2004-05-24 04:29:21 fred_nerk Exp $
 
 #include <stdio.h>
 #include <sys/file.h>
@@ -19,7 +19,6 @@
 extern radiust *radius;
 extern sessiont *session;
 extern u32 sessionid;
-extern int radfd;
 extern tbft *filter_buckets;
 extern struct configt *config;
 
@@ -41,12 +40,16 @@ int throttle_session(sessionidt s, int throttle)
 			log(1, 0, s, session[s].tunnel, "Error creating a filtering bucket for user %s\n", session[s].user);
 			return 0;
 		}
-		log(2, 0, s, session[s].tunnel, "Throttling session %d for user %s\n", s, session[s].user);
+		log(2, 0, s, session[s].tunnel, "Throttling session %d for user %s (bucket %s)\n", s, session[s].user, filter_buckets[session[s].tbf].handle);
 		snprintf(cmd, 2048, "iptables -t mangle -A throttle -d %s -j MARK --set-mark %d",
 				inet_toa(ntohl(session[s].ip)),
 				session[s].tbf);
 		log(4, 0, s, session[s].tunnel, "Running %s\n", cmd);
-		system(cmd);
+		if (WEXITSTATUS(system(cmd)) != 0)
+		{
+			log(2, 0, s, session[s].tunnel, "iptables returned an error. Session is not throttled\n");
+			return 0;
+		}
 	}
 	else
 	{
@@ -69,6 +72,6 @@ int throttle_session(sessionidt s, int throttle)
 		}
 	}
 	session[s].throttle = throttle;
-	return 0;
+	return session[s].throttle;
 }
 
