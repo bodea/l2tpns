@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.52 2005-01-25 04:19:05 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.53 2005-02-08 01:20:38 bodea Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -2508,7 +2508,7 @@ static char const *show_access_list_rule(int extended, ip_filter_rulet *rule)
 	return buf;
 }
 
-ip_filter_rulet *access_list_rule_ext(struct cli_def *cli, char *command, char **argv, int argc)
+static ip_filter_rulet *access_list_rule_ext(struct cli_def *cli, char *command, char **argv, int argc)
 {
 	static ip_filter_rulet rule;
 	struct in_addr addr;
@@ -2743,7 +2743,7 @@ ip_filter_rulet *access_list_rule_ext(struct cli_def *cli, char *command, char *
 	return &rule;
 }
 
-ip_filter_rulet *access_list_rule_std(struct cli_def *cli, char *command, char **argv, int argc)
+static ip_filter_rulet *access_list_rule_std(struct cli_def *cli, char *command, char **argv, int argc)
 {
 	static ip_filter_rulet rule;
 	struct in_addr addr;

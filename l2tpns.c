@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.80 2005-01-25 04:19:05 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.81 2005-02-08 01:20:38 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -632,7 +632,7 @@ static int lookup_ipmap(in_addr_t ip)
 	return (int) (intptr_t) d[(size_t) *a];
 }
 
-int lookup_ipv6map(struct in6_addr ip)
+static int lookup_ipv6map(struct in6_addr ip)
 {
 	struct ipv6radix *curnode;
 	int i;
@@ -1086,7 +1086,7 @@ static void processipout(uint8_t * buf, int len)
 
 // process outgoing (to tunnel) IPv6
 //
-void processipv6out(uint8_t * buf, int len)
+static void processipv6out(uint8_t * buf, int len)
 {
 	sessionidt s;
 	sessiont *sp;
@@ -1396,7 +1396,7 @@ void throttle_session(sessionidt s, int rate_in, int rate_out)
 }
 
 // add/remove filters from session (-1 = no change)
-void filter_session(sessionidt s, int filter_in, int filter_out)
+static void filter_session(sessionidt s, int filter_in, int filter_out)
 {
 	if (!session[s].tunnel)
 		return; // No-one home.
