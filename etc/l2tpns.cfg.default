@@ -1,0 +1,43 @@
+# Comment out to log to stderr
+log file = /var/log/l2tpns
+
+# This must be defined, or it won't work
+# It's only used if the LAC requests tunnel authentication
+l2tp secret = foobar
+
+# You can have multiple radius server entries, but ony one radius secret
+radius server = radius.yourdomain.com.au
+radius secret = barfoo
+
+# Turn on or off Radius Accounting (START and STOP records)
+radius accounting = 0
+
+# Only 2 dns server entries are allowed
+dns server = 192.168.1.1
+dns server = 192.168.1.2
+
+# Set this to 0 to disable throttling
+throttle rate = 0
+
+# This can be from 1 to 5
+# At 5, all packets are logged and your system will run
+# very slowly
+# 2 will show errors only
+debug = 2
+
+# Save / load state on restart
+save state = no
+
+# Cluster Management
+#cluster master = 192.168.1.15
+
+# Where accounting information will be dumped. Comment out to disable.
+accounting dir = /var/run/l2tpns/acct/
+
+# You need to set this to the IP address of the tun interface
+# if you want to use clustering
+#bind address = 127.0.0.1
+
+# Uncomment this if you wish to use the walled garden plugin
+#plugin = garden
+

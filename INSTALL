@@ -1,0 +1,72 @@
+Brief Installation guide for L2TPNS
+
+1. Requirements
+
+    * You must have libcli installed to enable the command-line
+      interface. You can get it from http://sourceforge.net/projects/libcli.
+      If you don't have it, command-line support will not be compiled in.
+
+    * A kernel with iptables support
+
+    * If you want to use throttling, you must have a kernel and a tc (iproute) which supports HTB.
+
+
+2. Compile
+
+./configure --prefix=/usr --sysconfdir=/etc/l2tpns
+make
+
+
+3. Install
+
+    * make install. This does:
+	* Install the binaries into /usr/bin (l2tpns, cluster_master and nsctl)
+	* Create config dir /etc/l2tpns and create default config files
+	* Ensures that /dev/net/tun exists
+
+    * Modify config file. You probably need to change most of the config options.
+
+    * Set up basic firewall rules. This should be done in an init script.
+
+	iptables -t nat -N l2tpns
+	iptables -t nat -A PREROUTING -j l2tpns
+	iptables -t mangle -N l2tpns
+	iptables -t mangle -A PREROUTING -j l2tpns
+
+    * Set up walled garden firewall rules. This should be done in an init
+      script. This is not required unless you are using the garden plugin.
+
+	iptables -t nat -N garden >/dev/null 2>&1
+	iptables -t nat -F garden
+	iptables -t nat -A garden -p tcp -m tcp --dport 25 -j DNAT --to 192.168.1.1
+	iptables -t nat -A garden -p udp -m udp --dport 53 -j DNAT --to 192.168.1.1
+	iptables -t nat -A garden -p tcp -m tcp --dport 53 -j DNAT --to 192.168.1.1
+	iptables -t nat -A garden -p tcp -m tcp --dport 80 -j DNAT --to 192.168.1.1
+	iptables -t nat -A garden -p tcp -m tcp --dport 110 -j DNAT --to 192.168.1.1
+	iptables -t nat -A garden -p tcp -m tcp --dport 443 -j DNAT --to 192.168.1.1
+	iptables -t nat -A garden -p icmp -m icmp --icmp-type echo-request -j DNAT --to 192.168.1.1
+	iptables -t nat -A garden -p icmp -j ACCEPT
+	iptables -t nat -A garden -j DROP
+
+    * Set up IP address pools in /etc/l2tpns/ip_pool
+
+    * Set up clustering
+
+	* Run cluster_master on a separate machine
+	* Set the "cluster master" and "bind address" parameters in /etc/l2tpns/l2tpns.cfg
+
+    * Make l2tpns run on startup
+
+    * Test it out
+
+
+
+
+This software is quite stable and is being used in a production
+environment at a quite large ISP. However, you may have problems
+setting it up, and if so, I would appreciate it if you would file
+useful bug reports on the Source Forge page:
+
+http://sourceforge.net/projects/l2tpns/
+
+-- David Parrish

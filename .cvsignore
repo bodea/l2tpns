@@ -1,0 +1,5 @@
+*.o
+l2tpns
+state.dump
+*.swp
+cluster_master

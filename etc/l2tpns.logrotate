@@ -1,0 +1,8 @@
+/var/log/l2tpns {
+        daily
+        missingok
+        rotate 14
+        postrotate
+            /usr/bin/killall -HUP l2tpns
+        endscript
+}
