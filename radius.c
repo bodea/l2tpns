@@ -1,6 +1,6 @@
 // L2TPNS Radius Stuff
 
-char const *cvs_id_radius = "$Id: radius.c,v 1.20 2004-12-16 08:49:53 bodea Exp $";
+char const *cvs_id_radius = "$Id: radius.c,v 1.21 2005-01-05 13:45:49 bodea Exp $";
 
 #include <time.h>
 #include <stdio.h>
@@ -25,18 +25,6 @@ extern configt *config;
 extern int *radfds;
 extern ip_filtert *ip_filters;
 
-static const char *radius_state(int state)
-{
-	static char *tmp = NULL;
-	int i;
-	for (i = 0; radius_states[i]; i++)
-		if (i == state) return radius_states[i];
-
-	if (tmp == NULL) tmp = (char *)calloc(64, 1);
-	sprintf(tmp, "%d", state);
-	return tmp;
-}
-
 // Set up socket for radius requests
 void initrad(void)
 {
@@ -57,7 +45,6 @@ void radiusclear(uint16_t r, sessionidt s)
 	if (s) session[s].radius = 0;
 	memset(&radius[r], 0, sizeof(radius[r])); // radius[r].state = RADIUSNULL;
 }
-
 
 static uint16_t get_free_radius()
 {
@@ -118,7 +105,7 @@ void radiussend(uint16_t r, uint8_t state)
 	uint8_t *p;
 	sessionidt s;
 
-	CSTAT(call_radiussend);
+	CSTAT(radiussend);
 
 	s = radius[r].session;
 	if (!config->numradiusservers)
@@ -141,6 +128,7 @@ void radiussend(uint16_t r, uint8_t state)
 
 	if (radius[r].state != state)
 		radius[r].try = 0;
+
 	radius[r].state = state;
 	radius[r].retry = backoff(radius[r].try++);
 	LOG(4, s, session[s].tunnel, "Send RADIUS id %d sock %d state %s try %d\n",
@@ -156,7 +144,7 @@ void radiussend(uint16_t r, uint8_t state)
 			else
 			{
 				LOG(1, s, session[s].tunnel, "RADIUS timeout, but in state %s so don't timeout session\n",
-					radius_states[state]);
+					radius_state(state));
 				radiusclear(r, s);
 			}
 			STAT(radius_timeout);
@@ -167,7 +155,7 @@ void radiussend(uint16_t r, uint8_t state)
 			radius[r].state = RADIUSWAIT;
 			radius[r].retry = 100;
 		}
-		return ;
+		return;
 	}
 	// contruct RADIUS access request
 	switch (state)
@@ -369,14 +357,10 @@ void processrad(uint8_t *buf, int len, char socket_index)
 	tunnelidt t = 0;
 	hasht hash;
 	uint8_t routes = 0;
+	int r_code;
+	int r_id;
 
-	int r_code, r_id ; // Radius code.
-
-	r_code = buf[0]; // First byte in radius packet.
-	r_id = buf[1]; // radius reply indentifier.
-
-
-	CSTAT(call_processrad);
+	CSTAT(processrad);
 
 	LOG_HEX(5, "RADIUS Response", buf, len);
 	if (len < 20 || len < ntohs(*(uint16_t *) (buf + 2)))
@@ -384,11 +368,16 @@ void processrad(uint8_t *buf, int len, char socket_index)
 		LOG(1, 0, 0, "Duff RADIUS response length %d\n", len);
 		return ;
 	}
+
+	r_code = buf[0]; // response type
+	r_id = buf[1]; // radius reply indentifier.
+
 	len = ntohs(*(uint16_t *) (buf + 2));
 	r = socket_index | (r_id << RADIUS_SHIFT);
 	s = radius[r].session;
-	LOG(3, s, session[s].tunnel, "Received %s, radius %d response for session %u (code %d, id %d)\n",
-			radius_states[radius[r].state], r, s, r_code, r_id);
+	LOG(3, s, session[s].tunnel, "Received %s, radius %d response for session %u (%s, id %d)\n",
+			radius_state(radius[r].state), r, s, radius_code(r_code), r_id);
+
 	if (!s && radius[r].state != RADIUSSTOP)
 	{
 		LOG(1, s, session[s].tunnel, "   Unexpected RADIUS response\n");
@@ -412,16 +401,29 @@ void processrad(uint8_t *buf, int len, char socket_index)
 			LOG(0, s, session[s].tunnel, "   Incorrect auth on RADIUS response!! (wrong secret in radius config?)\n");
 			return; // Do nothing. On timeout, it will try the next radius server.
 		}
-		if ((radius[r].state == RADIUSAUTH && *buf != 2 && *buf != 3) ||
-			((radius[r].state == RADIUSSTART || radius[r].state == RADIUSSTOP) && *buf != 5))
+
+		if ((radius[r].state == RADIUSAUTH && r_code != AccessAccept && r_code != AccessReject) ||
+			((radius[r].state == RADIUSSTART || radius[r].state == RADIUSSTOP) && r_code != AccountingResponse))
 		{
-			LOG(1, s, session[s].tunnel, "   Unexpected RADIUS response %d\n", *buf);
+			LOG(1, s, session[s].tunnel, "   Unexpected RADIUS response %s\n", radius_code(r_code));
 			return; // We got something we didn't expect. Let the timeouts take
 				// care off finishing the radius session if that's really correct.
 		}
+
 		if (radius[r].state == RADIUSAUTH)
 		{
-			LOG(4, s, session[s].tunnel, "   Original response is \"%s\"\n", (*buf == 2) ? "accept" : "reject");
+			// run post-auth plugin
+			struct param_post_auth packet = {
+				&tunnel[t],
+				&session[s],
+				session[s].user,
+				(r_code == AccessAccept),
+				radius[r].chap ? PPPCHAP : PPPPAP
+			};
+
+			run_plugins(PLUGIN_POST_AUTH, &packet);
+			r_code = packet.auth_allowed ? AccessAccept : AccessReject;
+
 			// process auth response
 			if (radius[r].chap)
 			{
@@ -429,18 +431,13 @@ void processrad(uint8_t *buf, int len, char socket_index)
 				uint8_t *p = makeppp(b, sizeof(b), 0, 0, t, s, PPPCHAP);
 				if (!p) return;	// Abort!
 
-				{
-					struct param_post_auth packet = { &tunnel[t], &session[s], session[s].user, (*buf == 2), PPPCHAP };
-					run_plugins(PLUGIN_POST_AUTH, &packet);
-					*buf = packet.auth_allowed ? 2 : 3;
-				}
-
-				LOG(3, s, session[s].tunnel, "   CHAP User %s authentication %s.\n", session[s].user,
-						(*buf == 2) ? "allowed" : "denied");
-				*p = (*buf == 2) ? 3 : 4;     // ack/nak
+				*p = (r_code == AccessAccept) ? 3 : 4;     // ack/nak
 				p[1] = radius[r].id;
 				*(uint16_t *) (p + 2) = ntohs(4); // no message
 				tunnelsend(b, (p - b) + 4, t); // send it
+
+				LOG(3, s, session[s].tunnel, "   CHAP User %s authentication %s.\n", session[s].user,
+						(r_code == AccessAccept) ? "allowed" : "denied");
 			}
 			else
 			{
@@ -448,23 +445,18 @@ void processrad(uint8_t *buf, int len, char socket_index)
 				uint8_t *p = makeppp(b, sizeof(b), 0, 0, t, s, PPPPAP);
 				if (!p) return;		// Abort!
 
-				{
-					struct param_post_auth packet = { &tunnel[t], &session[s], session[s].user, (*buf == 2), PPPPAP };
-					run_plugins(PLUGIN_POST_AUTH, &packet);
-					*buf = packet.auth_allowed ? 2 : 3;
-				}
-
-				LOG(3, s, session[s].tunnel, "   PAP User %s authentication %s.\n", session[s].user,
-						(*buf == 2) ? "allowed" : "denied");
 				// ack/nak
-				*p = *buf;
+				*p = r_code;
 				p[1] = radius[r].id;
 				*(uint16_t *) (p + 2) = ntohs(5);
 				p[4] = 0; // no message
 				tunnelsend(b, (p - b) + 5, t); // send it
+
+				LOG(3, s, session[s].tunnel, "   PAP User %s authentication %s.\n", session[s].user,
+						(r_code == AccessAccept) ? "allowed" : "denied");
 			}
 
-			if (*buf == 2)
+			if (r_code == AccessAccept)
 			{
 				// Login successful
 				// Extract IP, routes, etc
@@ -631,7 +623,7 @@ void processrad(uint8_t *buf, int len, char socket_index)
 					}
 				}
 			}
-			else if (*buf == 3)
+			else if (r_code == AccessReject)
 			{
 				LOG(2, s, session[s].tunnel, "   Authentication denied for %s\n", session[s].user);
 //FIXME: We should tear down the session here!
@@ -656,7 +648,7 @@ void processrad(uint8_t *buf, int len, char socket_index)
 		else
 		{
 				// An ack for a stop or start record.
-			LOG(3, s, t, "   RADIUS accounting ack recv in state %s\n", radius_states[radius[r].state]);
+			LOG(3, s, t, "   RADIUS accounting ack recv in state %s\n", radius_state(radius[r].state));
 			break;
 		}
 	} while (0);
@@ -671,10 +663,10 @@ void radiusretry(uint16_t r)
 	sessionidt s = radius[r].session;
 	tunnelidt t = 0;
 
-	CSTAT(call_radiusretry);
+	CSTAT(radiusretry);
 
-	if (s)
-		t = session[s].tunnel;
+	if (s) t = session[s].tunnel;
+
 	radius[r].retry = backoff(radius[r].try + 1);
 	switch (radius[r].state)
 	{
