@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.76 2005-01-10 07:17:37 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.77 2005-01-10 07:45:03 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -856,7 +856,7 @@ static void processipout(uint8_t * buf, int len)
 			if (sess_count[s].packets_dropped)
 			{
 				INC_STAT(tun_rx_dropped, sess_count[s].packets_dropped);
-				LOG(2, s, t, "Possible DoS attack on %s (%s); dropped %u packets.",
+				LOG(2, s, t, "Possible DoS attack on %s (%s); dropped %u packets.\n",
 					fmtaddr(ip, 0), sp->user, sess_count[s].packets_dropped);
 			}
 
