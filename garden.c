@@ -34,19 +34,19 @@ int plugin_post_auth(struct param_post_auth *data)
 
 	p.log(3, 0, 0, 0, "Walled Garden allowing login\n");
 	data->auth_allowed = 1;
-	data->s->garden = 1;
+	data->s->walled_garden = 1;
 	return PLUGIN_RET_OK;
 }
 
 int plugin_new_session(struct param_new_session *data)
 {
-	if (data->s->garden) garden_session(data->s, 1);
+	if (data->s->walled_garden) garden_session(data->s, 1);
 	return PLUGIN_RET_OK;
 }
 
 int plugin_kill_session(struct param_new_session *data)
 {
-	if (data->s->garden) garden_session(data->s, 0);
+	if (data->s->walled_garden) garden_session(data->s, 0);
 	return PLUGIN_RET_OK;
 }
 
@@ -119,7 +119,7 @@ int garden_session(sessiont *s, int flag)
 		snprintf(cmd, 2048, "iptables -t nat -A garden_users -s %s -j garden", p.inet_toa(ntohl(s->ip)));
 		p.log(3, 0, 0, s->tunnel, "%s\n", cmd);
 		system(cmd);
-		s->garden = 1;
+		s->walled_garden = 1;
 	}
 	else
 	{
@@ -145,7 +145,7 @@ int garden_session(sessiont *s, int flag)
 			if (WEXITSTATUS(status) != 0) break;
 		}
 
-		s->garden = 0;
+		s->walled_garden = 0;
 
 		if (!s->die) {
 			/* OK, we're up! */
@@ -153,7 +153,7 @@ int garden_session(sessiont *s, int flag)
 			p.radiussend(r, RADIUSSTART);
 		}
 	}
-	s->garden = flag;
+	s->walled_garden = flag;
 	return 1;
 }
 

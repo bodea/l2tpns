@@ -1,19 +1,13 @@
-subdirs = @subdirs@
-top_srcdir = @top_srcdir@
-srcdir = @srcdir@
-prefix = @prefix@
-exec_prefix = @exec_prefix@
-bindir = @bindir@
-infodir = @infodir@
-etcdir = @sysconfdir@
-libdir = @prefix@/lib/l2tpns
+PREFIX=
+bindir = $(PREFIX)/usr/sbin
+etcdir = $(PREFIX)/etc/l2tpns
+libdir = $(PREFIX)/usr/lib/l2tpns
 
-CC = @CC@
-CFLAGS=-Wall @CFLAGS@
-LDFLAGS = @LDFLAGS@
-LIBS = @LIBS@
-INSTALL = @INSTALL@
-DEFS = @DEFS@
+CC = gcc
+CFLAGS=-Wall -g -O2
+LDFLAGS = 
+LIBS = -lm -ldl -lcli
+INSTALL = /usr/bin/install -c
 
 OBJS=	md5.o \
 	icmp.o \
@@ -47,9 +41,6 @@ nsctl:	nsctl.o control.o
 
 clean:
 	/bin/rm -f *.o *.so l2tpns cluster_master nsctl
-
-distclean:
-	/bin/rm -f Makefile config.h config.status config.cache config.log
 
 install: all
 	$(INSTALL) -D -o root -g root -m 0755 l2tpns $(bindir)/l2tpns

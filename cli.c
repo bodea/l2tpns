@@ -1,5 +1,5 @@
 // L2TPNS Command Line Interface
-// $Id: cli.c,v 1.2 2004-03-05 00:09:03 fred_nerk Exp $
+// $Id: cli.c,v 1.3 2004-03-05 00:22:06 fred_nerk Exp $
 // vim: sw=4 ts=8
 
 #include <stdio.h>
@@ -39,7 +39,7 @@ extern char hostname[];
 extern struct Tringbuffer *ringbuffer;
 #endif
 
-char *rcs_id = "$Id: cli.c,v 1.2 2004-03-05 00:09:03 fred_nerk Exp $";
+char *rcs_id = "$Id: cli.c,v 1.3 2004-03-05 00:22:06 fred_nerk Exp $";
 
 char *debug_levels[] = {
     "CRIT",
@@ -290,7 +290,7 @@ int cmd_show_session(struct cli_def *cli, char *command, char **argv, int argc)
 	    cli_print(cli, "	Tx Speed:	%lu", session[s].tx_connect_speed);
 	    cli_print(cli, "	Intercepted:	%s", session[s].snoop ? "YES" : "no");
 	    cli_print(cli, "	Throttled:	%s", session[s].throttle ? "YES" : "no");
-	    cli_print(cli, "	Servicenet:	%s", session[s].servicenet ? "YES" : "no");
+	    cli_print(cli, "	Walled Garden:	%s", session[s].walled_garden ? "YES" : "no");
 	    cli_print(cli, "	Filter Bucket:	%s", session[s].tbf ? filter_buckets[session[s].tbf].handle : "none");
 	}
 	return CLI_OK;
@@ -304,7 +304,7 @@ int cmd_show_session(struct cli_def *cli, char *command, char **argv, int argc)
 	    "IP",
 	    "I",
 	    "T",
-	    "S",
+	    "G",
 	    "opened",
 	    "downloaded",
 	    "uploaded",
@@ -324,7 +324,7 @@ int cmd_show_session(struct cli_def *cli, char *command, char **argv, int argc)
 		userip,
 		(session[i].snoop) ? "Y" : "N",
 		(session[i].throttle) ? "Y" : "N",
-		(session[i].servicenet) ? "Y" : "N",
+		(session[i].walled_garden) ? "Y" : "N",
 		abs(time_now - (unsigned long)session[i].opened),
 		(unsigned long)session[i].total_cout,
 		(unsigned long)session[i].total_cin,

@@ -417,7 +417,7 @@ sessionidt sessionbyuser(char *username)
 #ifdef STAT_CALLS
 	STAT(call_sessionbyuser);
 #endif
-	for (s = 1; s < MAXSESSION && (session[s].servicenet || strncmp(session[s].user, username, 128)); s++);
+	for (s = 1; s < MAXSESSION && (session[s].walled_garden || strncmp(session[s].user, username, 128)); s++);
 	if (s < MAXSESSION)
 		return s;
 	return 0;
@@ -770,7 +770,7 @@ void controladd(controlt * c, tunnelidt t, sessionidt s)
 void sessionshutdown(sessionidt s, char *reason)
 {
 	int dead = session[s].die;
-	int servicenet = session[s].servicenet;
+	int walled_garden = session[s].walled_garden;
 
 #ifdef STAT_CALLS
 	STAT(call_sessionshutdown);
@@ -789,7 +789,7 @@ void sessionshutdown(sessionidt s, char *reason)
 	}
 
 	// RADIUS Stop message
-	if (session[s].opened && !servicenet && !dead) {
+	if (session[s].opened && !walled_garden && !dead) {
 		u8 r = session[s].radius;
 		if (!r)
 		{
@@ -1970,7 +1970,7 @@ int assign_ip_address(sessionidt s)
 		if (!ip_address_pool[i].address || ip_address_pool[i].assigned)
 			continue;
 
-		if (!session[s].servicenet && ip_address_pool[i].user[0] && !strcmp(u, ip_address_pool[i].user))
+		if (!session[s].walled_garden && ip_address_pool[i].user[0] && !strcmp(u, ip_address_pool[i].user))
 		{
 			best = i;
 			reuse = 1;
@@ -1995,7 +1995,7 @@ int assign_ip_address(sessionidt s)
 	session[s].ip_pool_index = best;
 	ip_address_pool[best].assigned = 1;
 	ip_address_pool[best].last = time_now;
-	if (session[s].servicenet)
+	if (session[s].walled_garden)
 		/* Don't track addresses of users in walled garden (note: this
 		   means that their address isn't "sticky" even if they get
 		   un-gardened). */
@@ -2145,7 +2145,7 @@ void dump_acct_info()
 
     for (i = 0; i < MAXSESSION; i++)
     {
-	if (!session[i].opened || !session[i].cin || !session[i].cout || !*session[i].user || session[i].servicenet)
+	if (!session[i].opened || !session[i].cin || !session[i].cout || !*session[i].user || session[i].walled_garden)
 		continue;
 	if (!f)
 	{
@@ -2240,7 +2240,7 @@ int main(int argc, char *argv[])
 	initdata();
 	init_cli();
 	read_config_file();
-	log(0, 0, 0, 0, "$Id: l2tpns.c,v 1.2 2004-03-05 00:09:03 fred_nerk Exp $\n(c) Copyright 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced\n");
+	log(0, 0, 0, 0, "$Id: l2tpns.c,v 1.3 2004-03-05 00:22:06 fred_nerk Exp $\n(c) Copyright 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced\n");
 
 	/* Start up the cluster first, so that we don't have two machines with
 	 * the same IP at once.
@@ -2700,7 +2700,7 @@ int sessionsetup(tunnelidt t, sessionidt s, u8 routes)
 	{
 		if (i == s) continue;
 		if (ip == session[i].ip) sessionkill(i, "Duplicate IP address");
-		if (!session[s].servicenet && !session[i].servicenet && strcasecmp(user, session[i].user) == 0)
+		if (!session[s].walled_garden && !session[i].walled_garden && strcasecmp(user, session[i].user) == 0)
 			sessionkill(i, "Duplicate session for user");
 	}
 

@@ -1,5 +1,5 @@
 // L2TPNS PPP Stuff
-// $Id: ppp.c,v 1.2 2004-03-05 00:09:03 fred_nerk Exp $
+// $Id: ppp.c,v 1.3 2004-03-05 00:22:06 fred_nerk Exp $
 
 #include <stdio.h>
 #include <string.h>
@@ -438,7 +438,7 @@ void processipcp(tunnelidt t, sessionidt s, u8 * p, u16 l)
 	if (*p == ConfigAck)
 	{                          // happy with our IPCP
 		u8 r = session[s].radius;
-		if ((!r || radius[r].state == RADIUSIPCP) && !session[s].servicenet)
+		if ((!r || radius[r].state == RADIUSIPCP) && !session[s].walled_garden)
 			if (!r)
 				r = radiusnew(s);
 			if (r)

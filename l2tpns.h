@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.2 2004-03-05 00:09:03 fred_nerk Exp $
+// $Id: l2tpns.h,v 1.3 2004-03-05 00:22:06 fred_nerk Exp $
 
 #include <netinet/in.h>
 #include <stdio.h>
@@ -132,7 +132,7 @@ typedef struct sessions
 	u8 flags;			// various bit flags
 	u8 snoop;			// are we snooping this session?
 	u8 throttle;			// is this session throttled?
-	u8 servicenet;			// is this session servicenetted?
+	u8 walled_garden;		// is this session gardened?
 	u16 mru;			// maximum receive unit
 	u16 tbf;			// filter bucket for throttling
 	char random_vector[MAXTEL];

@@ -1,5 +1,5 @@
 // L2TPNS Cluster Master
-// $Id: cluster_slave.c,v 1.2 2004-03-05 00:09:03 fred_nerk Exp $
+// $Id: cluster_slave.c,v 1.3 2004-03-05 00:22:06 fred_nerk Exp $
 
 #include <stdio.h>
 #include <netinet/in.h>
@@ -164,10 +164,6 @@ int handle_session(char *buf, int l)
 	    }
 	}
     }
-    /*
-    if (session[s].servicenet)
-	servicenet_session(s, 1);
-    */
     return 0;
 }
 
