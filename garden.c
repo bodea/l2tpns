@@ -7,7 +7,7 @@
 #include "plugin.h"
 #include "control.h"
 
-char const *cvs_id = "$Id: garden.c,v 1.7 2004-06-28 02:43:13 fred_nerk Exp $";
+char const *cvs_id = "$Id: garden.c,v 1.8 2004-10-30 07:35:31 bodea Exp $";
 
 int __plugin_api_version = 1;
 static struct pluginfuncs *p = 0;
@@ -15,12 +15,12 @@ static struct pluginfuncs *p = 0;
 static int iam_master = 0;	// We're all slaves! Slaves I tell you!
 
 char *up_commands[] = {
-	"iptables -t nat -N garden >/dev/null 2>&1",	// Create a chain that all gardened users will go through
+	"iptables -t nat -N garden >/dev/null 2>&1",			// Create a chain that all gardened users will go through
 	"iptables -t nat -F garden",
-	". " PLUGINCONF "/build-garden",		// Populate with site-specific DNAT rules
-	"iptables -t nat -N garden_users >/dev/null 2>&1",// Empty chain, users added/removed by garden_session
+	". " PLUGINCONF "/build-garden",				// Populate with site-specific DNAT rules
+	"iptables -t nat -N garden_users >/dev/null 2>&1",		// Empty chain, users added/removed by garden_session
 	"iptables -t nat -F garden_users",
-	"iptables -t nat -A PREROUTING -j garden_users",	// DNAT any users on the garden_users chain
+	"iptables -t nat -A PREROUTING -j garden_users",		// DNAT any users on the garden_users chain
 	"sysctl -w net.ipv4.ip_conntrack_max=256000 >/dev/null",	// lots of entries
 	NULL,
 };
@@ -149,7 +149,7 @@ int garden_session(sessiont *s, int flag)
 	if (flag == 1)
 	{
 		p->log(2, 0, 0, s->tunnel, "Garden user %s (%s)\n", s->user, p->inet_toa(htonl(s->ip)));
-		snprintf(cmd, 2048, "iptables -t nat -A garden_users -s %s -j garden", p->inet_toa(htonl(s->ip)));
+		snprintf(cmd, sizeof(cmd), "iptables -t nat -A garden_users -s %s -j garden", p->inet_toa(htonl(s->ip)));
 		p->log(3, 0, 0, s->tunnel, "%s\n", cmd);
 		system(cmd);
 		s->walled_garden = 1;
@@ -170,7 +170,7 @@ int garden_session(sessiont *s, int flag)
 		s->cin = s->cout = 0;
 		s->pin = s->pout = 0;
 
-		snprintf(cmd, 2048, "iptables -t nat -D garden_users -s %s -j garden", p->inet_toa(htonl(s->ip)));
+		snprintf(cmd, sizeof(cmd), "iptables -t nat -D garden_users -s %s -j garden", p->inet_toa(htonl(s->ip)));
 		p->log(3, 0, 0, s->tunnel, "%s\n", cmd);
 		while (--count)
 		{

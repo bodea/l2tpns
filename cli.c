@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.18 2004-10-28 03:31:11 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.19 2004-10-30 07:35:31 bodea Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -566,6 +566,7 @@ int cmd_show_tunnels(struct cli_def *cli, char *command, char **argv, int argc)
 			"IP",
 			"State",
 			"Sessions");
+
 	for (i = 1; i < MAXTUNNEL; i++)
 	{
 		int sessions = 0;
@@ -579,6 +580,7 @@ int cmd_show_tunnels(struct cli_def *cli, char *command, char **argv, int argc)
 				states[tunnel[i].state],
 				sessions);
 	}
+
 	return CLI_OK;
 }
 
@@ -618,7 +620,7 @@ int cmd_show_users(struct cli_def *cli, char *command, char **argv, int argc)
 	}
 
 	if (sargc > 0)
-			return cmd_show_session(cli, "users", sargv, sargc);
+		return cmd_show_session(cli, "users", sargv, sargc);
 
 	return CLI_OK;
 }
@@ -968,12 +970,9 @@ int cmd_show_plugins(struct cli_def *cli, char *command, char **argv, int argc)
 
 	cli_print(cli, "Plugins currently loaded:");
 	for (i = 0; i < MAXPLUGINS; i++)
-	{
 		if (*config->plugins[i])
-		{
 			cli_print(cli, "  %s", config->plugins[i]);
-		}
-	}
+
 	return CLI_OK;
 }
 
@@ -996,6 +995,7 @@ int cmd_show_throttle(struct cli_def *cli, char *command, char **argv, int argc)
 			session[i].tbf_in,
 			session[i].tbf_out);
 	}
+
 	return CLI_OK;
 }
 
@@ -1201,7 +1201,7 @@ int cmd_snoop(struct cli_def *cli, char *command, char **argv, int argc)
 
 	if (argc < 3)
 	{
-		cli_print(cli, "Specify username ip port");
+		cli_print(cli, "Specify username, ip and port");
 		return CLI_OK;
 	}
 
@@ -1240,7 +1240,7 @@ int cmd_no_snoop(struct cli_def *cli, char *command, char **argv, int argc)
 
 	if (CLI_HELP_REQUESTED)
 		return cli_arg_help(cli, argc > 1,
-			"USER", "Username of session to un-snoop", NULL);
+			"USER", "Username of session to unsnoop", NULL);
 
 	if (!config->cluster_iam_master)
 	{
@@ -1250,7 +1250,7 @@ int cmd_no_snoop(struct cli_def *cli, char *command, char **argv, int argc)
 
 	if (!argc)
 	{
-		cli_print(cli, "Specify a user");
+		cli_print(cli, "Specify a user to unsnoop");
 		return CLI_OK;
 	}
 
@@ -1265,6 +1265,7 @@ int cmd_no_snoop(struct cli_def *cli, char *command, char **argv, int argc)
 		cli_print(cli, "Not snooping user %s", argv[i]);
 		cli_session_actions[s].action |= CLI_SESS_NOSNOOP;
 	}
+
 	return CLI_OK;
 }
 
@@ -1300,7 +1301,7 @@ int cmd_throttle(struct cli_def *cli, char *command, char **argv, int argc)
 
 	if (argc == 0)
 	{
-		cli_print(cli, "You must specify at least a username");
+		cli_print(cli, "Specify a user to throttle");
 		return CLI_OK;
 	}
 
@@ -1334,7 +1335,7 @@ int cmd_no_throttle(struct cli_def *cli, char *command, char **argv, int argc)
 
 	if (CLI_HELP_REQUESTED)
 		return cli_arg_help(cli, argc > 1,
-			"USER", "Username of session to un-throttle", NULL);
+			"USER", "Username of session to unthrottle", NULL);
 
 	if (!config->cluster_iam_master)
 	{
@@ -1344,7 +1345,7 @@ int cmd_no_throttle(struct cli_def *cli, char *command, char **argv, int argc)
 
 	if (!argc)
 	{
-		cli_print(cli, "Specify a user");
+		cli_print(cli, "Specify a user to unthrottle");
 		return CLI_OK;
 	}
 
