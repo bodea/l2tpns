@@ -1,3 +1,8 @@
+* ? David Parrish <david@dparrish.com> ?
+- Added support for hidden AVPs by Robert Clark
+- l2tpns-chap-response.patch from Robert Clark
+- l2tpns-config-hostname.patch from Robert Clark
+
 * Thu Sep 02 2004 David Parrish <david@dparrish.com> 2.0.2
 - Combined LCP patches from Iain and Yuri. This should allow Windows 2k/XP
   clients to connect, as well Linksys DSL modems.

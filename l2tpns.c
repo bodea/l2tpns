@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.25 2004-09-02 04:18:07 fred_nerk Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.26 2004-09-19 23:19:23 fred_nerk Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -169,6 +169,7 @@ void dump_state();
 void tunnel_clean();
 tunnelidt new_tunnel();
 void update_config();
+int unhide_avp(u8 *avp, tunnelidt t, sessionidt s, u16 length);
 
 static void cache_ipmap(ipt ip, int s);
 static void uncache_ipmap(ipt ip);
@@ -1452,6 +1453,13 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 						continue;
 					}
 					log(4, ntohl(addr->sin_addr.s_addr), s, t, "Hidden AVP\n");
+					// Unhide the AVP
+					n = unhide_avp(b, t, s, n);
+					if (n == 0)
+					{
+						fatal = flags;
+						continue;
+					}
 				}
 				if (*b & 0x3C)
 				{
@@ -1566,6 +1574,11 @@ void processudp(u8 * buf, int len, struct sockaddr_in *addr)
 						build_chap_response(b, 2, n, &chapresponse);
 					}
 					break;
+				case 13:    // Response
+					// Why did they send a response? We never challenge.
+					log(2, ntohl(addr->sin_addr.s_addr), s, t, "   received unexpected challenge response\n");
+				break;
+
 				case 14:    // assigned session
 					asession = session[s].far = ntohs(*(u16 *) (b));
 					log(4, ntohl(addr->sin_addr.s_addr), s, t, "   assigned session = %d\n", asession);
@@ -4013,3 +4026,77 @@ int cmd_show_hist_open(struct cli_def *cli, char *command, char **argv, int argc
 	cli_print(cli, "%d total sessions open.", count);
 	return CLI_OK;
 }
+
+/* Unhide an avp.
+ *
+ * This unencodes the AVP using the L2TP CHAP secret and the
+ * previously stored random vector. It replaces the hidden data with
+ * the cleartext data and returns the length of the cleartext data
+ * (including the AVP "header" of 6 bytes).
+ *
+ * Based on code from rp-l2tpd by Roaring Penguin Software Inc.
+ */
+int unhide_avp(u8 *avp, tunnelidt t, sessionidt s, u16 length)
+{
+	MD5_CTX ctx;
+	u8 *cursor;
+	u8 digest[16];
+	u8 working_vector[16];
+	uint16_t hidden_length;
+	u8 type[2];
+	size_t done, todo;
+	u8 *output;
+
+	// Find the AVP type.
+	type[0] = *(avp + 4);
+	type[1] = *(avp + 5);
+
+	// Line up with the hidden data
+	cursor = output = avp + 6;
+
+	// Compute initial pad
+	MD5Init(&ctx);
+	MD5Update(&ctx, type, 2);
+	MD5Update(&ctx, config->l2tpsecret, strlen(config->l2tpsecret));
+	MD5Update(&ctx, session[s].random_vector, session[s].random_vector_length);
+	MD5Final(digest, &ctx);
+
+	// Get hidden length
+	hidden_length = ((uint16_t) (digest[0] ^ cursor[0])) * 256 + (uint16_t) (digest[1] ^ cursor[1]);
+
+	// Keep these for later use
+	working_vector[0] = *cursor;
+	working_vector[1] = *(cursor + 1);
+	cursor += 2;
+
+	if (hidden_length > length - 8)
+	{
+		log(1, 0, s, t, "Hidden length %d too long in AVP of length %d\n", (int) hidden_length, (int) length);
+		return 0;
+	}
+
+	/* Decrypt remainder */
+	done = 2;
+	todo = hidden_length;
+	while (todo)
+	{
+		working_vector[done] = *cursor;
+		*output = digest[done] ^ *cursor;
+		++output;
+		++cursor;
+		--todo;
+		++done;
+		if (done == 16 && todo)
+		{
+			// Compute new digest
+			done = 0;
+			MD5Init(&ctx);
+			MD5Update(&ctx, config->l2tpsecret, strlen(config->l2tpsecret));
+			MD5Update(&ctx, &working_vector, 16);
+			MD5Final(digest, &ctx);
+		}
+	}
+
+	return hidden_length + 6;
+}
+

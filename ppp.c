@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.14 2004-09-02 04:18:07 fred_nerk Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.15 2004-09-19 23:19:23 fred_nerk Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -512,7 +512,8 @@ void processipcp(tunnelidt t, sessionidt s, u8 * p, u16 l)
 	{
 		// happy with our IPCP
 		u16 r = session[s].radius;
-		if ((!r || radius[r].state == RADIUSIPCP) && !session[s].walled_garden) {
+		if ((!r || radius[r].state == RADIUSIPCP) && !session[s].walled_garden)
+		{
 			if (!r)
 				r = radiusnew(s);
 			if (r)
@@ -635,7 +636,6 @@ void processipcp(tunnelidt t, sessionidt s, u8 * p, u16 l)
 void processipin(tunnelidt t, sessionidt s, u8 * p, u16 l)
 {
 	ipt ip;
-
 
 	CSTAT(call_processipin);
 
