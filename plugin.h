@@ -1,7 +1,7 @@
 #ifndef __PLUGIN_H__
 #define __PLUGIN_H__
 
-#define PLUGIN_API_VERSION	1
+#define PLUGIN_API_VERSION	2
 #define MAX_PLUGIN_TYPES	30
 
 enum
@@ -34,6 +34,7 @@ struct pluginfuncs
 	void (*sessionkill)(sessionidt s, char *reason);
 	u16 (*radiusnew)(sessionidt s);
 	void (*radiussend)(u16 r, u8 state);
+	void *(*getconfig)(char *key, enum config_typet type);
 };
 
 struct param_pre_auth
@@ -74,12 +75,6 @@ struct param_packet_tx
 struct param_timer
 {
 	time_t time_now;
-};
-
-struct param_config
-{
-	char *key;
-	char *value;
 };
 
 struct param_control

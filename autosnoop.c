@@ -4,9 +4,9 @@
 
 /* set up intercept based on RADIUS reply */
 
-char const *cvs_id = "$Id: autosnoop.c,v 1.6 2004-11-09 06:02:37 bodea Exp $";
+char const *cvs_id = "$Id: autosnoop.c,v 1.7 2004-11-09 08:05:02 bodea Exp $";
 
-int __plugin_api_version = 1;
+int __plugin_api_version = PLUGIN_API_VERSION;
 struct pluginfuncs *p;
 
 int plugin_radius_response(struct param_radius_response *data)

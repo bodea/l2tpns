@@ -9,9 +9,9 @@
 
 /* walled garden */
 
-char const *cvs_id = "$Id: garden.c,v 1.11 2004-11-05 04:55:27 bodea Exp $";
+char const *cvs_id = "$Id: garden.c,v 1.12 2004-11-09 08:05:02 bodea Exp $";
 
-int __plugin_api_version = 1;
+int __plugin_api_version = PLUGIN_API_VERSION;
 static struct pluginfuncs *p = 0;
 
 static int iam_master = 0;	// We're all slaves! Slaves I tell you!

@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.46 2004-11-09 05:42:53 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.47 2004-11-09 08:05:02 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -3469,6 +3469,7 @@ void update_config()
 	{
 		if (strcmp(config->plugins[i], config->old_plugins[i]) == 0)
 			continue;
+
 		if (*config->plugins[i])
 		{
 			// Plugin added
@@ -3761,6 +3762,29 @@ static void *open_plugin(char *plugin_name, int load)
 	return dlopen(path, RTLD_NOW);
 }
 
+// plugin callback to get a config value
+static void *getconfig(char *key, enum config_typet type)
+{
+	int i;
+
+	for (i = 0; config_values[i].key; i++)
+	{
+		if (!strcmp(config_values[i].key, key))
+		{
+			if (config_values[i].type == type)
+				return ((void *) config) + config_values[i].offset;
+
+			LOG(1, 0, 0, 0, "plugin requested config item \"%s\" expecting type %d, have type %d\n",
+				key, type, config_values[i].type);
+
+			return 0;
+		}
+	}
+
+	LOG(1, 0, 0, 0, "plugin requested unknown config item \"%s\"\n", key);
+	return 0;
+}
+
 void add_plugin(char *plugin_name)
 {
 	static struct pluginfuncs funcs = {
@@ -3773,6 +3797,7 @@ void add_plugin(char *plugin_name)
 		sessionkill,
 		radiusnew,
 		radiussend,
+		getconfig,
 	};
 
 	void *p = open_plugin(plugin_name, 1);
