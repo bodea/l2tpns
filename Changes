@@ -1,3 +1,6 @@
+* ??? 2.0.2
+- Apply patch to fix -v option from Juergen Kammer.
+
 * Tue Jul 13 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.1
 - Update INSTALL, Docs/manual.html documentation.
 - Add INTERNALS documentation.

@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.14 2004-07-12 08:21:45 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.15 2004-07-12 15:16:27 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -2837,6 +2837,7 @@ void dump_acct_info()
 int main(int argc, char *argv[])
 {
 	int o;
+	int optdebug = 0;
 
 	_program_name = strdup(argv[0]);
 
@@ -2853,7 +2854,7 @@ int main(int argc, char *argv[])
 				if (fork()) exit(0);
 				break;
 			case 'v':
-				config->debug++;
+				optdebug++;
 				break;
 			case 'h':
 				snprintf(hostname, sizeof(hostname), "%s", optarg);
@@ -2881,6 +2882,9 @@ int main(int argc, char *argv[])
 	initiptables();
 	initplugins();
 	initdata();
+
+	config->debug = optdebug;
+
 	init_tbf();
 	init_cli(hostname);
 	read_config_file();
