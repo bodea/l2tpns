@@ -1,6 +1,6 @@
 * Thu Nov 11 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.6
 - Make BGP keepalive/hold time configurable
-- Revise BGP config to use "router bgp AS" syntax
+- Revise BGP config to use "router bgp AS" syntax (requires libcli >= 1.8.2)
 
 * Tue Nov 9 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.5
 - Handle routing properly in lone-master case 

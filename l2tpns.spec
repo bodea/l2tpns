@@ -8,8 +8,8 @@ Source: http://optusnet.dl.sourceforge.net/sourceforge/l2tpns/l2tpns-%{version}.
 URL: http://sourceforge.net/projects/l2tpns
 BuildRoot: %{_tmppath}/%{name}-%{version}-root
 Prereq: /sbin/chkconfig
-BuildRequires: libcli >= 1.8.1
-Requires: libcli >= 1.8.1
+BuildRequires: libcli >= 1.8.2
+Requires: libcli >= 1.8.2
 
 %description
 A L2TP LNS which does not require l2tpd, pppd or any kernel patches. Can support

@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.25 2004-11-11 03:07:42 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.26 2004-11-11 05:38:01 bodea Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -104,7 +104,6 @@ static void parsemac(char *string, char mac[6]);
 #ifdef BGP
 #define MODE_CONFIG_BGP 8
 static int cmd_router_bgp(struct cli_def *cli, char *command, char **argv, int argc);
-static int cmd_router_bgp_exit(struct cli_def *cli, char *command, char **argv, int argc);
 static int cmd_router_bgp_neighbour(struct cli_def *cli, char *command, char **argv, int argc);
 static int cmd_router_bgp_no_neighbour(struct cli_def *cli, char *command, char **argv, int argc);
 static int cmd_show_bgp(struct cli_def *cli, char *command, char **argv, int argc);
@@ -187,7 +186,6 @@ void init_cli(char *hostname)
 	c = cli_register_command(cli, NULL, "router", NULL, PRIVILEGE_PRIVILEGED, MODE_CONFIG, NULL);
 	cli_register_command(cli, c, "bgp", cmd_router_bgp, PRIVILEGE_PRIVILEGED, MODE_CONFIG, "Configure BGP");
 
-	cli_register_command(cli, NULL, "exit", cmd_router_bgp_exit, PRIVILEGE_PRIVILEGED, MODE_CONFIG_BGP, "Exit from BGP configuration");
 	cli_register_command(cli, NULL, "neighbour", cmd_router_bgp_neighbour, PRIVILEGE_PRIVILEGED, MODE_CONFIG_BGP, "Configure BGP neighbour");
 
 	c = cli_register_command(cli, NULL, "no", NULL, PRIVILEGE_PRIVILEGED, MODE_CONFIG_BGP, NULL);
