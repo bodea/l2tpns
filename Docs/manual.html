@@ -205,6 +205,15 @@ secondary radius server will be tried.
 <P>
 </LI>
 
+<LI><B>primary_radius_port</B> (short)
+<LI><B>secondary_radius_port</B> (short)<BR>
+This sets the authentication ports for the primary and secondary
+radius servers.  The accounting port is one more than the authentication
+port.  If no radius ports are given, the authentication port defaults to 1645,
+and the accounting port to 1646.
+<P>
+</LI>
+
 <LI><B>radius_accounting</B> (boolean)<BR>
 If set to true, then radius accounting packets will be sent.  This
 means that a Start record will be sent when the session is
