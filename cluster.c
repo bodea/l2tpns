@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.5 2004-07-02 07:30:43 bodea Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.6 2004-07-05 06:54:01 bodea Exp $";
 
 #include <stdio.h>
 #include <sys/file.h>
@@ -438,6 +438,20 @@ void cluster_check_master(void)
 	int last_free = 0;
 	int had_peers = have_peers;
 	clockt t = TIME;
+	static int probed = 0;
+
+		// Is the master late? If so, try probing it...
+	if (TIME > (config->cluster_last_hb + config->cluster_hb_timeout/8 + 11)) {
+		if (!probed) {
+	   		if (config->cluster_master_address) {
+				peer_send_message(config->cluster_master_address,
+					C_LASTSEEN, config->cluster_seq_number, NULL, 0);
+				probed = 1;
+			}
+		}
+	} else {	// We got a recent heartbeat; reset the probe flag.
+		probed = 0;
+	}
 
 	if (TIME < (config->cluster_last_hb + config->cluster_hb_timeout) )
 		return;		// Everything's ok. return.
