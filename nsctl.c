@@ -16,12 +16,11 @@ struct {
     char *usage;
     int action;
 } builtins[] = {
-    { "load_plugin", " PLUGIN    Load named plugin",		NSCTL_REQ_LOAD },
-    { "unload_plugin", " PLUGIN  Unload named plugin",		NSCTL_REQ_UNLOAD },
-    { "help", "                  List available commands",	NSCTL_REQ_HELP },
+    { "load_plugin", " PLUGIN                          Load named plugin",		NSCTL_REQ_LOAD },
+    { "unload_plugin", " PLUGIN                        Unload named plugin",		NSCTL_REQ_UNLOAD },
+    { "help", "                                        List available commands",	NSCTL_REQ_HELP },
     { 0 }
 };
-
 
 static int debug = 0;
 static int timeout = 2; // 2 seconds

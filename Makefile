@@ -31,22 +31,12 @@ LDFLAGS =
 LDLIBS = -lm
 INSTALL = install -c -D -o root -g root
 
-OBJS =	arp.o \
-	bgp.o \
-	cli.o \
-	cluster.o \
-	constants.o \
-	control.o \
-	icmp.o \
-	l2tpns.o \
-	ll.o \
-	md5.o \
-	ppp.o \
-	radius.o \
-	tbf.o \
-	util.o
+OBJS = arp.o bgp.o cli.o cluster.o constants.o control.o icmp.o \
+    l2tpns.o ll.o md5.o ppp.o radius.o tbf.o util.o
 
-PLUGINS = garden.so autothrottle.so autosnoop.so stripdomain.so setrxspeed.so
+PLUGINS = garden.so throttlectl.so autothrottle.so snoopctl.so \
+    autosnoop.so stripdomain.so setrxspeed.so
+
 TARGETS = l2tpns nsctl generateload bounce $(PLUGINS)
 
 all: $(TARGETS)
@@ -100,6 +90,7 @@ install: all
 		echo '***' Installing default config files in $(DESTDIR)$(etcdir) - remember to adjust them; \
 		suffix=; \
 	fi; \
+
 	$(INSTALL) -m 0600 etc/startup-config.default $(DESTDIR)$(etcdir)/startup-config$$suffix; \
 	$(INSTALL) -m 0644 etc/ip_pool.default $(DESTDIR)$(etcdir)/ip_pool$$suffix; \
 	$(INSTALL) -m 0600 etc/users.default $(DESTDIR)$(etcdir)/users$$suffix
@@ -132,7 +123,9 @@ radius.o: radius.c md5.h constants.h l2tpns.h plugin.h util.h
 tbf.o: tbf.c l2tpns.h util.h tbf.h
 util.o: util.c l2tpns.h bgp.h
 garden.so: garden.c l2tpns.h plugin.h control.h
+throttlectl.so: throttlectl.c l2tpns.h plugin.h control.h
 autothrottle.so: autothrottle.c l2tpns.h plugin.h
+snoopctl.so: snoopctl.c l2tpns.h plugin.h control.h
 autosnoop.so: autosnoop.c l2tpns.h plugin.h
 stripdomain.so: stripdomain.c l2tpns.h plugin.h
 setrxspeed.so: setrxspeed.c l2tpns.h plugin.h

@@ -31,10 +31,12 @@ struct pluginfuncs
 	sessionidt (*get_session_by_username)(char *username);
 	sessiont *(*get_session_by_id)(sessionidt s);
 	sessionidt (*get_id_by_session)(sessiont *s);
-	void (*sessionkill)(sessionidt s, char *reason);
 	u16 (*radiusnew)(sessionidt s);
 	void (*radiussend)(u16 r, u8 state);
 	void *(*getconfig)(char *key, enum config_typet type);
+	void (*sessionkill)(sessionidt s, char *reason);
+	void (*throttle)(sessionidt s, int rate_in, int rate_out);
+	int (*session_changed)(int sid);
 };
 
 struct param_pre_auth

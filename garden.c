@@ -9,7 +9,7 @@
 
 /* walled garden */
 
-char const *cvs_id = "$Id: garden.c,v 1.13 2004-11-17 08:23:34 bodea Exp $";
+char const *cvs_id = "$Id: garden.c,v 1.14 2004-11-17 15:08:19 bodea Exp $";
 
 int plugin_api_version = PLUGIN_API_VERSION;
 static struct pluginfuncs *p = 0;
@@ -76,22 +76,25 @@ int plugin_kill_session(struct param_new_session *data)
 }
 
 char *plugin_control_help[] = {
-	"  garden USER|SID       Put user into the walled garden",
-	"  ungarden USER|SID     Release user",
+	"  garden USER|SID           Put user into the walled garden",
+	"  ungarden USER|SID         Release user from garden",
 	0
 };
 
 int plugin_control(struct param_control *data)
 {
-	sessionidt session;
-	sessiont *s = 0;
+	sessionidt s;
+	sessiont *sess = 0;
 	int flag;
 	char *end;
 
-	if (data->argc < 1 || (strcmp(data->argv[0], "garden") && strcmp(data->argv[0], "ungarden")))
+	if (data->argc < 1)
+		return PLUGIN_RET_OK;
+
+	if (strcmp(data->argv[0], "garden") && strcmp(data->argv[0], "ungarden"))
 		return PLUGIN_RET_OK; // not for us
 
-	flag = data->argv[0][0] == 'g';
+	flag = data->argv[0][0] != 'u';
 
 	if (!iam_master)	// All garden processing happens on the master.
 	{
@@ -107,8 +110,8 @@ int plugin_control(struct param_control *data)
 		return PLUGIN_RET_STOP;
 	}
 
-	if (!(session = strtol(data->argv[0], &end, 10)) || *end)
-		session = p->get_session_by_username(data->argv[0]);
+	if (!(session = strtol(data->argv[1], &end, 10)) || *end)
+		session = p->get_session_by_username(data->argv[1]);
 
 	if (session)
 		s = p->get_session_by_id(session);
@@ -128,6 +131,8 @@ int plugin_control(struct param_control *data)
 	}
 
 	garden_session(s, flag);
+	p->sesssion_changed(session);
+
 	data->response = NSCTL_RES_OK;
 	data->additional = 0;
 
@@ -149,7 +154,7 @@ int plugin_become_master(void)
 }
 
 // Called for each active session after becoming master
-int plugin_new_session_master(sessiont * s)
+int plugin_new_session_master(sessiont *s)
 {	
 	if (s->walled_garden)
 	{

@@ -2,10 +2,10 @@
 .de Id
 .ds Dt \\$4 \\$5
 ..
-.Id $Id: nsctl.8,v 1.1 2004-11-17 08:23:35 bodea Exp $
+.Id $Id: nsctl.8,v 1.2 2004-11-17 15:08:19 bodea Exp $
 .TH NSCTL 8 "\*(Dt" L2TPNS "System Management Commands"
 .SH NAME
-nsctl \- Issue commands to l2tpns plugins
+nsctl \- manage running l2tpns instance
 .SH SYNOPSIS
 .B nsctl
 .RB [ \-d ]
@@ -17,10 +17,10 @@ nsctl \- Issue commands to l2tpns plugins
 .RI [ arg " ...]"
 .SH DESCRIPTION
 .B nsctl
-is part of the
+sends commands to a running
 .B l2tpns
-package.  It allows the system administrator to send manage plugin
-features of a running l2tpns process.
+process.  It provides both for the loading or unloading of plugins and
+also the management of sessions via functions provided by those plugins.
 .SH OPTIONS
 .TP
 .B \-d
@@ -59,7 +59,9 @@ Any other value of
 if any)
 are sent to
 .B l2tpns
-as-is, to be passed to each plugin in turn (and possibly acted upon).
+as-is, to be passed to each plugin which registers a
+.B plugin_control
+function in turn (in which it may be acted upon).
 .SH SEE ALSO
 .BR l2tpns (8)
 .SH AUTHOR

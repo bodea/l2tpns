@@ -146,6 +146,7 @@ set ipaddress 192.168.1.1
 set boolean true
 </PRE>
 
+<P>
 <UL>
 <LI><B>debug</B> (int)<BR>
 Sets the level of messages that will be written to the log file.  The value
@@ -162,28 +163,24 @@ highest.  A rough description of the levels is:
 Note that the higher you set the debugging level, the slower the program
 will run.  Also, at level 5 a LOT of information will be logged.  This should
 only ever be used for working out why it doesn't work at all.
-<P>
 </LI>
 
 <LI><B>log_file</B> (string)<BR>
 This will be where all logging and debugging information is written
-to.  This can be either a filename, such as <EM>/var/log/l2tpns</EM>, or
+to.  This may be either a filename, such as <EM>/var/log/l2tpns</EM>, or
 the special magic string <EM>syslog:facility</EM>, where <EM>facility</EM>
 is any one of the syslog logging facilities, such as local5.
-<P>
 </LI>
 
 <LI><B>pid_file</B> (string)<BR>
-If this is set, the process id will be written to this file. The filename must
-contain an absolute path.
-<P>
+If set, the process id will be written to the specified file.  The
+value must be an absolute path.
 </LI>
 
 <LI><B>l2tp_secret</B> (string)<BR>
-This sets the string that l2tpns will use for authenticating tunnel request.
-This must be the same as the LAC, or authentication will fail.  This will
-only actually be used if the LAC requests authentication.
-<P>
+The secret used by l2tpns for authenticating tunnel request.  Must be
+the same as the LAC, or authentication will fail.  Only actually be
+used if the LAC requests authentication.
 </LI>
 
 <LI><B>primary_dns</B> (ip address)
@@ -191,7 +188,6 @@ only actually be used if the LAC requests authentication.
 Whenever a PPP connection is established, DNS servers will be sent to the
 user, both a primary and a secondary.  If either is set to 0.0.0.0, then that
 one will not be sent.
-<P>
 </LI>
 
 <LI><B>save_state</B> (boolean)<BR>
@@ -200,24 +196,21 @@ ip_address_pool, session and tunnel tables to disk prior to exiting to
 be re-loaded at startup.  The validity of this data is obviously quite
 short and the intent is to allow an sessions to be retained over a
 software upgrade.
-<P>
 </LI>
 
 <LI><B>primary_radius</B> (ip address)
 <LI><B>secondary_radius</B> (ip address)<BR>
-This sets the radius servers used for both authentication and
-accounting.  If the primary server does not respond, then the
-secondary radius server will be tried.
-<P>
+Sets the radius servers used for both authentication and accounting. 
+If the primary server does not respond, then the secondary radius
+server will be tried.
 </LI>
 
 <LI><B>primary_radius_port</B> (short)
 <LI><B>secondary_radius_port</B> (short)<BR>
-This sets the authentication ports for the primary and secondary
-radius servers.  The accounting port is one more than the authentication
-port.  If no radius ports are given, the authentication port defaults to 1645,
-and the accounting port to 1646.
-<P>
+Sets the authentication ports for the primary and secondary radius
+servers.  The accounting port is one more than the authentication
+port.  If no radius ports are given, the authentication port defaults
+to 1645, and the accounting port to 1646.
 </LI>
 
 <LI><B>radius_accounting</B> (boolean)<BR>
@@ -225,13 +218,11 @@ If set to true, then radius accounting packets will be sent.  This
 means that a Start record will be sent when the session is
 successfully authenticated, and a Stop record will be sent when the
 session is closed.
-<P>
 </LI>
 
 <LI><B>radius_secret</B> (string)<BR>
 This secret will be used in all radius queries.  If this is not set then
 radius queries will fail.
-<P>
 </LI>
 
 <LI><B>bind_address</B> (ip address)<BR>
@@ -239,28 +230,29 @@ When the tun interface is created, it is assigned the address
 specified here.  If no address is given, 1.1.1.1 is used.  Packets
 containing user traffic should be routed via this address if given,
 otherwise the primary address of the machine.
-<P>
 </LI>
+
+<LI><B>peer_address</B> (ip address)<BR>
+Address to send to clients as the default gateway.
+</L1>
 
 <LI><B>send_garp</B> (boolean)<BR>
 Determines whether or not to send a gratuitous ARP for the
 bind_address when the server is ready to handle traffic (default: 
 true).<BR>
 This value is ignored if BGP is configured.
-<P>
 </LI>
 
 <LI><B>throttle_speed</B> (int)<BR>
-Sets the speed (in kbits/s) which sessions will be limited to.  If this is
-set to 0, then throttling will not be used at all.  Note: You can set this by
-the CLI, but changes will not affect currently connected users.
-<P>
+Sets the default speed (in kbits/s) which sessions will be limited to. 
+If this is set to 0, then throttling will not be used at all.  Note: 
+You can set this by the CLI, but changes will not affect currently
+connected users.
 </LI>
 
 <LI><B>throttle_buckets</B> (int)<BR>
 Number of token buckets to allocate for throttling.  Each throttled
 session requires two buckets (in and out).
-<P>
 </LI>
 
 <LI><B>accounting_dir</B> (string)<BR>
@@ -271,88 +263,80 @@ Following the header is a single line for every connected user, fields
 separated by a space.<BR> The fields are username, ip, qos,
 uptxoctets, downrxoctets.  The qos field is 1 if a standard user, and
 2 if the user is throttled.
-<P>
 </LI>
 
 <LI><B>setuid</B> (int)<BR>
 After starting up and binding the interface, change UID to this.  This
 doesn't work properly.
-<P>
 </LI>
 
 <LI><B>dump_speed</B> (boolean)<BR>
 If set to true, then the current bandwidth utilization will be logged every
 second.  Even if this is disabled, you can see this information by running
 the <EM>uptime</EM> command on the CLI.
-<P>
 </LI>
 
 <LI><B>cleanup_interval</B> (int)<BR>
 Interval between regular cleanups (in seconds).
-<P>
 </LI>
 
 <LI><B>multi_read_count</B> (int)<BR>
 Number of packets to read off each of the UDP and TUN fds when
 returned as readable by select (default:  10).  Avoids incurring the
 unnecessary system call overhead of select on busy servers.
-<P>
 </LI>
 
 <LI><B>scheduler_fifo</B> (boolean)<BR>
 Sets the scheduling policy for the l2tpns process to SCHED_FIFO.  This
-causes the kernel to immediately preempt any currently SCHED_OTHER
+causes the kernel to immediately preempt any currently running SCHED_OTHER
 (normal) process in favour of l2tpns when it becomes runnable. 
 Ignored on uniprocessor systems.
-<P>
 </LI>
 
 <LI><B>lock_pages</B> (boolean)<BR>
 Keep all pages mapped by the l2tpns process in memory.
-<P>
 </LI>
 
 <LI><B>icmp_rate</B> (int)<BR>
-Maximum number of host unreachable icmp packets to send per second.
-<P>
+Maximum number of host unreachable ICMP packets to send per second.
 </LI>
 
 <LI><B>cluster_address</B> (ip address)<BR>
 Multicast cluster address (default:  239.192.13.13).  See the section
 on <A HREF="#Clustering">Clustering</A> for more information.
-<P>
 </LI>
 
 <LI><B>cluster_interface</B> (string)<BR>
 Interface for cluster packets (default: eth0).
-<P>
 </LI>
 
 <LI><B>cluster_hb_interval</B> (int)<BR>
 Interval in tenths of a second between cluster heartbeat/pings.
-<P>
 </LI>
 
 <LI><B>cluster_hb_timeout</B> (int)<BR>
 Cluster heartbeat timeout in tenths of a second.  A new master will be
 elected when this interval has been passed without seeing a heartbeat
 from the master.
-<P>
-</LI>
-
-<LI><B>as_number</B> (int)<BR>
-Defines the local AS number for BGP (see <A HREF="#Routing">Routing</A>).
-<P>
-</LI>
-
-<LI><B>bgp_peer1</B> (string)
-<LI><B>bgp_peer1_as</B> (int)
-<LI><B>bgp_peer2</B> (string)
-<LI><B>bgp_peer2_as</B> (int)<BR>
-<P>
-DNS name (or IP) and AS number of BGP peers.
 </LI>
 </UL>
+
+<P>BGP routing configuration is entered by the command:
+The routing configuration section is entered by the command
+<DL><DD><B>router bgp</B> <I>as</I></DL>
+where <I>as</I> specifies the local AS number.
+
+<P>Subsequent lines prefixed with
+<DL><DD><B>neighbour</B> <I>peer</I></DL>
+define the attributes of BGP neighhbours.  Valid commands are:
+<DL>
+  <DD><B>neighbour</B> <I>peer</I> <B>remote-as</B> <I>as</I>
+  <DD><B>neighbout</B> <I>peer</I> <B>timers</B> <I>keepalive hold</I>
+</DL>
+
+Where <I>peer</I> specifies the BGP neighbour as either a hostname or
+IP address, <I>as</I> is the remote AS number and <I>keepalive</I>,
+<I>hold</I> are the timer values in seconds.
 
 <H3 ID="users">users</H3>
 
@@ -411,8 +395,7 @@ A running l2tpns process can be controlled in a number of ways.  The primary
 method of control is by the Command-Line Interface (CLI).<P>
 
 You can also remotely send commands to modules via the nsctl client
-provided.  This currently only works with the walled garden module, but
-modification is trivial to support other modules.<P>
+provided.<P>
 
 Also, there are a number of signals that l2tpns understands and takes action
 when it receives them.
@@ -642,16 +625,13 @@ this way, although some may require a restart to take effect.<P>
 
 <H3 ID="nsctl">nsctl</H3>
 
-nsctl was implemented (badly) to allow messages to be passed to modules.<P>
+nsctl allows messages to be passed to plugins.<P>
 
-You must pass at least 2 parameters: <EM>host</EM> and <EM>command</EM>.  The
-host is the address of the l2tpns server which you want to send the message
-to.<P>
+Arguments are <EM>command</EM> and optional <EM>args</EM>.  See
+<STRONG>nsctl</STRONG>(8) for more details.<P>
 
-Command can currently be either <EM>garden</EM> or <EM>ungarden</EM>.  With
-both of these commands, you must give a session ID as the 3rd parameter.
-This will activate or deactivate the walled garden for a session
-temporarily.
+Built-in command are <EM>load_plugin</EM>, <EM>unload_plugin</EM> and
+<EM>help</EM>.  Any other commands are passed to plugins for processing.
 
 <H3 ID="Signals">Signals</H3>
 

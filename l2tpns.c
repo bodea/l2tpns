@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.51 2004-11-17 08:23:34 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.52 2004-11-17 15:08:19 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -3760,10 +3760,12 @@ static int add_plugin(char *plugin_name)
 		sessionbyuser,
 		sessiontbysessionidt,
 		sessionidtbysessiont,
-		sessionkill,
 		radiusnew,
 		radiussend,
 		getconfig,
+		sessionkill,
+		throttle_session,
+		cluster_send_session,
 	};
 
 	void *p = open_plugin(plugin_name, 1);

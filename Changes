@@ -5,8 +5,9 @@
 - Cleanup: make a bunch of global functions/variables static.
 - Remove reference to old -a command line argument.
 - Add l2tpns(8) and nsctl(8) manpages from Jonathan McDowell.
-- Add startup-config(5) manpage [FIXME].
+- Add startup-config(5) manpage.
 - Revise nsctl to allow arbitrary strings/args to be passed to plugins.
+- Add snoopctl, throttlectl plugins.
 
 * Mon Nov 15 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.7
 - Fix socket creation in host_unreachable() (thanks to Bjørn Augestad)

@@ -17,5 +17,7 @@ set accounting_dir "/var/run/l2tpns/acct/"
 set setuid 0
 set dump_speed no
 load plugin "garden"
+load plugin "throttlectl"
 load plugin "autothrottle"
+load plugin "snoopctl"
 load plugin "autosnoop"
