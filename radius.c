@@ -1,6 +1,6 @@
 // L2TPNS Radius Stuff
 
-char const *cvs_id_radius = "$Id: radius.c,v 1.25 2005-03-10 06:16:05 bodea Exp $";
+char const *cvs_id_radius = "$Id: radius.c,v 1.26 2005-04-18 05:07:20 bodea Exp $";
 
 #include <time.h>
 #include <stdio.h>
@@ -239,7 +239,7 @@ void radiussend(uint16_t r, uint8_t state)
 		{
 			*p = 44;           // session ID
 			p[1] = 18;
-			sprintf(p + 2, "%08X%08X", session[s].id, session[s].opened);
+			sprintf(p + 2, "%08X%08X", session[s].unique_id, session[s].opened);
 			p += p[1];
 			if (state == RADIUSSTOP)
 			{                // stop
@@ -581,7 +581,7 @@ void processrad(uint8_t *buf, int len, char socket_index)
 						// Vendor-Specific Attribute
 						int vendor = ntohl(*(int *)(p + 2));
 						char attrib = *(p + 6);
-						char attrib_length = *(p + 7) - 2;
+						int attrib_length = *(p + 7) - 2;
 						char *avpair, *value, *key, *newp;
 
 						LOG(3, s, session[s].tunnel, "   Radius reply contains Vendor-Specific.  Vendor=%d Attrib=%d Length=%d\n", vendor, attrib, attrib_length);

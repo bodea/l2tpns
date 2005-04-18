@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.62 2005-04-18 04:18:15 bodea Exp $
+// $Id: l2tpns.h,v 1.63 2005-04-18 05:07:20 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -166,7 +166,7 @@ typedef struct
 	tunnelidt tunnel;		// near end tunnel ID
 	in_addr_t ip;			// IP of session set by RADIUS response (host byte order).
 	int ip_pool_index;		// index to IP pool
-	unsigned long unique_id;	// unique session id
+	uint32_t unique_id;		// unique session id
 	uint16_t nr;			// next receive
 	uint16_t ns;			// next send
 	uint32_t magic;			// ppp magic number
@@ -174,7 +174,6 @@ typedef struct
 	uint32_t pin, pout;		// packet counts
 	uint32_t total_cin;		// This counter is never reset while a session is open
 	uint32_t total_cout;		// This counter is never reset while a session is open
-	uint32_t id;			// session id
 	uint16_t throttle_in;		// upstream throttle rate (kbps)
 	uint16_t throttle_out;		// downstream throttle rate
 	clockt opened;			// when started
@@ -187,9 +186,7 @@ typedef struct
 	uint16_t tbf_in;		// filter bucket for throttling in from the user.
 	uint16_t tbf_out;		// filter bucket for throttling out to the user.
 	uint8_t l2tp_flags;		// various bit flags from the ICCN on the l2tp tunnel.
-	uint8_t reserved_old_snoop;	// No longer used - remove at some time
 	uint8_t walled_garden;		// is this session gardened?
-	uint8_t flags1;			// additional flags (currently unused);
 	char random_vector[MAXTEL];
 	int random_vector_length;
 	char user[MAXUSER];		// user (needed in seesion for radius stop messages)

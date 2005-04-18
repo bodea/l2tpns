@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.89 2005-04-01 06:39:00 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.90 2005-04-18 05:07:20 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -68,11 +68,10 @@ static int rand_fd = -1;	// Random data source
 time_t basetime = 0;		// base clock
 char hostname[1000] = "";	// us.
 static int tunidx;		// ifr_ifindex of tun device
-static uint32_t sessionid = 0;	// session id for radius accounting
 static int syslog_log = 0;	// are we logging to syslog
 static FILE *log_stream = NULL;	// file handle for direct logging (i.e. direct into file, not via syslog).
 extern int cluster_sockfd;	// Intra-cluster communications socket.
-uint32_t last_id = 0;		// Last used PPP SID. Can I kill this?? -- mo
+uint32_t last_id = 0;		// Unique ID for radius accounting
 
 struct cli_session_actions *cli_session_actions = NULL;	// Pending session changes requested by CLI
 struct cli_tunnel_actions *cli_tunnel_actions = NULL;	// Pending tunnel changes required by CLI
@@ -2319,7 +2318,6 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 						}
 
 						c = controlnew(11); // sending ICRP
-						session[s].id = sessionid++;
 						session[s].opened = time_now;
 						session[s].tunnel = t;
 						session[s].far = asession;
