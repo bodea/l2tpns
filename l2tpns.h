@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.63 2005-04-18 05:07:20 bodea Exp $
+// $Id: l2tpns.h,v 1.64 2005-04-18 05:32:16 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -186,6 +186,7 @@ typedef struct
 	uint16_t tbf_in;		// filter bucket for throttling in from the user.
 	uint16_t tbf_out;		// filter bucket for throttling out to the user.
 	uint8_t l2tp_flags;		// various bit flags from the ICCN on the l2tp tunnel.
+	uint32_t flags;			// Various session flags.
 	uint8_t walled_garden;		// is this session gardened?
 	char random_vector[MAXTEL];
 	int random_vector_length;
@@ -194,10 +195,8 @@ typedef struct
 	char calling[MAXTEL];		// calling number
 	uint32_t tx_connect_speed;
 	uint32_t rx_connect_speed;
-	uint32_t flags;			// Various session flags.
 	in_addr_t snoop_ip;		// Interception destination IP
 	uint16_t snoop_port;		// Interception destination port
-	uint16_t sid;			// near end session id.
 	uint8_t filter_in;		// input filter index (to ip_filters[N-1]; 0 if none)
 	uint8_t filter_out;		// output filter index
 	struct in6_addr ipv6route;	// Static IPv6 route
