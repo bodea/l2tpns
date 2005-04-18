@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.61 2005-03-10 06:18:47 bodea Exp $
+// $Id: l2tpns.h,v 1.62 2005-04-18 04:18:15 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -53,10 +53,6 @@
 #define LIBDIR		"/usr/lib/l2tpns"
 #endif
 
-#ifndef STATEDIR
-#define STATEDIR	"/var/lib/l2tpns"
-#endif
-
 #ifndef PLUGINDIR
 #define PLUGINDIR	LIBDIR		// Plugins
 #endif
@@ -69,13 +65,8 @@
 #define FLASHDIR	ETCDIR
 #endif
 
-#ifndef DATADIR
-#define DATADIR		STATEDIR
-#endif
-
 #define TUNDEVICE	"/dev/net/tun"
 #define RANDOMDEVICE	"/dev/urandom"			// default, not as secure as /dev/random but non-blocking
-#define STATEFILE	DATADIR "/state.dump"		// State dump file
 #define CONFIGFILE	FLASHDIR "/startup-config"	// Configuration file
 #define CLIUSERS	FLASHDIR "/users"		// CLI Users file
 #define IPPOOLFILE	FLASHDIR "/ip_pool"		// Address pool configuration

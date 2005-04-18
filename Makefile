@@ -9,7 +9,6 @@ statedir = /var/lib/l2tpns
 DEFINES =
 DEFINES += -DLIBDIR='"$(libdir)"'
 DEFINES += -DETCDIR='"$(etcdir)"'
-DEFINES += -DSTATEDIR='"$(statedir)"'
 
 OPTIM =
 OPTIM += -g
