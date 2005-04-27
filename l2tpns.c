@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.90 2005-04-18 05:07:20 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.91 2005-04-27 13:53:15 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -1555,7 +1555,7 @@ void sendipcp(tunnelidt t, sessionidt s)
 	if (radius[r].try > 10)
 	{
 		radiusclear(r, s);	// Clear radius session.
-		sessionshutdown(s, "No reply on IPCP", 3, 0);
+		sessionshutdown(s, "No reply to IPCP.", 3, 0);
 		return;
 	}
 
@@ -2349,7 +2349,7 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 					break;
 				case 14:      // CDN
 					controlnull(t); // ack
-					sessionshutdown(s, "Closed (Received CDN)", 0, 0);
+					sessionshutdown(s, "Closed (Received CDN).", 0, 0);
 					break;
 				case 0xFFFF:
 					LOG(1, s, t, "Missing message type\n");
@@ -2636,7 +2636,7 @@ static int regular_cleanups(void)
 		// Drop sessions who have not responded within IDLE_TIMEOUT seconds
 		if (session[s].last_packet && (time_now - session[s].last_packet >= IDLE_TIMEOUT))
 		{
-			sessionshutdown(s, "No response to LCP ECHO requests", 3, 0);
+			sessionshutdown(s, "No response to LCP ECHO requests.", 3, 0);
 			STAT(session_timeout);
 			if (++count >= MAX_ACTIONS) break;
 			continue;
@@ -2670,7 +2670,7 @@ static int regular_cleanups(void)
 			if (a & CLI_SESS_KILL)
 			{
 				LOG(2, s, session[s].tunnel, "Dropping session by CLI\n");
-				sessionshutdown(s, "Requested by administrator", 3, 0);
+				sessionshutdown(s, "Requested by administrator.", 3, 0);
 				a = 0; // dead, no need to check for other actions
 			}
 
@@ -4113,7 +4113,7 @@ int sessionsetup(tunnelidt t, sessionidt s)
 		if (!session[s].ip)
 		{
 			LOG(0, s, t, "   No IP allocated.  The IP address pool is FULL!\n");
-			sessionshutdown(s, "No IP addresses available", 2, 7);
+			sessionshutdown(s, "No IP addresses available.", 2, 7);
 			return 0;
 		}
 		LOG(3, s, t, "   No IP allocated.  Assigned %s from pool\n",

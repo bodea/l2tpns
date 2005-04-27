@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.46 2005-03-10 06:16:05 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.47 2005-04-27 13:53:17 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -39,6 +39,7 @@ void processpap(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 	{
 		LOG(1, s, t, "Short PAP %u bytes\n", l);
 		STAT(tunnel_rx_errors);
+		sessionshutdown(s, "Short PAP packet.", 3, 0);
 		return ;
 	}
 
@@ -46,6 +47,7 @@ void processpap(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 	{
 		LOG(1, s, t, "Length mismatch PAP %u/%u\n", hl, l);
 		STAT(tunnel_rx_errors);
+		sessionshutdown(s, "PAP length mismatch.", 3, 0);
 		return ;
 	}
 	l = hl;
@@ -54,6 +56,7 @@ void processpap(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 	{
 		LOG(1, s, t, "Unexpected PAP code %d\n", *p);
 		STAT(tunnel_rx_errors);
+		sessionshutdown(s, "Unexpected PAP code.", 3, 0);
 		return ;
 	}
 
@@ -102,6 +105,7 @@ void processpap(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 		}
 		LOG(3, s, t, "Fallback response to PAP (%s)\n", (session[s].ip) ? "ACK" : "NAK");
 		tunnelsend(b, 5 + (p - b), t); // send it
+		sessionshutdown(s, "PAP authentication failed.", 3, 0);
 	}
 	else
 	{
@@ -1076,12 +1080,13 @@ void processccp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 	tunnelsend(b, l + (q - b), t); // send it
 }
 
-// send a CHAP PP packet
+// send a CHAP challenge
 void sendchap(tunnelidt t, sessionidt s)
 {
 	uint8_t b[MAXCONTROL];
 	uint16_t r = session[s].radius;
 	uint8_t *q;
+	uint8_t *l;
 
 	CSTAT(sendchap);
 
@@ -1105,7 +1110,7 @@ void sendchap(tunnelidt t, sessionidt s)
 	radius[r].retry = backoff(radius[r].try++);
 	if (radius[r].try > 5)
 	{
-		sessionshutdown(s, "Timeout CHAP", 3, 0);
+		sessionshutdown(s, "CHAP timeout.", 3, 0);
 		STAT(tunnel_tx_errors);
 		return ;
 	}
@@ -1114,7 +1119,7 @@ void sendchap(tunnelidt t, sessionidt s)
 
 	*q = 1;					// challenge
 	q[1] = radius[r].id;			// ID
-	q[4] = 16;				// length
+	q[4] = 16;				// value size (size of challenge)
 	memcpy(q + 5, radius[r].auth, 16);	// challenge
 	strcpy(q + 21, hostname);		// our name
 	*(uint16_t *) (q + 2) = htons(strlen(hostname) + 21); // length
