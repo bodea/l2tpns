@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.54 2005-04-18 05:07:20 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.55 2005-05-02 09:55:04 bodea Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -364,16 +364,16 @@ int cli_arg_help(struct cli_def *cli, int cr_ok, char *entry, ...)
 
 		desc = va_arg(ap, char *);
 		if (desc && *desc)
-			cli_print(cli, "  %-20s %s", p, desc);
+			cli_error(cli, "  %-20s %s", p, desc);
 		else
-			cli_print(cli, "  %s", p);
+			cli_error(cli, "  %s", p);
 
 		entry = desc ? va_arg(ap, char *) : 0;
 	}
 
 	va_end(ap);
 	if (cr_ok)
-		cli_print(cli, "  <cr>");
+		cli_error(cli, "  <cr>");
 
 	return CLI_OK;
 }
@@ -902,7 +902,7 @@ static int cmd_write_memory(struct cli_def *cli, char *command, char **argv, int
 	}
 	else
 	{
-		cli_print(cli, "Error writing configuration: %s", strerror(errno));
+		cli_error(cli, "Error writing configuration: %s", strerror(errno));
 	}
 	return CLI_OK;
 }
@@ -1156,7 +1156,7 @@ static int cmd_drop_user(struct cli_def *cli, char *command, char **argv, int ar
 
 	if (!config->cluster_iam_master)
 	{
-		cli_print(cli, "Can't do this on a slave.  Do it on %s",
+		cli_error(cli, "Can't do this on a slave.  Do it on %s",
 			fmtaddr(config->cluster_master_address, 0));
 
 		return CLI_OK;
@@ -1164,7 +1164,7 @@ static int cmd_drop_user(struct cli_def *cli, char *command, char **argv, int ar
 
 	if (!argc)
 	{
-		cli_print(cli, "Specify a user to drop");
+		cli_error(cli, "Specify a user to drop");
 		return CLI_OK;
 	}
 
@@ -1172,7 +1172,7 @@ static int cmd_drop_user(struct cli_def *cli, char *command, char **argv, int ar
 	{
 		if (!(s = sessionbyuser(argv[i])))
 		{
-			cli_print(cli, "User %s is not connected", argv[i]);
+			cli_error(cli, "User %s is not connected", argv[i]);
 			continue;
 		}
 
@@ -1197,7 +1197,7 @@ static int cmd_drop_tunnel(struct cli_def *cli, char *command, char **argv, int 
 
 	if (!config->cluster_iam_master)
 	{
-		cli_print(cli, "Can't do this on a slave.  Do it on %s",
+		cli_error(cli, "Can't do this on a slave.  Do it on %s",
 			fmtaddr(config->cluster_master_address, 0));
 
 		return CLI_OK;
@@ -1205,7 +1205,7 @@ static int cmd_drop_tunnel(struct cli_def *cli, char *command, char **argv, int 
 
 	if (!argc)
 	{
-		cli_print(cli, "Specify a tunnel to drop");
+		cli_error(cli, "Specify a tunnel to drop");
 		return CLI_OK;
 	}
 
@@ -1213,19 +1213,19 @@ static int cmd_drop_tunnel(struct cli_def *cli, char *command, char **argv, int 
 	{
 		if ((t = atol(argv[i])) <= 0 || (t >= MAXTUNNEL))
 		{
-			cli_print(cli, "Invalid tunnel ID (1-%d)", MAXTUNNEL-1);
+			cli_error(cli, "Invalid tunnel ID (1-%d)", MAXTUNNEL-1);
 			continue;
 		}
 
 		if (!tunnel[t].ip)
 		{
-			cli_print(cli, "Tunnel %d is not connected", t);
+			cli_error(cli, "Tunnel %d is not connected", t);
 			continue;
 		}
 
 		if (tunnel[t].die)
 		{
-			cli_print(cli, "Tunnel %d is already being shut down", t);
+			cli_error(cli, "Tunnel %d is already being shut down", t);
 			continue;
 		}
 
@@ -1247,7 +1247,7 @@ static int cmd_drop_session(struct cli_def *cli, char *command, char **argv, int
 
 	if (!config->cluster_iam_master)
 	{
-		cli_print(cli, "Can't do this on a slave.  Do it on %s",
+		cli_error(cli, "Can't do this on a slave.  Do it on %s",
 			fmtaddr(config->cluster_master_address, 0));
 
 		return CLI_OK;
@@ -1255,7 +1255,7 @@ static int cmd_drop_session(struct cli_def *cli, char *command, char **argv, int
 
 	if (!argc)
 	{
-		cli_print(cli, "Specify a session id to drop");
+		cli_error(cli, "Specify a session id to drop");
 		return CLI_OK;
 	}
 
@@ -1263,7 +1263,7 @@ static int cmd_drop_session(struct cli_def *cli, char *command, char **argv, int
 	{
 		if ((s = atol(argv[i])) <= 0 || (s > MAXSESSION))
 		{
-			cli_print(cli, "Invalid session ID (1-%d)", MAXSESSION-1);
+			cli_error(cli, "Invalid session ID (1-%d)", MAXSESSION-1);
 			continue;
 		}
 
@@ -1274,7 +1274,7 @@ static int cmd_drop_session(struct cli_def *cli, char *command, char **argv, int
 		}
 		else
 		{
-			cli_print(cli, "Session %d is not active.", s);
+			cli_error(cli, "Session %d is not active.", s);
 		}
 	}
 
@@ -1314,7 +1314,7 @@ static int cmd_snoop(struct cli_def *cli, char *command, char **argv, int argc)
 
 	if (!config->cluster_iam_master)
 	{
-		cli_print(cli, "Can't do this on a slave.  Do it on %s",
+		cli_error(cli, "Can't do this on a slave.  Do it on %s",
 			fmtaddr(config->cluster_master_address, 0));
 
 		return CLI_OK;
@@ -1322,27 +1322,27 @@ static int cmd_snoop(struct cli_def *cli, char *command, char **argv, int argc)
 
 	if (argc < 3)
 	{
-		cli_print(cli, "Specify username, ip and port");
+		cli_error(cli, "Specify username, ip and port");
 		return CLI_OK;
 	}
 
 	if (!(s = sessionbyuser(argv[0])))
 	{
-		cli_print(cli, "User %s is not connected", argv[0]);
+		cli_error(cli, "User %s is not connected", argv[0]);
 		return CLI_OK;
 	}
 
 	ip = inet_addr(argv[1]);
 	if (!ip || ip == INADDR_NONE)
 	{
-		cli_print(cli, "Cannot parse IP \"%s\"", argv[1]);
+		cli_error(cli, "Cannot parse IP \"%s\"", argv[1]);
 		return CLI_OK;
 	}
 
 	port = atoi(argv[2]);
 	if (!port)
 	{
-		cli_print(cli, "Invalid port %s", argv[2]);
+		cli_error(cli, "Invalid port %s", argv[2]);
 		return CLI_OK;
 	}
 
@@ -1365,7 +1365,7 @@ static int cmd_no_snoop(struct cli_def *cli, char *command, char **argv, int arg
 
 	if (!config->cluster_iam_master)
 	{
-		cli_print(cli, "Can't do this on a slave.  Do it on %s",
+		cli_error(cli, "Can't do this on a slave.  Do it on %s",
 			fmtaddr(config->cluster_master_address, 0));
 
 		return CLI_OK;
@@ -1373,7 +1373,7 @@ static int cmd_no_snoop(struct cli_def *cli, char *command, char **argv, int arg
 
 	if (!argc)
 	{
-		cli_print(cli, "Specify a user to unsnoop");
+		cli_error(cli, "Specify a user to unsnoop");
 		return CLI_OK;
 	}
 
@@ -1381,7 +1381,7 @@ static int cmd_no_snoop(struct cli_def *cli, char *command, char **argv, int arg
 	{
 		if (!(s = sessionbyuser(argv[i])))
 		{
-			cli_print(cli, "User %s is not connected", argv[i]);
+			cli_error(cli, "User %s is not connected", argv[i]);
 			continue;
 		}
 
@@ -1439,7 +1439,7 @@ static int cmd_throttle(struct cli_def *cli, char *command, char **argv, int arg
 
 	if (!config->cluster_iam_master)
 	{
-		cli_print(cli, "Can't do this on a slave.  Do it on %s",
+		cli_error(cli, "Can't do this on a slave.  Do it on %s",
 			fmtaddr(config->cluster_master_address, 0));
 
 		return CLI_OK;
@@ -1447,13 +1447,13 @@ static int cmd_throttle(struct cli_def *cli, char *command, char **argv, int arg
 
 	if (argc == 0)
 	{
-		cli_print(cli, "Specify a user to throttle");
+		cli_error(cli, "Specify a user to throttle");
 		return CLI_OK;
 	}
 
 	if (!(s = sessionbyuser(argv[0])))
 	{
-		cli_print(cli, "User %s is not connected", argv[0]);
+		cli_error(cli, "User %s is not connected", argv[0]);
 		return CLI_OK;
 	}
 
@@ -1466,7 +1466,7 @@ static int cmd_throttle(struct cli_def *cli, char *command, char **argv, int arg
 		rate_in = rate_out = atoi(argv[1]);
 		if (rate_in < 1)
 		{
-			cli_print(cli, "Invalid rate \"%s\"", argv[1]);
+			cli_error(cli, "Invalid rate \"%s\"", argv[1]);
 			return CLI_OK;
 		}
 	}
@@ -1483,20 +1483,20 @@ static int cmd_throttle(struct cli_def *cli, char *command, char **argv, int arg
 
 			if (r < 1)
 			{
-				cli_print(cli, "Invalid rate specification \"%s %s\"", argv[i], argv[i+1]);
+				cli_error(cli, "Invalid rate specification \"%s %s\"", argv[i], argv[i+1]);
 				return CLI_OK;
 			}
 		}
 	}
 	else
 	{
-		cli_print(cli, "Invalid arguments");
+		cli_error(cli, "Invalid arguments");
 		return CLI_OK;
 	}
 
 	if ((rate_in && session[s].throttle_in) || (rate_out && session[s].throttle_out))
 	{
-		cli_print(cli, "User %s already throttled, unthrottle first", argv[0]);
+		cli_error(cli, "User %s already throttled, unthrottle first", argv[0]);
 		return CLI_OK;
 	}
 
@@ -1510,7 +1510,7 @@ static int cmd_throttle(struct cli_def *cli, char *command, char **argv, int arg
 	if (cli_session_actions[s].throttle_in == -1 &&
 	    cli_session_actions[s].throttle_out == -1)
 	{
-		cli_print(cli, "User %s already throttled at this rate", argv[0]);
+		cli_error(cli, "User %s already throttled at this rate", argv[0]);
 		return CLI_OK;
 	}
 
@@ -1531,7 +1531,7 @@ static int cmd_no_throttle(struct cli_def *cli, char *command, char **argv, int 
 
 	if (!config->cluster_iam_master)
 	{
-		cli_print(cli, "Can't do this on a slave.  Do it on %s",
+		cli_error(cli, "Can't do this on a slave.  Do it on %s",
 			fmtaddr(config->cluster_master_address, 0));
 
 		return CLI_OK;
@@ -1539,7 +1539,7 @@ static int cmd_no_throttle(struct cli_def *cli, char *command, char **argv, int 
 
 	if (!argc)
 	{
-		cli_print(cli, "Specify a user to unthrottle");
+		cli_error(cli, "Specify a user to unthrottle");
 		return CLI_OK;
 	}
 
@@ -1547,7 +1547,7 @@ static int cmd_no_throttle(struct cli_def *cli, char *command, char **argv, int 
 	{
 		if (!(s = sessionbyuser(argv[i])))
 		{
-			cli_print(cli, "User %s is not connected", argv[i]);
+			cli_error(cli, "User %s is not connected", argv[i]);
 			continue;
 		}
 
@@ -1558,7 +1558,7 @@ static int cmd_no_throttle(struct cli_def *cli, char *command, char **argv, int 
 		}
 		else
 		{
-			cli_print(cli, "User %s not throttled", argv[i]);
+			cli_error(cli, "User %s not throttled", argv[i]);
 		}
 	}
 
@@ -1623,7 +1623,7 @@ static int cmd_debug(struct cli_def *cli, char *command, char **argv, int argc)
 			continue;
 		}
 
-		cli_print(cli, "Invalid debugging flag \"%s\"", argv[i]);
+		cli_error(cli, "Invalid debugging flag \"%s\"", argv[i]);
 	}
 
 	return CLI_OK;
@@ -1669,7 +1669,7 @@ static int cmd_no_debug(struct cli_def *cli, char *command, char **argv, int arg
 			continue;
 		}
 
-		cli_print(cli, "Invalid debugging flag \"%s\"", argv[i]);
+		cli_error(cli, "Invalid debugging flag \"%s\"", argv[i]);
 	}
 
 	return CLI_OK;
@@ -1685,7 +1685,7 @@ static int cmd_load_plugin(struct cli_def *cli, char *command, char **argv, int 
 
 	if (argc != 1)
 	{
-		cli_print(cli, "Specify a plugin to load");
+		cli_error(cli, "Specify a plugin to load");
 		return CLI_OK;
 	}
 
@@ -1695,7 +1695,7 @@ static int cmd_load_plugin(struct cli_def *cli, char *command, char **argv, int 
 			firstfree = i;
 		if (strcmp(config->plugins[i], argv[0]) == 0)
 		{
-			cli_print(cli, "Plugin is already loaded");
+			cli_error(cli, "Plugin is already loaded");
 			return CLI_OK;
 		}
 	}
@@ -1720,7 +1720,7 @@ static int cmd_remove_plugin(struct cli_def *cli, char *command, char **argv, in
 
 	if (argc != 1)
 	{
-		cli_print(cli, "Specify a plugin to remove");
+		cli_error(cli, "Specify a plugin to remove");
 		return CLI_OK;
 	}
 
@@ -1734,7 +1734,7 @@ static int cmd_remove_plugin(struct cli_def *cli, char *command, char **argv, in
 		}
 	}
 
-	cli_print(cli, "Plugin is not loaded");
+	cli_error(cli, "Plugin is not loaded");
 	return CLI_OK;
 }
 
@@ -1820,7 +1820,7 @@ static int cmd_set(struct cli_def *cli, char *command, char **argv, int argc)
 				int len = strlen(argv[0])-1;
 				for (i = 0; config_values[i].key; i++)
 					if (!len || !strncmp(config_values[i].key, argv[0], len))
-						cli_print(cli, "  %s", config_values[i].key);
+						cli_error(cli, "  %s", config_values[i].key);
 			}
 
 			return CLI_OK;
@@ -1840,7 +1840,7 @@ static int cmd_set(struct cli_def *cli, char *command, char **argv, int argc)
 
 	if (argc != 2)
 	{
-		cli_print(cli, "Specify variable and value");
+		cli_error(cli, "Specify variable and value");
 		return CLI_OK;
 	}
 
@@ -1881,7 +1881,7 @@ static int cmd_set(struct cli_def *cli, char *command, char **argv, int argc)
 					*(int *) value = 0;
 				break;
 			default:
-				cli_print(cli, "Unknown variable type");
+				cli_error(cli, "Unknown variable type");
 				break;
 			}
 			config->reload_config = 1;
@@ -1889,7 +1889,7 @@ static int cmd_set(struct cli_def *cli, char *command, char **argv, int argc)
 		}
 	}
 
-	cli_print(cli, "Unknown variable \"%s\"", argv[0]);
+	cli_error(cli, "Unknown variable \"%s\"", argv[0]);
 	return CLI_OK;
 }
 
@@ -1922,7 +1922,7 @@ int regular_stuff(struct cli_def *cli)
 		if (!(p = strchr(m, '\n')))
 			p = m + strlen(p);
 
-		cli_print(cli, "\r%s-%u-%u %.*s",
+		cli_error(cli, "\r%s-%u-%u %.*s",
 			debug_levels[(int)ringbuffer->buffer[i].level],
 			ringbuffer->buffer[i].tunnel,
 			ringbuffer->buffer[i].session,
@@ -1949,13 +1949,13 @@ static int cmd_router_bgp(struct cli_def *cli, char *command, char **argv, int a
 
 	if (argc != 1 || (as = atoi(argv[0])) < 1 || as > 65535)
 	{
-		cli_print(cli, "Invalid autonomous system number");
+		cli_error(cli, "Invalid autonomous system number");
 		return CLI_OK;
 	}
 
 	if (bgp_configured && as != config->as_number)
 	{
-		cli_print(cli, "Can't change local AS on a running system");
+		cli_error(cli, "Can't change local AS on a running system");
 		return CLI_OK;
 	}
 
@@ -2049,19 +2049,19 @@ static int cmd_router_bgp_neighbour(struct cli_def *cli, char *command, char **a
 
 	if (argc < 3)
 	{
-		cli_print(cli, "Invalid arguments");
+		cli_error(cli, "Invalid arguments");
 		return CLI_OK;
 	}
 
 	if ((i = find_bgp_neighbour(argv[0])) == -2)
 	{
-		cli_print(cli, "Invalid neighbour");
+		cli_error(cli, "Invalid neighbour");
 		return CLI_OK;
 	}
 
 	if (i == -1)
 	{
-		cli_print(cli, "Too many neighbours (max %d)", BGP_NUM_PEERS);
+		cli_error(cli, "Too many neighbours (max %d)", BGP_NUM_PEERS);
 		return CLI_OK;
 	}
 
@@ -2070,7 +2070,7 @@ static int cmd_router_bgp_neighbour(struct cli_def *cli, char *command, char **a
 		int as = atoi(argv[2]);
 		if (as < 0 || as > 65535)
 		{
-			cli_print(cli, "Invalid autonomous system number");
+			cli_error(cli, "Invalid autonomous system number");
 			return CLI_OK;
 		}
 
@@ -2087,13 +2087,13 @@ static int cmd_router_bgp_neighbour(struct cli_def *cli, char *command, char **a
 
 	if (argc != 4 || !MATCH("timers", argv[1]))
 	{
-		cli_print(cli, "Invalid arguments");
+		cli_error(cli, "Invalid arguments");
 		return CLI_OK;
 	}
 
 	if (!config->neighbour[i].name[0])
 	{
-		cli_print(cli, "Specify remote-as first");
+		cli_error(cli, "Specify remote-as first");
 		return CLI_OK;
 	}
 
@@ -2102,13 +2102,13 @@ static int cmd_router_bgp_neighbour(struct cli_def *cli, char *command, char **a
 
 	if (keepalive < 1 || keepalive > 65535)
 	{
-		cli_print(cli, "Invalid keepalive time");
+		cli_error(cli, "Invalid keepalive time");
 		return CLI_OK;
 	}
 
 	if (hold < 3 || hold > 65535)
 	{
-		cli_print(cli, "Invalid hold time");
+		cli_error(cli, "Invalid hold time");
 		return CLI_OK;
 	}
 
@@ -2136,19 +2136,19 @@ static int cmd_router_bgp_no_neighbour(struct cli_def *cli, char *command, char 
 
 	if (argc != 1)
 	{
-		cli_print(cli, "Specify a BGP neighbour");
+		cli_error(cli, "Specify a BGP neighbour");
 		return CLI_OK;
 	}
 
 	if ((i = find_bgp_neighbour(argv[0])) == -2)
 	{
-		cli_print(cli, "Invalid neighbour");
+		cli_error(cli, "Invalid neighbour");
 		return CLI_OK;
 	}
 
 	if (i < 0 || !config->neighbour[i].name[0])
 	{
-		cli_print(cli, "Neighbour %s not configured", argv[0]);
+		cli_error(cli, "Neighbour %s not configured", argv[0]);
 		return CLI_OK;
 	}
 
@@ -2351,7 +2351,7 @@ static int access_list(struct cli_def *cli, char **argv, int argc, int add)
 
 	if (argc != 2)
 	{
-		cli_print(cli, "Specify access-list type and name");
+		cli_error(cli, "Specify access-list type and name");
 		return CLI_OK;
 	}
 
@@ -2361,14 +2361,14 @@ static int access_list(struct cli_def *cli, char **argv, int argc, int add)
 		extended = 1;
 	else
 	{
-		cli_print(cli, "Invalid access-list type");
+		cli_error(cli, "Invalid access-list type");
 		return CLI_OK;
 	}
 
 	if (strlen(argv[1]) > sizeof(ip_filters[0].name) - 1 ||
 	    strspn(argv[1], "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-") != strlen(argv[1]))
 	{
-		cli_print(cli, "Invalid access-list name");
+		cli_error(cli, "Invalid access-list name");
 		return CLI_OK;
 	}
 
@@ -2377,7 +2377,7 @@ static int access_list(struct cli_def *cli, char **argv, int argc, int add)
 	{
 		if (filt < 0)
 		{
-			cli_print(cli, "Too many access-lists");
+			cli_error(cli, "Too many access-lists");
 			return CLI_OK;
 		}
 
@@ -2390,7 +2390,7 @@ static int access_list(struct cli_def *cli, char **argv, int argc, int add)
 		}
 		else if (ip_filters[filt].extended != extended)
 		{
-			cli_print(cli, "Access-list is %s",
+			cli_error(cli, "Access-list is %s",
 				ip_filters[filt].extended ? "extended" : "standard");
 
 			return CLI_OK;
@@ -2402,14 +2402,14 @@ static int access_list(struct cli_def *cli, char **argv, int argc, int add)
 
 	if (filt < 0 || !*ip_filters[filt].name)
 	{
-		cli_print(cli, "Access-list not defined");
+		cli_error(cli, "Access-list not defined");
 		return CLI_OK;
 	}
 
 	// racy
 	if (ip_filters[filt].used)
 	{
-		cli_print(cli, "Access-list in use");
+		cli_error(cli, "Access-list in use");
 		return CLI_OK;
 	}
 
@@ -2535,7 +2535,7 @@ static ip_filter_rulet *access_list_rule_ext(struct cli_def *cli, char *command,
 
 	if (argc < 3)
 	{
-		cli_print(cli, "Specify rule details");
+		cli_error(cli, "Specify rule details");
 		return NULL;
 	}
 
@@ -2552,7 +2552,7 @@ static ip_filter_rulet *access_list_rule_ext(struct cli_def *cli, char *command,
 		rule.proto = IPPROTO_TCP;
 	else
 	{
-		cli_print(cli, "Invalid protocol \"%s\"", argv[0]);
+		cli_error(cli, "Invalid protocol \"%s\"", argv[0]);
 		return NULL;
 	}
 
@@ -2575,7 +2575,7 @@ static ip_filter_rulet *access_list_rule_ext(struct cli_def *cli, char *command,
 			port = &rule.dst_ports;
 			if (a >= argc)
 			{
-				cli_print(cli, "Specify destination");
+				cli_error(cli, "Specify destination");
 				return NULL;
 			}
 		}
@@ -2590,13 +2590,13 @@ static ip_filter_rulet *access_list_rule_ext(struct cli_def *cli, char *command,
 		{
 			if (++a >= argc)
 			{
-				cli_print(cli, "Specify host ip address");
+				cli_error(cli, "Specify host ip address");
 				return NULL;
 			}
 
 			if (!inet_aton(argv[a], &addr))
 			{
-				cli_print(cli, "Cannot parse IP \"%s\"", argv[a]);
+				cli_error(cli, "Cannot parse IP \"%s\"", argv[a]);
 				return NULL;
 			}
 
@@ -2608,13 +2608,13 @@ static ip_filter_rulet *access_list_rule_ext(struct cli_def *cli, char *command,
 		{
 			if (a >= argc - 1)
 			{
-				cli_print(cli, "Specify %s ip address and wildcard", i ? "destination" : "source");
+				cli_error(cli, "Specify %s ip address and wildcard", i ? "destination" : "source");
 				return NULL;
 			}
 
 			if (!inet_aton(argv[a], &addr))
 			{
-				cli_print(cli, "Cannot parse IP \"%s\"", argv[a]);
+				cli_error(cli, "Cannot parse IP \"%s\"", argv[a]);
 				return NULL;
 			}
 
@@ -2622,7 +2622,7 @@ static ip_filter_rulet *access_list_rule_ext(struct cli_def *cli, char *command,
 
 			if (!inet_aton(argv[++a], &addr))
 			{
-				cli_print(cli, "Cannot parse IP \"%s\"", argv[a]);
+				cli_error(cli, "Cannot parse IP \"%s\"", argv[a]);
 				return NULL;
 			}
 
@@ -2650,13 +2650,13 @@ static ip_filter_rulet *access_list_rule_ext(struct cli_def *cli, char *command,
 
 		if (++a >= argc)
 		{
-			cli_print(cli, "Specify port");
+			cli_error(cli, "Specify port");
 			return NULL;
 		}
 
 		if (!(port->port = atoi(argv[a])))
 		{
-			cli_print(cli, "Invalid port \"%s\"", argv[a]);
+			cli_error(cli, "Invalid port \"%s\"", argv[a]);
 			return NULL;
 		}
 			
@@ -2666,13 +2666,13 @@ static ip_filter_rulet *access_list_rule_ext(struct cli_def *cli, char *command,
 
 		if (a >= argc)
 		{
-			cli_print(cli, "Specify port");
+			cli_error(cli, "Specify port");
 			return NULL;
 		}
 
 		if (!(port->port2 = atoi(argv[a])) || port->port2 < port->port)
 		{
-			cli_print(cli, "Invalid port \"%s\"", argv[a]);
+			cli_error(cli, "Invalid port \"%s\"", argv[a]);
 			return NULL;
 		}
 			
@@ -2695,7 +2695,7 @@ static ip_filter_rulet *access_list_rule_ext(struct cli_def *cli, char *command,
 
 			if (++a >= argc)
 			{
-				cli_print(cli, "Specify tcp flags");
+				cli_error(cli, "Specify tcp flags");
 				return NULL;
 			}
 
@@ -2713,7 +2713,7 @@ static ip_filter_rulet *access_list_rule_ext(struct cli_def *cli, char *command,
 				else if (MATCH("urg", &argv[a][1])) *f |= TCP_FLAG_URG;
 				else
 				{
-					cli_print(cli, "Invalid tcp flag \"%s\"", argv[a]);
+					cli_error(cli, "Invalid tcp flag \"%s\"", argv[a]);
 					return NULL;
 				}
 
@@ -2726,7 +2726,7 @@ static ip_filter_rulet *access_list_rule_ext(struct cli_def *cli, char *command,
 	{
 		if (rule.src_ports.op || rule.dst_ports.op || rule.tcp_flag_op)
 		{
-			cli_print(cli, "Can't specify \"fragments\" on rules with layer 4 matches");
+			cli_error(cli, "Can't specify \"fragments\" on rules with layer 4 matches");
 			return NULL;
 		}
 
@@ -2736,7 +2736,7 @@ static ip_filter_rulet *access_list_rule_ext(struct cli_def *cli, char *command,
 
 	if (a < argc)
 	{
-		cli_print(cli, "Invalid flag \"%s\"", argv[a]);
+		cli_error(cli, "Invalid flag \"%s\"", argv[a]);
 		return NULL;
 	}
 
@@ -2794,7 +2794,7 @@ static ip_filter_rulet *access_list_rule_std(struct cli_def *cli, char *command,
 
 	if (argc < 1)
 	{
-		cli_print(cli, "Specify rule details");
+		cli_error(cli, "Specify rule details");
 		return NULL;
 	}
 
@@ -2813,13 +2813,13 @@ static ip_filter_rulet *access_list_rule_std(struct cli_def *cli, char *command,
 	{
 		if (argc != 2)
 		{
-			cli_print(cli, "Specify host ip address");
+			cli_error(cli, "Specify host ip address");
 			return NULL;
 		}
 
 		if (!inet_aton(argv[1], &addr))
 		{
-			cli_print(cli, "Cannot parse IP \"%s\"", argv[1]);
+			cli_error(cli, "Cannot parse IP \"%s\"", argv[1]);
 			return NULL;
 		}
 
@@ -2830,13 +2830,13 @@ static ip_filter_rulet *access_list_rule_std(struct cli_def *cli, char *command,
 	{
 		if (argc > 2)
 		{
-			cli_print(cli, "Specify source ip address and wildcard");
+			cli_error(cli, "Specify source ip address and wildcard");
 			return NULL;
 		}
 
 		if (!inet_aton(argv[0], &addr))
 		{
-			cli_print(cli, "Cannot parse IP \"%s\"", argv[0]);
+			cli_error(cli, "Cannot parse IP \"%s\"", argv[0]);
 			return NULL;
 		}
 
@@ -2846,7 +2846,7 @@ static ip_filter_rulet *access_list_rule_std(struct cli_def *cli, char *command,
 		{
 			if (!inet_aton(argv[1], &addr))
 			{
-				cli_print(cli, "Cannot parse IP \"%s\"", argv[1]);
+				cli_error(cli, "Cannot parse IP \"%s\"", argv[1]);
 				return NULL;
 			}
 
@@ -2881,7 +2881,7 @@ static int cmd_ip_access_list_rule(struct cli_def *cli, char *command, char **ar
 			return CLI_OK;
 	}
 
-	cli_print(cli, "Too many rules");
+	cli_error(cli, "Too many rules");
 	return CLI_OK;
 }
 
@@ -2917,7 +2917,7 @@ static int cmd_filter(struct cli_def *cli, char *command, char **argv, int argc)
 
 	if (!config->cluster_iam_master)
 	{
-		cli_print(cli, "Can't do this on a slave.  Do it on %s",
+		cli_error(cli, "Can't do this on a slave.  Do it on %s",
 			fmtaddr(config->cluster_master_address, 0));
 
 		return CLI_OK;
@@ -2925,13 +2925,13 @@ static int cmd_filter(struct cli_def *cli, char *command, char **argv, int argc)
 
 	if (argc != 3 && argc != 5)
 	{
-		cli_print(cli, "Specify a user and filters");
+		cli_error(cli, "Specify a user and filters");
 		return CLI_OK;
 	}
 
 	if (!(s = sessionbyuser(argv[0])))
 	{
-		cli_print(cli, "User %s is not connected", argv[0]);
+		cli_error(cli, "User %s is not connected", argv[0]);
 		return CLI_OK;
 	}
 
@@ -2945,7 +2945,7 @@ static int cmd_filter(struct cli_def *cli, char *command, char **argv, int argc)
 		{
 			if (session[s].filter_in)
 			{
-				cli_print(cli, "Input already filtered");
+				cli_error(cli, "Input already filtered");
 				return CLI_OK;
 			}
 			f = &cli_session_actions[s].filter_in;
@@ -2954,21 +2954,21 @@ static int cmd_filter(struct cli_def *cli, char *command, char **argv, int argc)
 		{
 			if (session[s].filter_out)
 			{
-				cli_print(cli, "Output already filtered");
+				cli_error(cli, "Output already filtered");
 				return CLI_OK;
 			}
 			f = &cli_session_actions[s].filter_out;
 		}
 		else
 		{
-			cli_print(cli, "Invalid filter specification");
+			cli_error(cli, "Invalid filter specification");
 			return CLI_OK;
 		}
 
 		v = find_access_list(argv[i+1]);
 		if (v < 0 || !*ip_filters[v].name)
 		{
-			cli_print(cli, "Access-list %s not defined", argv[i+1]);
+			cli_error(cli, "Access-list %s not defined", argv[i+1]);
 			return CLI_OK;
 		}
 
@@ -2992,7 +2992,7 @@ static int cmd_no_filter(struct cli_def *cli, char *command, char **argv, int ar
 
 	if (!config->cluster_iam_master)
 	{
-		cli_print(cli, "Can't do this on a slave.  Do it on %s",
+		cli_error(cli, "Can't do this on a slave.  Do it on %s",
 			fmtaddr(config->cluster_master_address, 0));
 
 		return CLI_OK;
@@ -3000,7 +3000,7 @@ static int cmd_no_filter(struct cli_def *cli, char *command, char **argv, int ar
 
 	if (!argc)
 	{
-		cli_print(cli, "Specify a user to remove filters from");
+		cli_error(cli, "Specify a user to remove filters from");
 		return CLI_OK;
 	}
 
@@ -3008,7 +3008,7 @@ static int cmd_no_filter(struct cli_def *cli, char *command, char **argv, int ar
 	{
 		if (!(s = sessionbyuser(argv[i])))
 		{
-			cli_print(cli, "User %s is not connected", argv[i]);
+			cli_error(cli, "User %s is not connected", argv[i]);
 			continue;
 		}
 
@@ -3019,7 +3019,7 @@ static int cmd_no_filter(struct cli_def *cli, char *command, char **argv, int ar
 		}
 		else
 		{
-			cli_print(cli, "User %s not filtered", argv[i]);
+			cli_error(cli, "User %s not filtered", argv[i]);
 		}
 	}
 
@@ -3035,7 +3035,7 @@ static int cmd_show_access_list(struct cli_def *cli, char *command, char **argv,
 
 	if (argc < 1)
 	{
-		cli_print(cli, "Specify a filter name");
+		cli_error(cli, "Specify a filter name");
 		return CLI_OK;
 	}
 
@@ -3046,7 +3046,7 @@ static int cmd_show_access_list(struct cli_def *cli, char *command, char **argv,
 
 		if (f < 0 || !*ip_filters[f].name)
 		{
-			cli_print(cli, "Access-list %s not defined", argv[i]);
+			cli_error(cli, "Access-list %s not defined", argv[i]);
 			return CLI_OK;
 		}
 

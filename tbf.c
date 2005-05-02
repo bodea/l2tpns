@@ -1,6 +1,6 @@
 // L2TPNS: token bucket filters
 
-char const *cvs_id_tbf = "$Id: tbf.c,v 1.11 2004-12-16 08:49:53 bodea Exp $";
+char const *cvs_id_tbf = "$Id: tbf.c,v 1.12 2005-05-02 09:55:04 bodea Exp $";
 
 #include <string.h>
 #include "l2tpns.h"
@@ -318,7 +318,7 @@ int cmd_show_tbf(struct cli_def *cli, char *command, char **argv, int argc)
 		return CLI_HELP_NO_ARGS;
 
 	if (!config->cluster_iam_master) {
-		cli_print(cli, "Can't do this on a slave.  Do it on %s",
+		cli_error(cli, "Can't do this on a slave.  Do it on %s",
 			fmtaddr(config->cluster_master_address, 0));
 
 		return CLI_OK;

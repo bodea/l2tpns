@@ -8,8 +8,8 @@ Source: http://optusnet.dl.sourceforge.net/sourceforge/l2tpns/l2tpns-%{version}.
 URL: http://sourceforge.net/projects/l2tpns
 BuildRoot: %{_tmppath}/%{name}-%{version}-root
 Prereq: /sbin/chkconfig
-BuildRequires: libcli >= 1.8.2
-Requires: libcli >= 1.8.2
+BuildRequires: libcli >= 1.8.5
+Requires: libcli >= 1.8.5
 
 %description
 l2tpns is a layer 2 tunneling protocol network server (LNS).  It

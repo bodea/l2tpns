@@ -45,6 +45,7 @@
 - Update .last_packet in cluster_handle_bytes only when there have
   been bytes received from the modem (dead sessions were having the
   idle timeout reset by stray packets).
+- Use cli_error() for error messages and help.
 
 * Fri Dec 17 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.13
 - Better cluster master collision resolution: keep a counter of state
