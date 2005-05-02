@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.33 2005-04-01 08:55:29 bodea Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.34 2005-05-02 09:06:05 bodea Exp $";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -1037,7 +1037,9 @@ static int cluster_handle_bytes(char *data, int size)
 
 		session[b->sid].cin += b->in;
 		session[b->sid].cout += b->out;
-		session[b->sid].last_packet = time_now; // Reset idle timer!
+
+		if (b->in)
+			session[b->sid].last_packet = time_now; // Reset idle timer!
 
 		size -= sizeof(*b);
 		++b;

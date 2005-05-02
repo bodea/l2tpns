@@ -1,4 +1,4 @@
-* Fri Apr 1 2005 Brendan O'Dea <bod@optusnet.com.au> 2.1.0
+* Mon May 2 2005 Brendan O'Dea <bod@optusnet.com.au> 2.1.0
 - Add IPv6 support from Jonathan McDowell.
 - Add CHAP support from Jordan Hrycaj (work in progress).
 - Sanity check that cluster_send_session is not called from a child
@@ -40,7 +40,11 @@
   (general error, try another LNS) when out of IP addresses, and 3
   (adminstrative) for everything else (suggestion from Chris Gates).
 - Only send RADIUS stop record in sessionshutdown when there's an ip address.
-- Reset .die on master takeover.
+- Reset .die on master takeover (so that dying sessions don't have to
+  hang around until the new master has the same uptime as the old one).
+- Update .last_packet in cluster_handle_bytes only when there have
+  been bytes received from the modem (dead sessions were having the
+  idle timeout reset by stray packets).
 
 * Fri Dec 17 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.13
 - Better cluster master collision resolution: keep a counter of state
