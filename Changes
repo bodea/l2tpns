@@ -1,3 +1,7 @@
+* Tue May 3 2005 Brendan O'Dea <bod@optusnet.com.au> 2.0.18
+- Add a Cisco-Avpair with intercept details to RADIUS Start/Stop
+  records.
+
 * Mon May 2 2005 Brendan O'Dea <bod@optusnet.com.au> 2.0.17
 - Only send RADIUS stop record in sessionshutdown when there's an ip address.
 - Reset .die on master takeover (so that dying sessions don't have to
