@@ -1,4 +1,4 @@
-* Mon May 2 2005 Brendan O'Dea <bod@optusnet.com.au> 2.1.0
+* Tue May 3 2005 Brendan O'Dea <bod@optusnet.com.au> 2.1.0
 - Add IPv6 support from Jonathan McDowell.
 - Add CHAP support from Jordan Hrycaj (work in progress).
 - Sanity check that cluster_send_session is not called from a child
@@ -46,6 +46,8 @@
   been bytes received from the modem (dead sessions were having the
   idle timeout reset by stray packets).
 - Use cli_error() for error messages and help.
+- Add a Cisco-Avpair with intercept details to RADIUS Start/Stop
+  records.
 
 * Fri Dec 17 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.13
 - Better cluster master collision resolution: keep a counter of state
