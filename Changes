@@ -1,4 +1,4 @@
-* Tue May 3 2005 Brendan O'Dea <bod@optusnet.com.au> 2.1.0
+* Thu May 5 2005 Brendan O'Dea <bod@optusnet.com.au> 2.1.0
 - Add IPv6 support from Jonathan McDowell.
 - Add CHAP support from Jordan Hrycaj (work in progress).
 - Sanity check that cluster_send_session is not called from a child
@@ -48,6 +48,10 @@
 - Use cli_error() for error messages and help.
 - Add a Cisco-Avpair with intercept details to RADIUS Start/Stop
   records.
+- Don't use LOG() macro in initdata() until the config struct has been
+  allocated (uses config->debug).
+- Initialise log_stream to stderr to catch errors before the config file
+  is read.
 
 * Fri Dec 17 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.13
 - Better cluster master collision resolution: keep a counter of state

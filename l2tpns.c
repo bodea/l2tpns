@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.91 2005-04-27 13:53:15 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.92 2005-05-05 02:39:54 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -55,23 +55,23 @@ char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.91 2005-04-27 13:53:15 bodea Exp 
 #endif /* BGP */
 
 // Globals
-configt *config = NULL;		// all configuration
-int tunfd = -1;			// tun interface file handle. (network device)
-int udpfd = -1;			// UDP file handle
-int controlfd = -1;		// Control signal handle
-int clifd = -1;			// Socket listening for CLI connections.
-int snoopfd = -1;		// UDP file handle for sending out intercept data
-int *radfds = NULL;		// RADIUS requests file handles
-int ifrfd = -1;			// File descriptor for routing, etc
-int ifr6fd = -1;		// File descriptor for IPv6 routing, etc
-static int rand_fd = -1;	// Random data source
-time_t basetime = 0;		// base clock
-char hostname[1000] = "";	// us.
-static int tunidx;		// ifr_ifindex of tun device
-static int syslog_log = 0;	// are we logging to syslog
-static FILE *log_stream = NULL;	// file handle for direct logging (i.e. direct into file, not via syslog).
-extern int cluster_sockfd;	// Intra-cluster communications socket.
-uint32_t last_id = 0;		// Unique ID for radius accounting
+configt *config = NULL;			// all configuration
+int tunfd = -1;				// tun interface file handle. (network device)
+int udpfd = -1;				// UDP file handle
+int controlfd = -1;			// Control signal handle
+int clifd = -1;				// Socket listening for CLI connections.
+int snoopfd = -1;			// UDP file handle for sending out intercept data
+int *radfds = NULL;			// RADIUS requests file handles
+int ifrfd = -1;				// File descriptor for routing, etc
+int ifr6fd = -1;			// File descriptor for IPv6 routing, etc
+static int rand_fd = -1;		// Random data source
+time_t basetime = 0;			// base clock
+char hostname[1000] = "";		// us.
+static int tunidx;			// ifr_ifindex of tun device
+static int syslog_log = 0;		// are we logging to syslog
+static FILE *log_stream = stderr;	// file handle for direct logging (i.e. direct into file, not via syslog).
+extern int cluster_sockfd;		// Intra-cluster communications socket.
+uint32_t last_id = 0;			// Unique ID for radius accounting
 
 struct cli_session_actions *cli_session_actions = NULL;	// Pending session changes requested by CLI
 struct cli_tunnel_actions *cli_tunnel_actions = NULL;	// Pending tunnel changes required by CLI
@@ -3141,16 +3141,12 @@ static void initdata(int optdebug, char *optconfig)
 {
 	int i;
 
-	if (!(_statistics = shared_malloc(sizeof(struct Tstats))))
-	{
-		LOG(0, 0, 0, "Error doing malloc for _statistics: %s\n", strerror(errno));
-		exit(1);
-	}
 	if (!(config = shared_malloc(sizeof(configt))))
 	{
-		LOG(0, 0, 0, "Error doing malloc for configuration: %s\n", strerror(errno));
+		fprintf(stderr, "Error doing malloc for configuration: %s\n", strerror(errno));
 		exit(1);
 	}
+
 	memset(config, 0, sizeof(configt));
 	time(&config->start_time);
 	strncpy(config->config_file, optconfig, strlen(optconfig));
@@ -3159,6 +3155,20 @@ static void initdata(int optdebug, char *optconfig)
 	config->rl_rate = 28; // 28kbps
 	strcpy(config->random_device, RANDOMDEVICE);
 
+#ifdef RINGBUFFER
+	if (!(ringbuffer = shared_malloc(sizeof(struct Tringbuffer))))
+	{
+		LOG(0, 0, 0, "Error doing malloc for ringbuffer: %s\n", strerror(errno));
+		exit(1);
+	}
+	memset(ringbuffer, 0, sizeof(struct Tringbuffer));
+#endif
+
+	if (!(_statistics = shared_malloc(sizeof(struct Tstats))))
+	{
+		LOG(0, 0, 0, "Error doing malloc for _statistics: %s\n", strerror(errno));
+		exit(1);
+	}
 	if (!(tunnel = shared_malloc(sizeof(tunnelt) * MAXTUNNEL)))
 	{
 		LOG(0, 0, 0, "Error doing malloc for tunnels: %s\n", strerror(errno));
@@ -3194,15 +3204,6 @@ static void initdata(int optdebug, char *optconfig)
 		exit(1);
 	}
 	memset(ip_filters, 0, sizeof(ip_filtert) * MAXFILTER);
-
-#ifdef RINGBUFFER
-	if (!(ringbuffer = shared_malloc(sizeof(struct Tringbuffer))))
-	{
-		LOG(0, 0, 0, "Error doing malloc for ringbuffer: %s\n", strerror(errno));
-		exit(1);
-	}
-	memset(ringbuffer, 0, sizeof(struct Tringbuffer));
-#endif
 
 	if (!(cli_session_actions = shared_malloc(sizeof(struct cli_session_actions) * MAXSESSION)))
 	{
@@ -3771,9 +3772,11 @@ int main(int argc, char *argv[])
 
 static void sighup_handler(int sig)
 {
-	if (log_stream && log_stream != stderr)
+	if (log_stream)
 	{
-		fclose(log_stream);
+		if (log_stream != stderr)
+			fclose(log_stream);
+
 		log_stream = NULL;
 	}
 
@@ -3895,7 +3898,9 @@ static void update_config()
 	syslog_log = 0;
 	if (log_stream)
 	{
-		fclose(log_stream);
+		if (log_stream != stderr)
+			fclose(log_stream);
+
 		log_stream = NULL;
 	}
 
