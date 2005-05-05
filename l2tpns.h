@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.64 2005-04-18 05:32:16 bodea Exp $
+// $Id: l2tpns.h,v 1.65 2005-05-05 10:02:08 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -181,7 +181,6 @@ typedef struct
 	time_t last_packet;		// Last packet from the user (used for idle timeouts)
 	in_addr_t dns1, dns2;		// DNS servers
 	routet route[MAXROUTE];		// static routes
-	uint16_t radius;		// which radius session is being used (0 for not waiting on authentication)
 	uint16_t mru;			// maximum receive unit
 	uint16_t tbf_in;		// filter bucket for throttling in from the user.
 	uint16_t tbf_out;		// filter bucket for throttling out to the user.
@@ -225,6 +224,12 @@ typedef struct
 	clockt last_packet_out;
 	uint32_t packets_out;
 	uint32_t packets_dropped;
+
+	// RADIUS session in use
+	uint16_t radius;
+
+	// interim RADIUS
+	time_t last_interim;
 } sessionlocalt;
 
 #define	SESSIONPFC	1	// PFC negotiated flags
@@ -313,8 +318,8 @@ enum
 	RADIUSIPCP,             // sending IPCP to end user
 	RADIUSSTART,            // sending start accounting to RADIUS server
 	RADIUSSTOP,             // sending stop accounting to RADIUS server
+	RADIUSINTERIM,		// sending interim accounting to RADIUS server
 	RADIUSWAIT,		// waiting timeout before available, in case delayed replies
-	RADIUSDEAD,		// errored while talking to radius server.
 };
 
 struct Tstats
@@ -442,6 +447,7 @@ typedef struct
 
 	char		radiussecret[64];
 	int		radius_accounting;
+	int		radius_interim;
 	in_addr_t	radiusserver[MAXRADSERVER];	// radius servers
 	uint16_t	radiusport[MAXRADSERVER];	// radius base ports
 	uint8_t		numradiusservers;		// radius server count

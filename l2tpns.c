@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.92 2005-05-05 02:39:54 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.93 2005-05-05 10:02:07 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -55,23 +55,23 @@ char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.92 2005-05-05 02:39:54 bodea Exp 
 #endif /* BGP */
 
 // Globals
-configt *config = NULL;			// all configuration
-int tunfd = -1;				// tun interface file handle. (network device)
-int udpfd = -1;				// UDP file handle
-int controlfd = -1;			// Control signal handle
-int clifd = -1;				// Socket listening for CLI connections.
-int snoopfd = -1;			// UDP file handle for sending out intercept data
-int *radfds = NULL;			// RADIUS requests file handles
-int ifrfd = -1;				// File descriptor for routing, etc
-int ifr6fd = -1;			// File descriptor for IPv6 routing, etc
-static int rand_fd = -1;		// Random data source
-time_t basetime = 0;			// base clock
-char hostname[1000] = "";		// us.
-static int tunidx;			// ifr_ifindex of tun device
-static int syslog_log = 0;		// are we logging to syslog
-static FILE *log_stream = stderr;	// file handle for direct logging (i.e. direct into file, not via syslog).
-extern int cluster_sockfd;		// Intra-cluster communications socket.
-uint32_t last_id = 0;			// Unique ID for radius accounting
+configt *config = NULL;		// all configuration
+int tunfd = -1;			// tun interface file handle. (network device)
+int udpfd = -1;			// UDP file handle
+int controlfd = -1;		// Control signal handle
+int clifd = -1;			// Socket listening for CLI connections.
+int snoopfd = -1;		// UDP file handle for sending out intercept data
+int *radfds = NULL;		// RADIUS requests file handles
+int ifrfd = -1;			// File descriptor for routing, etc
+int ifr6fd = -1;		// File descriptor for IPv6 routing, etc
+static int rand_fd = -1;	// Random data source
+time_t basetime = 0;		// base clock
+char hostname[1000] = "";	// us.
+static int tunidx;		// ifr_ifindex of tun device
+static int syslog_log = 0;	// are we logging to syslog
+static FILE *log_stream = 0;	// file handle for direct logging (i.e. direct into file, not via syslog).
+extern int cluster_sockfd;	// Intra-cluster communications socket.
+uint32_t last_id = 0;		// Unique ID for radius accounting
 
 struct cli_session_actions *cli_session_actions = NULL;	// Pending session changes requested by CLI
 struct cli_tunnel_actions *cli_tunnel_actions = NULL;	// Pending tunnel changes required by CLI
@@ -110,6 +110,7 @@ config_descriptt config_values[] = {
 	CONFIG("primary_radius_port", radiusport[0], SHORT),
 	CONFIG("secondary_radius_port", radiusport[1], SHORT),
 	CONFIG("radius_accounting", radius_accounting, BOOL),
+	CONFIG("radius_interim", radius_interim, INT),
 	CONFIG("radius_secret", radiussecret, STRING),
 	CONFIG("radius_authtypes", radius_authtypes_s, STRING),
 	CONFIG("bind_address", bind_address, IPv4),
@@ -1455,7 +1456,7 @@ void sessionshutdown(sessionidt s, char *reason, int result, int error)
 	if (session[s].ip && !walled_garden && !session[s].die)
 	{
 		// RADIUS Stop message
-		uint16_t r = session[s].radius;
+		uint16_t r = sess_local[s].radius;
 		if (!r)
 		{
 			if (!(r = radiusnew(s)))
@@ -1537,7 +1538,7 @@ void sessionshutdown(sessionidt s, char *reason, int result, int error)
 void sendipcp(tunnelidt t, sessionidt s)
 {
 	uint8_t buf[MAXCONTROL];
-	uint16_t r = session[s].radius;
+	uint16_t r = sess_local[s].radius;
 	uint8_t *q;
 
 	CSTAT(sendipcp);
@@ -1616,8 +1617,8 @@ void sessionkill(sessionidt s, char *reason)
 
 	session[s].die = TIME;
 	sessionshutdown(s, reason, 3, 0);  // close radius/routes, etc.
-	if (session[s].radius)
-		radiusclear(session[s].radius, s); // cant send clean accounting data, session is killed
+	if (sess_local[s].radius)
+		radiusclear(sess_local[s].radius, s); // cant send clean accounting data, session is killed
 
 	LOG(2, s, session[s].tunnel, "Kill session %d (%s): %s\n", s, session[s].user, reason);
 
@@ -2189,16 +2190,17 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 					}
 				case 31:    // Proxy Authentication Challenge
 					{
-						memcpy(radius[session[s].radius].auth, b, 16);
 						LOG(4, s, t, "   Proxy Auth Challenge\n");
+						if (sess_local[s].radius)
+							memcpy(radius[sess_local[s].radius].auth, b, 16);
 						break;
 					}
 				case 32:    // Proxy Authentication ID
 					{
 						uint16_t authid = ntohs(*(uint16_t *)(b));
 						LOG(4, s, t, "   Proxy Auth ID (%d)\n", authid);
-						if (session[s].radius)
-							radius[session[s].radius].id = authid;
+						if (sess_local[s].radius)
+							radius[sess_local[s].radius].id = authid;
 						break;
 					}
 				case 33:    // Proxy Authentication Response
@@ -2618,19 +2620,22 @@ static int regular_cleanups(void)
 		if (!session[s].opened)	// Session isn't in use
 			continue;
 
-		if (!session[s].die && session[s].ip && !(session[s].flags & SF_IPCP_ACKED))
+		// check for expired sessions
+		if (session[s].die)
+		{
+			if (session[s].die <= TIME)
+			{
+				sessionkill(s, "Expired");
+				if (++count >= MAX_ACTIONS) break;
+			}
+			continue;
+		}
+
+		if (session[s].ip && !(session[s].flags & SF_IPCP_ACKED))
 		{
 			// IPCP has not completed yet. Resend
 			LOG(3, s, session[s].tunnel, "No ACK for initial IPCP ConfigReq... resending\n");
 			sendipcp(session[s].tunnel, s);
-		}
-
-		// check for expired sessions
-		if (session[s].die && session[s].die <= TIME)
-		{
-			sessionkill(s, "Expired");
-			if (++count >= MAX_ACTIONS) break;
-			continue;
 		}
 
 		// Drop sessions who have not responded within IDLE_TIMEOUT seconds
@@ -2728,6 +2733,31 @@ static int regular_cleanups(void)
 				cluster_send_session(s);
 
 			if (++count >= MAX_ACTIONS) break;
+		}
+
+		// RADIUS interim accounting
+		if (config->radius_accounting && config->radius_interim > 0
+		    && session[s].ip && !session[s].walled_garden
+		    && !sess_local[s].radius // RADIUS already in progress
+		    && time_now - sess_local[s].last_interim >= config->radius_interim)
+		{
+			if (!radiusnew(s))
+			{
+				LOG(1, s, session[s].tunnel, "No free RADIUS sessions for Interim message\n");
+				STAT(radius_overflow);
+				continue;
+			}
+
+			random_data(radius[r].auth, sizeof(radius[r].auth));
+
+			LOG(3, s, session[s].tunnel, "Sending RADIUS Interim for %s (%u)\n",
+				session[s].user, session[s].unique_id);
+
+			radiussend(r, RADIUSINTERIM);
+			sess_local[s].last_interim = time_now;
+
+			if (++count >= MAX_ACTIONS)
+				break;
 		}
 	}
 
@@ -3154,6 +3184,8 @@ static void initdata(int optdebug, char *optconfig)
 	config->num_tbfs = MAXTBFS;
 	config->rl_rate = 28; // 28kbps
 	strcpy(config->random_device, RANDOMDEVICE);
+
+	log_stream = stderr;
 
 #ifdef RINGBUFFER
 	if (!(ringbuffer = shared_malloc(sizeof(struct Tringbuffer))))

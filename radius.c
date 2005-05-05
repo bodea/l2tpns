@@ -1,6 +1,6 @@
 // L2TPNS Radius Stuff
 
-char const *cvs_id_radius = "$Id: radius.c,v 1.28 2005-05-03 05:11:34 bodea Exp $";
+char const *cvs_id_radius = "$Id: radius.c,v 1.29 2005-05-05 10:02:08 bodea Exp $";
 
 #include <time.h>
 #include <stdio.h>
@@ -42,7 +42,7 @@ void initrad(void)
 
 void radiusclear(uint16_t r, sessionidt s)
 {
-	if (s) session[s].radius = 0;
+	if (s) sess_local[s].radius = 0;
 	memset(&radius[r], 0, sizeof(radius[r])); // radius[r].state = RADIUSNULL;
 }
 
@@ -69,7 +69,7 @@ static uint16_t get_free_radius()
 
 uint16_t radiusnew(sessionidt s)
 {
-	uint16_t r = session[s].radius;
+	uint16_t r = sess_local[s].radius;
 
 	/* re-use */
 	if (r)
@@ -86,7 +86,7 @@ uint16_t radiusnew(sessionidt s)
 	};
 
 	memset(&radius[r], 0, sizeof(radius[r]));
-	session[s].radius = r;
+	sess_local[s].radius = r;
 	radius[r].session = s;
 	radius[r].state = RADIUSWAIT;
 	radius[r].retry = TIME + 1200; // Wait at least 120 seconds to re-claim this.
@@ -165,6 +165,7 @@ void radiussend(uint16_t r, uint8_t state)
 			break;
 		case RADIUSSTART:
 		case RADIUSSTOP:
+		case RADIUSINTERIM:
 			b[0] = 4;               // accounting request
 			break;
 		default:
@@ -229,11 +230,11 @@ void radiussend(uint16_t r, uint8_t state)
 			p += p[1];
 		}
 	}
-	else if (state == RADIUSSTART || state == RADIUSSTOP)
+	else if (state == RADIUSSTART || state == RADIUSSTOP || state == RADIUSINTERIM)
 	{                          // accounting
 		*p = 40;                // accounting type
 		p[1] = 6;
-		*(uint32_t *) (p + 2) = htonl((state == RADIUSSTART) ? 1 : 2);
+		*(uint32_t *) (p + 2) = htonl(state - RADIUSSTART + 1); // start=1, stop=2, interim=3
 		p += p[1];
 		if (s)
 		{
@@ -241,8 +242,16 @@ void radiussend(uint16_t r, uint8_t state)
 			p[1] = 18;
 			sprintf(p + 2, "%08X%08X", session[s].unique_id, session[s].opened);
 			p += p[1];
-			if (state == RADIUSSTOP)
-			{                // stop
+			if (state == RADIUSSTART)
+			{                // start
+				*p = 41;      // delay
+				p[1] = 6;
+				*(uint32_t *) (p + 2) = htonl(time(NULL) - session[s].opened);
+				p += p[1];
+				sess_local[s].last_interim = time_now; // Setup "first" Interim
+			}
+			else
+			{                // stop, interim
 				*p = 42;      // input octets
 				p[1] = 6;
 				*(uint32_t *) (p + 2) = htonl(session[s].cin);
@@ -262,13 +271,6 @@ void radiussend(uint16_t r, uint8_t state)
 				*p = 48;      // output spackets
 				p[1] = 6;
 				*(uint32_t *) (p + 2) = htonl(session[s].pout);
-				p += p[1];
-			}
-			else
-			{                // start
-				*p = 41;      // delay
-				p[1] = 6;
-				*(uint32_t *) (p + 2) = htonl(time(NULL) - session[s].opened);
 				p += p[1];
 			}
 
@@ -393,7 +395,8 @@ void processrad(uint8_t *buf, int len, char socket_index)
 		LOG(1, s, session[s].tunnel, "   Unexpected RADIUS response\n");
 		return;
 	}
-	if (radius[r].state != RADIUSAUTH && radius[r].state != RADIUSSTART && radius[r].state != RADIUSSTOP)
+	if (radius[r].state != RADIUSAUTH && radius[r].state != RADIUSSTART
+	    && radius[r].state != RADIUSSTOP && radius[r].state != RADIUSINTERIM)
 	{
 		LOG(1, s, session[s].tunnel, "   Unexpected RADIUS response\n");
 		return;
@@ -413,7 +416,7 @@ void processrad(uint8_t *buf, int len, char socket_index)
 		}
 
 		if ((radius[r].state == RADIUSAUTH && r_code != AccessAccept && r_code != AccessReject) ||
-			((radius[r].state == RADIUSSTART || radius[r].state == RADIUSSTOP) && r_code != AccountingResponse))
+			((radius[r].state == RADIUSSTART || radius[r].state == RADIUSSTOP || radius[r].state == RADIUSINTERIM) && r_code != AccountingResponse))
 		{
 			LOG(1, s, session[s].tunnel, "   Unexpected RADIUS response %s\n", radius_code(r_code));
 			return; // We got something we didn't expect. Let the timeouts take
@@ -709,24 +712,27 @@ void radiusretry(uint16_t r)
 	radius[r].retry = backoff(radius[r].try + 1);
 	switch (radius[r].state)
 	{
-		case RADIUSCHAP:           // sending CHAP down PPP
+		case RADIUSCHAP:	// sending CHAP down PPP
 			sendchap(t, s);
 			break;
 		case RADIUSIPCP:
-			sendipcp(t, s);         // send IPCP
+			sendipcp(t, s);	// send IPCP
 			break;
-		case RADIUSAUTH:           // sending auth to RADIUS server
+		case RADIUSAUTH:	// sending auth to RADIUS server
 			radiussend(r, RADIUSAUTH);
 			break;
-		case RADIUSSTART:          // sending start accounting to RADIUS server
+		case RADIUSSTART:	// sending start accounting to RADIUS server
 			radiussend(r, RADIUSSTART);
 			break;
-		case RADIUSSTOP:           // sending stop accounting to RADIUS server
+		case RADIUSSTOP:	// sending stop accounting to RADIUS server
 			radiussend(r, RADIUSSTOP);
 			break;
+		case RADIUSINTERIM:	// sending interim accounting to RADIUS server
+			radiussend(r, RADIUSINTERIM);
+			break;
 		default:
-		case RADIUSNULL:           // Not in use
-		case RADIUSWAIT:           // waiting timeout before available, in case delayed reply from RADIUS server
+		case RADIUSNULL:	// Not in use
+		case RADIUSWAIT:	// waiting timeout before available, in case delayed reply from RADIUS server
 			// free up RADIUS task
 			radiusclear(r, s);
 			LOG(3, s, session[s].tunnel, "Freeing up radius session %d\n", r);

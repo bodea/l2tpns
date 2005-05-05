@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.55 2005-05-02 09:55:04 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.56 2005-05-05 10:02:07 bodea Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -413,7 +413,6 @@ static int cmd_show_session(struct cli_def *cli, char *command, char **argv, int
 			cli_print(cli, "\tBytes In/Out:\t%u/%u", session[s].total_cout, session[s].total_cin);
 			cli_print(cli, "\tPkts In/Out:\t%u/%u", session[s].pout, session[s].pin);
 			cli_print(cli, "\tMRU:\t\t%d", session[s].mru);
-			cli_print(cli, "\tRadius Session:\t%u", session[s].radius);
 			cli_print(cli, "\tRx Speed:\t%u", session[s].rx_connect_speed);
 			cli_print(cli, "\tTx Speed:\t%u", session[s].tx_connect_speed);
 			if (session[s].filter_in && session[s].filter_in <= MAXFILTER)

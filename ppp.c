@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.47 2005-04-27 13:53:17 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.48 2005-05-05 10:02:08 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -77,7 +77,7 @@ void processpap(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 		}
 		LOG(3, s, t, "PAP login %s/%s\n", user, pass);
 	}
-	if (session[s].ip || !session[s].radius)
+	if (session[s].ip || !sess_local[s].radius)
 	{
 		// respond now, either no RADIUS available or already authenticated
 		uint8_t b[MAXCONTROL];
@@ -110,7 +110,7 @@ void processpap(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 	else
 	{
 		// set up RADIUS request
-		uint16_t r = session[s].radius;
+		uint16_t r = sess_local[s].radius;
 
 		// Run PRE_AUTH plugins
 		struct param_pre_auth packet = { &tunnel[t], &session[s], strdup(user), strdup(pass), PPPPAP, 1 };
@@ -144,7 +144,7 @@ void processchap(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 	CSTAT(processchap);
 
 	LOG_HEX(5, "CHAP", p, l);
-	r = session[s].radius;
+	r = sess_local[s].radius;
 	if (!r)
 	{
 		LOG(1, s, t, "Unexpected CHAP message\n");
@@ -592,7 +592,7 @@ void processipcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 	if (*p == ConfigAck)
 	{
 		// happy with our IPCP
-		uint16_t r = session[s].radius;
+		uint16_t r = sess_local[s].radius;
 		if ((!r || radius[r].state == RADIUSIPCP) && !session[s].walled_garden)
 		{
 			if (!r)
@@ -1084,9 +1084,8 @@ void processccp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 void sendchap(tunnelidt t, sessionidt s)
 {
 	uint8_t b[MAXCONTROL];
-	uint16_t r = session[s].radius;
+	uint16_t r = sess_local[s].radius;
 	uint8_t *q;
-	uint8_t *l;
 
 	CSTAT(sendchap);
 

@@ -1,6 +1,7 @@
 * Thu May 5 2005 Brendan O'Dea <bod@optusnet.com.au> 2.1.0
 - Add IPv6 support from Jonathan McDowell.
 - Add CHAP support from Jordan Hrycaj (work in progress).
+- Add interim accounting support from Vladislav Bjelic.
 - Sanity check that cluster_send_session is not called from a child
   process.
 - Throttle outgoing LASTSEEN packets to at most one per second for a

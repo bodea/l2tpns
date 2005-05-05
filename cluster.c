@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.34 2005-05-02 09:06:05 bodea Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.35 2005-05-05 10:02:07 bodea Exp $";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -594,7 +594,7 @@ void cluster_check_master(void)
 
 		sess_local[i].cin = sess_local[i].cout = 0;
 
-		session[i].radius = 0;	// Reset authentication as the radius blocks aren't up to date.
+		sess_local[i].radius = 0;	// Reset authentication as the radius blocks aren't up to date.
 
 		if (session[i].unique_id >= high_unique_id)	// This is different to the index into the session table!!!
 			high_unique_id = session[i].unique_id+1;
