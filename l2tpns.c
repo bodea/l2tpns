@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.73.2.6 2005-04-01 06:37:19 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.73.2.7 2005-05-06 06:35:18 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -1847,7 +1847,7 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 					if (!sessionfree)
 					{
 						STAT(session_overflow);
-						LOG(1, 0, t, "No free sessions");
+						LOG(1, 0, t, "No free sessions\n");
 						return;
 					}
 					else
