@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.94 2005-05-06 06:35:37 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.95 2005-05-06 23:31:50 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -2741,7 +2741,7 @@ static int regular_cleanups(void)
 		    && !sess_local[s].radius // RADIUS already in progress
 		    && time_now - sess_local[s].last_interim >= config->radius_interim)
 		{
-			if (!radiusnew(s))
+			if (!(r = radiusnew(s)))
 			{
 				LOG(1, s, session[s].tunnel, "No free RADIUS sessions for Interim message\n");
 				STAT(radius_overflow);
