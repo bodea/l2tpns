@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.93 2005-05-05 10:02:07 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.94 2005-05-06 06:35:37 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -2296,7 +2296,7 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 					if (!sessionfree)
 					{
 						STAT(session_overflow);
-						LOG(1, 0, t, "No free sessions");
+						LOG(1, 0, t, "No free sessions\n");
 						return;
 					}
 					else
@@ -4014,7 +4014,7 @@ static void update_config()
 		else if (!strncasecmp("pap", p, strlen(p)))
 			type = AUTHPAP;
 		else
-			LOG(0, 0, 0, "Invalid RADIUS authentication type \"%s\"", p);
+			LOG(0, 0, 0, "Invalid RADIUS authentication type \"%s\"\n", p);
 
 		config->radius_authtypes |= type;
 		if (!config->radius_authprefer)
