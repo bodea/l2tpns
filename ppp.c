@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.50 2005-05-07 08:53:23 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.51 2005-05-07 11:57:53 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -1195,39 +1195,48 @@ uint8_t *makeppp(uint8_t *b, int size, uint8_t *p, int l, tunnelidt t, sessionid
 	return b;
 }
 
-// Send initial LCP ConfigReq for PAP, set magic no.
+// Send initial LCP ConfigReq for preferred authentication type, set magic no and MRU
 void initlcp(tunnelidt t, sessionidt s)
 {
-	char b[500], *q;
-	int size;
+	char b[500], *q, *l;
 
 	if (!(q = makeppp(b, sizeof(b), NULL, 0, t, s, PPPLCP)))
 		return;
 
-	LOG(4, s, t, "Sending LCP ConfigReq for PAP\n");
-	*q = ConfigReq;
-	*(uint8_t *)(q + 1) = (time_now % 255) + 1; // ID
-	*(uint16_t *)(q + 2) = htons(14); // Length
-	*(uint8_t *)(q + 4) = 5;
-	*(uint8_t *)(q + 5) = 6;
-	*(uint32_t *)(q + 6) = htonl(session[s].magic);
-	*(uint8_t *)(q + 10) = 3;
+	LOG(4, s, t, "Sending LCP ConfigReq for %s\n",
+	    config->radius_authprefer == AUTHCHAP ? "CHAP" : "PAP");
+
+	if (!session[s].mru)
+		session[s].mru = DEFAULT_MRU;
+
+	l = q;
+	*l++ = ConfigReq;
+	*l++ = (time_now % 255) + 1; // ID
+
+	*l++ = 1; *l++ = 4; // Maximum-Receive-Unit (length 4)
+	*(uint16_t *) l = htons(session[s].mru); l += 2;
+
+	*l++ = 3; // Authentication-Protocol
 	if (config->radius_authprefer == AUTHCHAP)
 	{
-		*(uint8_t *)(q + 11) = 5;
-		*(uint16_t *)(q + 12) = htons(PPPCHAP);
-		*(uint8_t *)(q + 14) = 5; // MD5
-		size = 15;
+		*l++ = 5; // length
+		*(uint16_t *) l = htons(PPPCHAP); l += 2;
+		*l++ = 5; // MD5
 	}
 	else
 	{
-		*(uint8_t *)(q + 11) = 4;
-		*(uint16_t *)(q + 12) = htons(PPPPAP);
-		size = 14;
+		*l++ = 4; // length
+		*(uint16_t *) l = htons(PPPPAP); l += 2;
 	}
 
-	LOG_HEX(5, "PPPLCP", q, size);
-	tunnelsend(b, (q - b) + size, t);
+	*l++ = 5; *l++ = 6; // Magic-Number (length 6)
+	*(uint32_t *) l = htonl(session[s].magic);
+	l += 4;
+
+	*(uint16_t *)(q + 2) = htons(l - q); // Length
+
+	LOG_HEX(5, "PPPLCP", q, l - q);
+	tunnelsend(b, (l - b), t);
 }
 
 // Send CCP request for no compression

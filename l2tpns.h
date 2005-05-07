@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.65 2005-05-05 10:02:08 bodea Exp $
+// $Id: l2tpns.h,v 1.66 2005-05-07 11:57:53 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -43,6 +43,7 @@
 #define ECHO_TIMEOUT	60		// Time between last packet sent and LCP ECHO generation
 #define IDLE_TIMEOUT	240		// Time between last packet sent and LCP ECHO generation
 #define BUSY_WAIT_TIME	3000		// 5 minutes in 1/10th seconds to wait for radius to cleanup on shutdown
+#define DEFAULT_MRU	1458		// maximum packet size to avoid fragmentation when LNS ethernet MTU is 1500
 
 // Constants
 #ifndef ETCDIR
