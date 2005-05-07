@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.96 2005-05-07 08:17:25 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.97 2005-05-07 08:53:23 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -1544,7 +1544,7 @@ void sendipcp(tunnelidt t, sessionidt s)
 
 	if (!r)
 	{
-		sessionshutdown(s, "No free RADIUS sessions for IPCP");
+		sessionshutdown(s, "No free RADIUS sessions for IPCP", 3, 0);
 		return;
 	}
 

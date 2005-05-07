@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.49 2005-05-07 08:17:25 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.50 2005-05-07 08:53:23 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -285,7 +285,7 @@ static void dumplcp(uint8_t *p, int l)
 				{
 					int proto = ntohs(*(uint16_t *)(o + 2));
 					int algo = *(uint8_t *)(o + 4);
-					LOG(4, 0, 0, "   %s 0x%x 0x%x (%s)\n", lcp_types[type], proto, algo,
+					LOG(4, 0, 0, "   %s 0x%x 0x%x (%s)\n", lcp_type(type), proto, algo,
 						(proto == PPPCHAP && algo == 5) ? "CHAP MD5"  : "UNSUPPORTED");
 				}
 				else
@@ -403,7 +403,6 @@ void processlcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 				case 3: // Authentication-Protocol
 					{
 						int proto = ntohs(*(uint16_t *)(o + 2));
-						uint16_t wanted_proto;
 						char proto_name[] = "0x0000";
 
 						if (proto == PPPPAP)
