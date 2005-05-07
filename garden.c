@@ -9,7 +9,7 @@
 
 /* walled garden */
 
-char const *cvs_id = "$Id: garden.c,v 1.20 2004-12-16 08:49:53 bodea Exp $";
+char const *cvs_id = "$Id: garden.c,v 1.20.2.1 2005-05-07 03:51:20 bodea Exp $";
 
 int plugin_api_version = PLUGIN_API_VERSION;
 static struct pluginfuncs *p = 0;
@@ -214,7 +214,7 @@ int garden_session(sessiont *s, int flag)
 		{
 			/* OK, we're up! */
 			uint16_t r = p->radiusnew(p->get_id_by_session(s));
-			p->radiussend(r, RADIUSSTART);
+			if (r) p->radiussend(r, RADIUSSTART);
 		}
 	}
 

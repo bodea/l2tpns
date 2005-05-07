@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.73.2.7 2005-05-06 06:35:18 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.73.2.8 2005-05-07 03:51:21 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -1117,7 +1117,6 @@ void sessionshutdown(sessionidt s, char *reason)
 			if (!(r = radiusnew(s)))
 			{
 				LOG(1, s, session[s].tunnel, "No free RADIUS sessions for Stop message\n");
-				STAT(radius_overflow);
 			}
 			else
 			{
@@ -1189,6 +1188,12 @@ void sendipcp(tunnelidt t, sessionidt s)
 	if (!r)
 		r = radiusnew(s);
 
+	if (!r)
+	{
+		sessionshutdown(s, "No free RADIUS sessions for IPCP");
+		return;
+	}
+
 	if (radius[r].state != RADIUSIPCP)
 	{
 		radius[r].state = RADIUSIPCP;
@@ -1219,6 +1224,17 @@ void sendipcp(tunnelidt t, sessionidt s)
 	session[s].flags &= ~SF_IPCP_ACKED;	// Clear flag.
 }
 
+static void sessionclear(sessionidt s)
+{
+	memset(&session[s], 0, sizeof(session[s]));
+	memset(&sess_local[s], 0, sizeof(sess_local[s]));
+	memset(&cli_session_actions[s], 0, sizeof(cli_session_actions[s]));
+
+	session[s].tunnel = T_FREE;	// Mark it as free.
+	session[s].next = sessionfree;
+	sessionfree = s;
+}
+
 // kill a session now
 void sessionkill(sessionidt s, char *reason)
 {
@@ -1240,12 +1256,7 @@ void sessionkill(sessionidt s, char *reason)
 		radiusclear(session[s].radius, s); // cant send clean accounting data, session is killed
 
 	LOG(2, s, session[s].tunnel, "Kill session %d (%s): %s\n", s, session[s].user, reason);
-
-	memset(&session[s], 0, sizeof(session[s]));
-	session[s].tunnel = T_FREE;	// Mark it as free.
-	session[s].next = sessionfree;
-	sessionfree = s;
-	cli_session_actions[s].action = 0;
+	sessionclear(s);
 	cluster_send_session(s);
 }
 
@@ -1866,7 +1877,7 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 						if (!(r = radiusnew(s)))
 						{
 							LOG(1, s, t, "No free RADIUS sessions for ICRQ\n");
-							sessionkill(s, "no free RADIUS sesions");
+							sessionclear(s);
 							return;
 						}
 

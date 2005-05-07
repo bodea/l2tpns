@@ -1,3 +1,7 @@
+* Sat May 7 2005 Brendan O'Dea <bod@optusnet.com.au> 2.0.19
+- Fix leak in session freelist when initial RADIUS session allocation
+  fails.
+
 * Tue May 3 2005 Brendan O'Dea <bod@optusnet.com.au> 2.0.18
 - Add a Cisco-Avpair with intercept details to RADIUS Start/Stop
   records.
