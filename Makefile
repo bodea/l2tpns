@@ -41,6 +41,8 @@ DEFINES += -DRINGBUFFER
 DEFINES += -DBGP
 OBJS += bgp.o
 
+doit = echo $(1); $(1)
+
 all: programs plugins tests
 programs: $(PROGRAMS)
 plugins: $(PLUGINS)
@@ -74,10 +76,6 @@ bounce: test/bounce.o
 %.so: %.c
 	$(CC) -fPIC -shared $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) -o $@ $<
 
-# install config files only if a startup-config does not exist yet
-# this does not interfere when building rpms or debs and makes
-# fast upgrading via make install possible
-
 install: all
 	$(INSTALL) -m 0755 l2tpns $(DESTDIR)$(bindir)/l2tpns
 	$(INSTALL) -m 0755 nsctl $(DESTDIR)$(bindir)/nsctl
@@ -86,27 +84,29 @@ install: all
 	$(INSTALL) -m 0644 Docs/l2tpns.8 $(DESTDIR)$(man8dir)/l2tpns.8
 	$(INSTALL) -m 0644 Docs/nsctl.8 $(DESTDIR)$(man8dir)/nsctl.8
 
-	gzip --best $(DESTDIR)$(man5dir)/*.5 $(DESTDIR)$(man8dir)/*.8
+	gzip --best --force $(DESTDIR)$(man5dir)/*.5 $(DESTDIR)$(man8dir)/*.8
 
-	@if [ -f $(DESTDIR)$(etcdir)/startup-config ]; then \
-		echo '***' Installing default config files in $(DESTDIR)$(etcdir) as .defaults; \
+	@for config in startup-config users ip_pool; \
+	do \
+	    suffix=; \
+	    mode=0600; [ $$config = ip_pool ] && mode=0644; \
+	    if [ -f $(DESTDIR)$(etcdir)/$$config ]; \
+	    then \
+	    	cmp -s etc/$$config.default $(DESTDIR)$(etcdir)/$$config && continue; \
 		suffix=.default; \
-	else \
-		echo '***' Installing default config files in $(DESTDIR)$(etcdir) - remember to adjust them; \
-		suffix=; \
-	fi; \
-
-	$(INSTALL) -m 0600 etc/startup-config.default $(DESTDIR)$(etcdir)/startup-config$$suffix; \
-	$(INSTALL) -m 0644 etc/ip_pool.default $(DESTDIR)$(etcdir)/ip_pool$$suffix; \
-	$(INSTALL) -m 0600 etc/users.default $(DESTDIR)$(etcdir)/users$$suffix
-
-	for plugin in $(PLUGINS); do \
-		$(INSTALL) -m 0755 $$plugin $(DESTDIR)$(libdir)/$$plugin; \
+	    fi; \
+	    $(call doit,$(INSTALL) -m $$mode etc/$$config.default $(DESTDIR)$(etcdir)/$$config$$suffix); \
 	done
 
-	if [ -z $(DESTDIR) ] && [ ! -e /dev/net/tun ]; then \
+	@for plugin in $(PLUGINS); \
+	do \
+		$(call doit,$(INSTALL) -m 0755 $$plugin $(DESTDIR)$(libdir)/$$plugin); \
+	done
+
+	@if [ -z $(DESTDIR) ] && [ ! -e /dev/net/tun ]; \
+	then \
 		mkdir /dev/net; \
-		mknod /dev/net/tun c 10 200; \
+		$(call doit,mknod /dev/net/tun c 10 200); \
 	fi
 
 .PHONY: all clean depend install
