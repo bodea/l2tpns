@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.95 2005-05-06 23:31:50 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.96 2005-05-07 08:17:25 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -1458,20 +1458,16 @@ void sessionshutdown(sessionidt s, char *reason, int result, int error)
 		// RADIUS Stop message
 		uint16_t r = sess_local[s].radius;
 		if (!r)
-		{
-			if (!(r = radiusnew(s)))
-			{
-				LOG(1, s, session[s].tunnel, "No free RADIUS sessions for Stop message\n");
-				STAT(radius_overflow);
-			}
-			else
-			{
-				random_data(radius[r].auth, sizeof(radius[r].auth));
-			}
-		}
+			r = radiusnew(s);
 
-		if (r && radius[r].state != RADIUSSTOP)
-			radiussend(r, RADIUSSTOP); // stop, if not already trying
+		if (r)
+		{
+			// stop, if not already trying
+			if (radius[r].state != RADIUSSTOP)
+				radiussend(r, RADIUSSTOP);
+		}
+		else
+			LOG(1, s, session[s].tunnel, "No free RADIUS sessions for Stop message\n");
 
 	    	// Save counters to dump to accounting file
 		if (*config->accounting_dir && shut_acct_n < sizeof(shut_acct) / sizeof(*shut_acct))
@@ -1546,6 +1542,12 @@ void sendipcp(tunnelidt t, sessionidt s)
 	if (!r)
 		r = radiusnew(s);
 
+	if (!r)
+	{
+		sessionshutdown(s, "No free RADIUS sessions for IPCP");
+		return;
+	}
+
 	if (radius[r].state != RADIUSIPCP)
 	{
 		radius[r].state = RADIUSIPCP;
@@ -1600,6 +1602,17 @@ void sendipcp(tunnelidt t, sessionidt s)
 	}
 }
 
+static void sessionclear(sessionidt s)
+{
+	memset(&session[s], 0, sizeof(session[s]));
+	memset(&sess_local[s], 0, sizeof(sess_local[s]));
+	memset(&cli_session_actions[s], 0, sizeof(cli_session_actions[s]));
+
+	session[s].tunnel = T_FREE;	// Mark it as free.
+	session[s].next = sessionfree;
+	sessionfree = s;
+}
+
 // kill a session now
 void sessionkill(sessionidt s, char *reason)
 {
@@ -1621,12 +1634,7 @@ void sessionkill(sessionidt s, char *reason)
 		radiusclear(sess_local[s].radius, s); // cant send clean accounting data, session is killed
 
 	LOG(2, s, session[s].tunnel, "Kill session %d (%s): %s\n", s, session[s].user, reason);
-
-	memset(&session[s], 0, sizeof(session[s]));
-	session[s].tunnel = T_FREE;	// Mark it as free.
-	session[s].next = sessionfree;
-	sessionfree = s;
-	cli_session_actions[s].action = 0;
+	sessionclear(s);
 	cluster_send_session(s);
 }
 
@@ -2081,14 +2089,14 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 //					LOG(4, s, t, "Firmware revision\n");
 					break;
 				case 7:     // host name
-					memset(tunnel[t].hostname, 0, 128);
-					memcpy(tunnel[t].hostname, b, (n >= 127) ? 127 : n);
+					memset(tunnel[t].hostname, 0, sizeof(tunnel[t].hostname));
+					memcpy(tunnel[t].hostname, b, (n < sizeof(tunnel[t].hostname)) ? n : sizeof(tunnel[t].hostname) - 1);
 					LOG(4, s, t, "   Tunnel hostname = \"%s\"\n", tunnel[t].hostname);
 					// TBA - to send to RADIUS
 					break;
 				case 8:     // vendor name
 					memset(tunnel[t].vendor, 0, sizeof(tunnel[t].vendor));
-					memcpy(tunnel[t].vendor, b, (n >= sizeof(tunnel[t].vendor) - 1) ? sizeof(tunnel[t].vendor) - 1 : n);
+					memcpy(tunnel[t].vendor, b, (n < sizeof(tunnel[t].vendor)) ? n : sizeof(tunnel[t].vendor) - 1);
 					LOG(4, s, t, "   Vendor name = \"%s\"\n", tunnel[t].vendor);
 					break;
 				case 9:     // assigned tunnel
@@ -2128,13 +2136,13 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 					// TBA
 					break;
 				case 21:    // called number
-					memset(called, 0, MAXTEL);
-					memcpy(called, b, (n >= MAXTEL) ? (MAXTEL-1) : n);
+					memset(called, 0, sizeof(called));
+					memcpy(called, b, (n < sizeof(called)) ? n : sizeof(called) - 1);
 					LOG(4, s, t, "   Called <%s>\n", called);
 					break;
 				case 22:    // calling number
-					memset(calling, 0, MAXTEL);
-					memcpy(calling, b, (n >= MAXTEL) ? (MAXTEL-1) : n);
+					memset(calling, 0, sizeof(calling));
+					memcpy(calling, b, (n < sizeof(calling)) ? n : sizeof(calling) - 1);
 					LOG(4, s, t, "   Calling <%s>\n", calling);
 					break;
 				case 23:    // subtype
@@ -2147,8 +2155,9 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 					else
 					{
 						// AS5300s send connect speed as a string
-						char tmp[30] = {0};
-						memcpy(tmp, b, (n >= 30) ? 30 : n);
+						char tmp[30];
+						memset(tmp, 0, sizeof(tmp));
+						memcpy(tmp, b, (n < sizeof(tmp)) ? n : sizeof(tmp) - 1);
 						session[s].tx_connect_speed = atol(tmp);
 					}
 					LOG(4, s, t, "   TX connect speed <%u>\n", session[s].tx_connect_speed);
@@ -2161,8 +2170,9 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 					else
 					{
 						// AS5300s send connect speed as a string
-						char tmp[30] = {0};
-						memcpy(tmp, b, (n >= 30) ? 30 : n);
+						char tmp[30];
+						memset(tmp, 0, sizeof(tmp));
+						memcpy(tmp, b, (n < sizeof(tmp)) ? n : sizeof(tmp) - 1);
 						session[s].rx_connect_speed = atol(tmp);
 					}
 					LOG(4, s, t, "   RX connect speed <%u>\n", session[s].rx_connect_speed);
@@ -2182,8 +2192,9 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 					}
 				case 30:    // Proxy Authentication Name
 					{
-						char authname[64] = {0};
-						memcpy(authname, b, (n > 63) ? 63 : n);
+						char authname[64];
+						memset(authname, 0, sizeof(authname));
+						memcpy(authname, b, (n < sizeof(authname)) ? n : sizeof(authname) - 1);
 						LOG(4, s, t, "   Proxy Auth Name (%s)\n",
 							authname);
 						break;
@@ -2204,13 +2215,9 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 						break;
 					}
 				case 33:    // Proxy Authentication Response
-					{
-						char authresp[64] = {0};
-						memcpy(authresp, b, (n > 63) ? 63 : n);
-						LOG(4, s, t, "   Proxy Auth Response\n");
-						break;
-					}
-				case 27:    // last send lcp
+					LOG(4, s, t, "   Proxy Auth Response\n");
+					break;
+				case 27:    // last sent lcp
 					{        // find magic number
 						uint8_t *p = b, *e = p + n;
 						while (p + 1 < e && p[1] && p + p[1] <= e)
@@ -2315,7 +2322,7 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 						if (!(r = radiusnew(s)))
 						{
 							LOG(1, s, t, "No free RADIUS sessions for ICRQ\n");
-							sessionkill(s, "no free RADIUS sesions");
+							sessionclear(s);
 							return;
 						}
 
@@ -2328,8 +2335,6 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 						control16(c, 14, s, 1); // assigned session
 						controladd(c, t, s); // send the reply
 
-						// Generate a random challenge
-						random_data(radius[r].auth, sizeof(radius[r].auth));
 						strncpy(radius[r].calling, calling, sizeof(radius[r].calling) - 1);
 						strncpy(session[s].called, called, sizeof(session[s].called) - 1);
 						strncpy(session[s].calling, calling, sizeof(session[s].calling) - 1);
@@ -2747,8 +2752,6 @@ static int regular_cleanups(void)
 				STAT(radius_overflow);
 				continue;
 			}
-
-			random_data(radius[r].auth, sizeof(radius[r].auth));
 
 			LOG(3, s, session[s].tunnel, "Sending RADIUS Interim for %s (%u)\n",
 				session[s].user, session[s].unique_id);

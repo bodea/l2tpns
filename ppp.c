@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.48 2005-05-05 10:02:08 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.49 2005-05-07 08:17:25 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -279,8 +279,14 @@ static void dumplcp(uint8_t *p, int l)
 				{
 					int proto = ntohs(*(uint16_t *)(o + 2));
 					LOG(4, 0, 0, "   %s 0x%x (%s)\n", lcp_type(type), proto,
-						proto == PPPCHAP ? "CHAP" :
-						proto == PPPPAP  ? "PAP"  : "UNKNOWN");
+						proto == PPPPAP  ? "PAP"  : "UNSUPPORTED");
+				}
+				else if (length == 5)
+				{
+					int proto = ntohs(*(uint16_t *)(o + 2));
+					int algo = *(uint8_t *)(o + 4);
+					LOG(4, 0, 0, "   %s 0x%x 0x%x (%s)\n", lcp_types[type], proto, algo,
+						(proto == PPPCHAP && algo == 5) ? "CHAP MD5"  : "UNSUPPORTED");
 				}
 				else
 					LOG(4, 0, 0, "   %s odd length %d\n", lcp_type(type), length);
@@ -397,17 +403,29 @@ void processlcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 				case 3: // Authentication-Protocol
 					{
 						int proto = ntohs(*(uint16_t *)(o + 2));
+						uint16_t wanted_proto;
 						char proto_name[] = "0x0000";
+
 						if (proto == PPPPAP)
-							break;
+						{
+							if (config->radius_authtypes & AUTHPAP)
+								break;
+
+							strcpy(proto_name, "PAP");
+						}
+						else if (proto == PPPCHAP)
+						{
+							if (config->radius_authtypes & AUTHCHAP
+							    && *(o + 4) == 5) // MD5
+								break;
+
+							strcpy(proto_name, "CHAP");
+						}
+						else
+							sprintf(proto_name, "%#4.4x", proto);
 
 						if (response && *response != ConfigNak) // rej already queued
 							break;
-
-						if (proto == PPPCHAP)
-							strcpy(proto_name, "CHAP");
-						else
-							sprintf(proto_name, "%#4.4x", proto);
 
 						LOG(2, s, t, "    Remote requesting %s authentication.  Rejecting.\n", proto_name);
 
@@ -419,16 +437,27 @@ void processlcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 							q += 4;
 						}
 
-						if ((q - b + length) > sizeof(b))
+						if ((q - b + 5) > sizeof(b)) // 5 is the larger (CHAP+MD5) of the two NAKs
 						{
 							LOG(2, s, t, "LCP overflow for %s ConfigNak.\n", proto_name);
 							break;
 						}
 
-						memcpy(q, o, length);
-						*(uint16_t *)(q += 2) = htons(PPPPAP); // NAK -> Use PAP instead
-						q += length;
-						*((uint16_t *) (response + 2)) = htons(q - response);
+						*q++ = type;
+						if (config->radius_authprefer == AUTHCHAP)
+						{
+							*q++ = 5;
+							*(uint16_t *) q = htons(PPPCHAP); q += 2;
+							*q++ = 5; // MD5
+						}
+						else
+						{
+							*q++ = 4;
+							*(uint16_t *) q = htons(PPPPAP); q += 2;
+						}
+
+						*((uint16_t *) (response + 2)) = htons(q - response); // LCP header length
+						break;
 					}
 					break;
 
@@ -483,7 +512,7 @@ void processlcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 	{
 		LOG(1, s, t, "Remote end sent a ConfigNak.  Ignoring\n");
 		if (config->debug > 3) dumplcp(p, l);
-		return ;
+		return;
 	}
 	else if (*p == TerminateReq)
 	{
@@ -1098,8 +1127,6 @@ void sendchap(tunnelidt t, sessionidt s)
 
 	LOG(1, s, t, "Send CHAP challenge\n");
 
-	// new challenge
-	random_data(radius[r].auth, sizeof(radius[r].auth));
 	radius[r].chap = 1;		// CHAP not PAP
 	radius[r].id++;
 	if (radius[r].state != RADIUSCHAP)
@@ -1173,6 +1200,7 @@ uint8_t *makeppp(uint8_t *b, int size, uint8_t *p, int l, tunnelidt t, sessionid
 void initlcp(tunnelidt t, sessionidt s)
 {
 	char b[500], *q;
+	int size;
 
 	if (!(q = makeppp(b, sizeof(b), NULL, 0, t, s, PPPLCP)))
 		return;
@@ -1185,11 +1213,22 @@ void initlcp(tunnelidt t, sessionidt s)
 	*(uint8_t *)(q + 5) = 6;
 	*(uint32_t *)(q + 6) = htonl(session[s].magic);
 	*(uint8_t *)(q + 10) = 3;
-	*(uint8_t *)(q + 11) = 4;
-	*(uint16_t *)(q + 12) = htons(PPPPAP); // PAP
+	if (config->radius_authprefer == AUTHCHAP)
+	{
+		*(uint8_t *)(q + 11) = 5;
+		*(uint16_t *)(q + 12) = htons(PPPCHAP);
+		*(uint8_t *)(q + 14) = 5; // MD5
+		size = 15;
+	}
+	else
+	{
+		*(uint8_t *)(q + 11) = 4;
+		*(uint16_t *)(q + 12) = htons(PPPPAP);
+		size = 14;
+	}
 
-	LOG_HEX(5, "PPPLCP", q, 14);
-	tunnelsend(b, (q - b) + 14, t);
+	LOG_HEX(5, "PPPLCP", q, size);
+	tunnelsend(b, (q - b) + size, t);
 }
 
 // Send CCP request for no compression

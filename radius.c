@@ -1,6 +1,6 @@
 // L2TPNS Radius Stuff
 
-char const *cvs_id_radius = "$Id: radius.c,v 1.29 2005-05-05 10:02:08 bodea Exp $";
+char const *cvs_id_radius = "$Id: radius.c,v 1.30 2005-05-07 08:17:26 bodea Exp $";
 
 #include <time.h>
 #include <stdio.h>
@@ -90,6 +90,8 @@ uint16_t radiusnew(sessionidt s)
 	radius[r].session = s;
 	radius[r].state = RADIUSWAIT;
 	radius[r].retry = TIME + 1200; // Wait at least 120 seconds to re-claim this.
+
+	random_data(radius[r].auth, sizeof(radius[r].auth));
 
 	LOG(3, s, session[s].tunnel, "Allocated radius %d\n", r);
 	return r;
