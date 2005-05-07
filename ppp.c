@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.51 2005-05-07 11:57:53 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.52 2005-05-07 13:12:26 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -24,6 +24,7 @@ extern time_t time_now;
 extern configt *config;
 
 static void initccp(tunnelidt t, sessionidt s);
+static uint8_t *add_lcp_auth(uint8_t *b, int size, int authtype);
 
 // Process PAP messages
 void processpap(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
@@ -404,6 +405,7 @@ void processlcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 					{
 						int proto = ntohs(*(uint16_t *)(o + 2));
 						char proto_name[] = "0x0000";
+						uint8_t *a;
 
 						if (proto == PPPPAP)
 						{
@@ -436,23 +438,25 @@ void processlcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 							q += 4;
 						}
 
-						if ((q - b + 5) > sizeof(b)) // 5 is the larger (CHAP+MD5) of the two NAKs
+						a = add_lcp_auth(q, sizeof(b) - (q - b), config->radius_authprefer);
+						if (!a)
 						{
 							LOG(2, s, t, "LCP overflow for %s ConfigNak.\n", proto_name);
 							break;
 						}
 
-						*q++ = type;
-						if (config->radius_authprefer == AUTHCHAP)
+						q = a;
+
+						if (config->radius_authtypes != config->radius_authprefer)
 						{
-							*q++ = 5;
-							*(uint16_t *) q = htons(PPPCHAP); q += 2;
-							*q++ = 5; // MD5
-						}
-						else
-						{
-							*q++ = 4;
-							*(uint16_t *) q = htons(PPPPAP); q += 2;
+							a = add_lcp_auth(q, sizeof(b) - (q - b), config->radius_authtypes & ~config->radius_authprefer);
+							if (!a)
+							{
+								LOG(2, s, t, "LCP overflow for %s ConfigNak.\n", proto_name);
+								break;
+							}
+
+							q = a;
 						}
 
 						*((uint16_t *) (response + 2)) = htons(q - response); // LCP header length
@@ -505,12 +509,13 @@ void processlcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 		tunnelsend(b, l + (q - b), t);
 
 		if (!(session[s].flags & SF_LCP_ACKED))
-			initlcp(t, s);
+			sendlcp(t, s, config->radius_authprefer);
 	}
 	else if (*p == ConfigNak)
 	{
 		LOG(1, s, t, "Remote end sent a ConfigNak.  Ignoring\n");
 		if (config->debug > 3) dumplcp(p, l);
+		// FIXME: handle MRU, authentication type
 		return;
 	}
 	else if (*p == TerminateReq)
@@ -1195,8 +1200,33 @@ uint8_t *makeppp(uint8_t *b, int size, uint8_t *p, int l, tunnelidt t, sessionid
 	return b;
 }
 
-// Send initial LCP ConfigReq for preferred authentication type, set magic no and MRU
-void initlcp(tunnelidt t, sessionidt s)
+static uint8_t *add_lcp_auth(uint8_t *b, int size, int authtype)
+{
+	if ((authtype == AUTHCHAP && size < 5) || size < 4)
+		return 0;
+
+	*b++ = 3; // Authentication-Protocol
+	if (authtype == AUTHCHAP)
+	{
+		*b++ = 5; // length
+		*(uint16_t *) b = htons(PPPCHAP); b += 2;
+		*b++ = 5; // MD5
+	}
+	else if (authtype == AUTHPAP)
+	{
+		*b++ = 4; // length
+		*(uint16_t *) b = htons(PPPPAP); b += 2;
+	}
+	else
+	{
+		LOG(0, 0, 0, "add_lcp_auth called with unsupported auth type %d\n", authtype);
+	}
+
+	return b;
+}
+
+// Send initial LCP ConfigReq for MRU, authentication type and magic no
+void sendlcp(tunnelidt t, sessionidt s, int authtype)
 {
 	char b[500], *q, *l;
 
@@ -1216,18 +1246,7 @@ void initlcp(tunnelidt t, sessionidt s)
 	*l++ = 1; *l++ = 4; // Maximum-Receive-Unit (length 4)
 	*(uint16_t *) l = htons(session[s].mru); l += 2;
 
-	*l++ = 3; // Authentication-Protocol
-	if (config->radius_authprefer == AUTHCHAP)
-	{
-		*l++ = 5; // length
-		*(uint16_t *) l = htons(PPPCHAP); l += 2;
-		*l++ = 5; // MD5
-	}
-	else
-	{
-		*l++ = 4; // length
-		*(uint16_t *) l = htons(PPPPAP); l += 2;
-	}
+	l = add_lcp_auth(l, sizeof(b) - (l - b), authtype);
 
 	*l++ = 5; *l++ = 6; // Magic-Number (length 6)
 	*(uint32_t *) l = htonl(session[s].magic);

@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.98 2005-05-07 11:57:53 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.99 2005-05-07 13:12:25 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -2186,7 +2186,7 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 					{
 						uint16_t atype = ntohs(*(uint16_t *)b);
 						LOG(4, s, t, "   Proxy Auth Type %d (%s)\n", atype, auth_type(atype));
-						if (atype = 2)
+						if (atype == 2)
 							authtype = AUTHCHAP;
 						else if (atype == 3)
 							authtype = AUTHPAP;
@@ -2357,7 +2357,7 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 					controlnull(t); // ack
 					// proxy authentication type is not supported
 					if (authtype && !(config->radius_authtypes & authtype))
-						initlcp(t, s);
+						sendlcp(t, s, config->radius_authprefer);
 					break;
 				case 14:      // CDN
 					controlnull(t); // ack

@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.66 2005-05-07 11:57:53 bodea Exp $
+// $Id: l2tpns.h,v 1.67 2005-05-07 13:12:25 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -589,7 +589,7 @@ void processipv6in(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l);
 void processccp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l);
 void sendchap(tunnelidt t, sessionidt s);
 uint8_t *makeppp(uint8_t *b, int size, uint8_t *p, int l, tunnelidt t, sessionidt s, uint16_t mtype);
-void initlcp(tunnelidt t, sessionidt s);
+void sendlcp(tunnelidt t, sessionidt s, int authtype);
 void send_ipin(sessionidt s, uint8_t *buf, int len);
 
 
