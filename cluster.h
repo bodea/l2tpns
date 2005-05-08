@@ -1,5 +1,5 @@
 // L2TPNS Clustering Stuff
-// $Id: cluster.h,v 1.9 2004-12-16 08:49:53 bodea Exp $
+// $Id: cluster.h,v 1.10 2005-05-08 08:00:50 bodea Exp $
 
 #ifndef __CLUSTER_H__
 #define __CLUSTER_H__
@@ -20,7 +20,7 @@
 #define C_CTUNNEL		13	// Compressed tunnel structure.
 #define C_GARDEN		14	// Gardened packet
 
-#define HB_VERSION		4	// Protocol version number..
+#define HB_VERSION		5	// Protocol version number..
 #define HB_MAX_SEQ		(1<<30)	// Maximum sequence number. (MUST BE A POWER OF 2!)
 #define HB_HISTORY_SIZE		64	// How many old heartbeats we remember?? (Must be a factor of HB_MAX_SEQ)
 
