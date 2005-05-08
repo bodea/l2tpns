@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.52 2005-05-07 13:12:26 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.53 2005-05-08 06:28:12 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -41,7 +41,7 @@ void processpap(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 		LOG(1, s, t, "Short PAP %u bytes\n", l);
 		STAT(tunnel_rx_errors);
 		sessionshutdown(s, "Short PAP packet.", 3, 0);
-		return ;
+		return;
 	}
 
 	if ((hl = ntohs(*(uint16_t *) (p + 2))) > l)
@@ -49,7 +49,7 @@ void processpap(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 		LOG(1, s, t, "Length mismatch PAP %u/%u\n", hl, l);
 		STAT(tunnel_rx_errors);
 		sessionshutdown(s, "PAP length mismatch.", 3, 0);
-		return ;
+		return;
 	}
 	l = hl;
 
@@ -58,7 +58,7 @@ void processpap(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 		LOG(1, s, t, "Unexpected PAP code %d\n", *p);
 		STAT(tunnel_rx_errors);
 		sessionshutdown(s, "Unexpected PAP code.", 3, 0);
-		return ;
+		return;
 	}
 
 	{
@@ -150,6 +150,7 @@ void processchap(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 	{
 		LOG(1, s, t, "Unexpected CHAP message\n");
 		STAT(tunnel_rx_errors);
+		sessionshutdown(s, "Unexpected CHAP message.", 3, 0);
 		return;
 	}
 
@@ -157,14 +158,16 @@ void processchap(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 	{
 		LOG(1, s, t, "Short CHAP %u bytes\n", l);
 		STAT(tunnel_rx_errors);
-		return ;
+		sessionshutdown(s, "Short CHAP packet.", 3, 0);
+		return;
 	}
 
 	if ((hl = ntohs(*(uint16_t *) (p + 2))) > l)
 	{
 		LOG(1, s, t, "Length mismatch CHAP %u/%u\n", hl, l);
 		STAT(tunnel_rx_errors);
-		return ;
+		sessionshutdown(s, "CHAP length mismatch.", 3, 0);
+		return;
 	}
 	l = hl;
 
@@ -172,20 +175,23 @@ void processchap(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 	{
 		LOG(1, s, t, "Unexpected CHAP response code %d\n", *p);
 		STAT(tunnel_rx_errors);
+		sessionshutdown(s, "CHAP length mismatch.", 3, 0);
 		return;
 	}
 	if (p[1] != radius[r].id)
 	{
 		LOG(1, s, t, "Wrong CHAP response ID %d (should be %d) (%d)\n", p[1], radius[r].id, r);
 		STAT(tunnel_rx_errors);
-		return ;
+		sessionshutdown(s, "Unexpected CHAP response ID.", 3, 0);
+		return;
 	}
 
 	if (l < 5 || p[4] != 16)
 	{
 		LOG(1, s, t, "Bad CHAP response length %d\n", l < 5 ? -1 : p[4]);
 		STAT(tunnel_rx_errors);
-		return ;
+		sessionshutdown(s, "Bad CHAP response length.", 3, 0);
+		return;
 	}
 
 	l -= 5;
@@ -194,7 +200,8 @@ void processchap(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 	{
 		LOG(1, s, t, "CHAP user too long %d\n", l - 16);
 		STAT(tunnel_rx_errors);
-		return ;
+		sessionshutdown(s, "CHAP username too long.", 3, 0);
+		return;
 	}
 
 	// Run PRE_AUTH plugins
@@ -513,10 +520,69 @@ void processlcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 	}
 	else if (*p == ConfigNak)
 	{
-		LOG(1, s, t, "Remote end sent a ConfigNak.  Ignoring\n");
+		int x = l - 4;
+		uint8_t *o = (p + 4);
+		int authtype = 0;
+
+		LOG(3, s, t, "LCP: ConfigNak (%d bytes)...\n", l);
 		if (config->debug > 3) dumplcp(p, l);
-		// FIXME: handle MRU, authentication type
-		return;
+
+		while (x > 2)
+		{
+			int type = o[0];
+			int length = o[1];
+
+			if (length == 0 || type == 0 || x < length) break;
+			switch (type)
+			{
+				case 1: // Maximum-Receive-Unit
+					session[s].mru = ntohs(*(uint16_t *)(o + 2));
+					LOG(3, s, t, "    Remote requested MRU of %u\n", session[s].mru);
+					break;
+
+				case 3: // Authentication-Protocol
+					if (authtype)
+						break;
+
+					{
+						int proto = ntohs(*(uint16_t *)(o + 2));
+						if (proto == PPPPAP)
+						{
+							authtype = config->radius_authtypes & AUTHPAP;
+							LOG(3, s, t, "    Remote requested PAP authentication...%sing\n",
+								authtype ? "accept" : "reject");
+						}
+						else if (proto == PPPCHAP && *(o + 4) == 5)
+						{
+							authtype = config->radius_authtypes & AUTHCHAP;
+							LOG(3, s, t, "    Remote requested CHAP authentication...%sing\n",
+								authtype ? "accept" : "reject");
+						}
+						else
+						{
+							LOG(3, s, t, "    Rejecting unsupported authentication %#4x\n",
+								proto);
+						}
+					}
+
+					if (!authtype)
+					{
+						sessionshutdown(s, "Unsupported authentication.", 3, 0);
+						return;
+					}
+
+					break;
+
+				default:
+				    	LOG(2, s, t, "    Remote NAKed LCP type %u?\n", type);
+					break;
+			}
+		}
+
+		if (!authtype)
+			authtype = config->radius_authprefer;
+
+		sendlcp(t, s, authtype);
 	}
 	else if (*p == TerminateReq)
 	{
@@ -575,7 +641,6 @@ void processlcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 	{
 		LOG(1, s, t, "Unexpected LCP code %d\n", *p);
 		STAT(tunnel_rx_errors);
-		return ;
 	}
 }
 

@@ -1,7 +1,8 @@
-* Sat May 7 2005 Brendan O'Dea <bod@optusnet.com.au> 2.1.0
+* Sun May 8 2005 Brendan O'Dea <bod@optusnet.com.au> 2.1.0
 - Add IPv6 support from Jonathan McDowell.
-- Add CHAP support from Jordan Hrycaj (work in progress).
+- Add CHAP support from Jordan Hrycaj.
 - Add interim accounting support from Vladislav Bjelic.
+- Negotiate MRU, default 1458 to avoid fragmentation.
 - Sanity check that cluster_send_session is not called from a child
   process.
 - Throttle outgoing LASTSEEN packets to at most one per second for a
