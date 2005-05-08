@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.67 2005-05-07 13:12:25 bodea Exp $
+// $Id: l2tpns.h,v 1.68 2005-05-08 07:13:56 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -165,6 +165,8 @@ typedef struct
 	sessionidt next;		// next session in linked list
 	sessionidt far;			// far end session ID
 	tunnelidt tunnel;		// near end tunnel ID
+	uint8_t l2tp_flags;		// various bit flags from the ICCN on the l2tp tunnel.
+	uint8_t flags;			// Various session flags.
 	in_addr_t ip;			// IP of session set by RADIUS response (host byte order).
 	int ip_pool_index;		// index to IP pool
 	uint32_t unique_id;		// unique session id
@@ -177,19 +179,18 @@ typedef struct
 	uint32_t total_cout;		// This counter is never reset while a session is open
 	uint16_t throttle_in;		// upstream throttle rate (kbps)
 	uint16_t throttle_out;		// downstream throttle rate
+	uint8_t filter_in;		// input filter index (to ip_filters[N-1]; 0 if none)
+	uint8_t filter_out;		// output filter index
+	uint16_t mru;			// maximum receive unit
 	clockt opened;			// when started
 	clockt die;			// being closed, when to finally free
 	time_t last_packet;		// Last packet from the user (used for idle timeouts)
 	in_addr_t dns1, dns2;		// DNS servers
 	routet route[MAXROUTE];		// static routes
-	uint16_t mru;			// maximum receive unit
 	uint16_t tbf_in;		// filter bucket for throttling in from the user.
 	uint16_t tbf_out;		// filter bucket for throttling out to the user.
-	uint8_t l2tp_flags;		// various bit flags from the ICCN on the l2tp tunnel.
-	uint32_t flags;			// Various session flags.
-	uint8_t walled_garden;		// is this session gardened?
-	char random_vector[MAXTEL];
 	int random_vector_length;
+	char random_vector[MAXTEL];
 	char user[MAXUSER];		// user (needed in seesion for radius stop messages)
 	char called[MAXTEL];		// called number
 	char calling[MAXTEL];		// calling number
@@ -197,11 +198,10 @@ typedef struct
 	uint32_t rx_connect_speed;
 	in_addr_t snoop_ip;		// Interception destination IP
 	uint16_t snoop_port;		// Interception destination port
-	uint8_t filter_in;		// input filter index (to ip_filters[N-1]; 0 if none)
-	uint8_t filter_out;		// output filter index
-	struct in6_addr ipv6route;	// Static IPv6 route
+	uint8_t walled_garden;		// is this session gardened?
 	uint8_t ipv6prefixlen;		// IPv6 route prefix length
-	char reserved[1];		// Space to expand structure without changing HB_VERSION
+	struct in6_addr ipv6route;	// Static IPv6 route
+	char reserved[24];		// Space to expand structure without changing HB_VERSION
 }
 sessiont;
 
