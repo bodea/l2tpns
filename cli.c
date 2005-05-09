@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.56 2005-05-05 10:02:07 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.57 2005-05-09 08:53:50 bodea Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -149,7 +149,7 @@ void init_cli(char *hostname)
 	cli_register_command(cli, c, "plugins", cmd_show_plugins, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "List all installed plugins");
 	cli_register_command(cli, c, "pool", cmd_show_pool, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Show the IP address allocation pool");
 	cli_register_command(cli, c, "radius", cmd_show_radius, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Show active radius queries");
-	cli_register_command(cli, c, "running-config", cmd_show_run, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Show the currently running configuration");
+	cli_register_command(cli, c, "running-config", cmd_show_run, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Show the currently running configuration");
 	cli_register_command(cli, c, "session", cmd_show_session, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Show a list of sessions or details for a single session");
 	cli_register_command(cli, c, "tbf", cmd_show_tbf, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "List all token bucket filters in use");
 	cli_register_command(cli, c, "throttle", cmd_show_throttle, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "List all throttled sessions and associated TBFs");
