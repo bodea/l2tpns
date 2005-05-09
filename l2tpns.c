@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.99 2005-05-07 13:12:25 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.100 2005-05-09 20:48:00 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -3988,7 +3988,7 @@ static void update_config()
 			// test twice, In case someone works with
 			// a secondary radius server without defining
 			// a primary one, this will work even then.
-			if (i>0 && !config->radiusport[i])
+			if (i > 0 && !config->radiusport[i])
 				config->radiusport[i] = config->radiusport[i-1];
 			if (!config->radiusport[i])
 				config->radiusport[i] = RADPORT;
@@ -4002,7 +4002,7 @@ static void update_config()
 	// parse radius_authtypes_s
 	config->radius_authtypes = config->radius_authprefer = 0;
 	p = config->radius_authtypes_s;
-	while (*p)
+	while (p && *p)
 	{
 		char *s = strpbrk(p, " \t,");
 		int type = 0;
@@ -4027,6 +4027,8 @@ static void update_config()
 		config->radius_authtypes |= type;
 		if (!config->radius_authprefer)
 			config->radius_authprefer = type;
+
+		p = s;
 	}
 
 	if (!config->radius_authtypes)
