@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.53 2005-05-08 06:28:12 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.54 2005-05-10 00:56:12 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -1307,6 +1307,8 @@ void sendlcp(tunnelidt t, sessionidt s, int authtype)
 	l = q;
 	*l++ = ConfigReq;
 	*l++ = (time_now % 255) + 1; // ID
+
+	l += 2; //Save space for length
 
 	*l++ = 1; *l++ = 4; // Maximum-Receive-Unit (length 4)
 	*(uint16_t *) l = htons(session[s].mru); l += 2;
