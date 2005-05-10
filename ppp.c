@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.54 2005-05-10 00:56:12 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.55 2005-05-10 09:35:27 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -405,7 +405,7 @@ void processlcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 					*q++ = 6;
 					memset(q, 0, 4); // asyncmap 0
 					q += 4;
-					*((uint16_t *) (response + 2)) = htons(q - response); // LCP header length
+					*((uint16_t *) (response + 2)) = htons(l = q - response); // LCP header length
 					break;
 
 				case 3: // Authentication-Protocol
@@ -466,7 +466,7 @@ void processlcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 							q = a;
 						}
 
-						*((uint16_t *) (response + 2)) = htons(q - response); // LCP header length
+						*((uint16_t *) (response + 2)) = htons(l = q - response); // LCP header length
 						break;
 					}
 					break;
@@ -498,7 +498,7 @@ void processlcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 
 					memcpy(q, o, length);
 					q += length;
-					*((uint16_t *) (response + 2)) = htons(q - response); // LCP header length
+					*((uint16_t *) (response + 2)) = htons(l = q - response); // LCP header length
 			}
 			x -= length;
 			o += length;
@@ -513,7 +513,7 @@ void processlcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 		}
 
 		LOG(3, s, t, "Sending %s\n", ppp_lcp_type(*response));
-		tunnelsend(b, l + (q - b), t);
+		tunnelsend(b, l + response - b, t);
 
 		if (!(session[s].flags & SF_LCP_ACKED))
 			sendlcp(t, s, config->radius_authprefer);
