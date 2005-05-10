@@ -2,7 +2,7 @@
 .de Id
 .ds Dt \\$4 \\$5
 ..
-.Id $Id: startup-config.5,v 1.5 2005-02-09 00:16:21 bodea Exp $
+.Id $Id: startup-config.5,v 1.6 2005-05-10 08:11:29 bodea Exp $
 .TH STARTUP-CONFIG 5 "\*(Dt" L2TPNS "File Formats and Conventions"
 .SH NAME
 startup\-config \- configuration file for l2tpns
@@ -51,6 +51,11 @@ is any one of the syslog logging facilities, such as
 If set, the process id will be written to the specified file.  The
 value must be an absolute path.
 .TP
+.B random_device
+Path to random data source (default
+.BR /dev/urandom ).
+Use "" to use the rand() library function.
+.TP
 .B l2tp_secret
 The secret used by
 .B l2tpns
@@ -82,8 +87,21 @@ and a
 .B Stop
 record when the session is closed.
 .TP
+.B radius_interim
+If
+.B radius_accounting
+is on, defines the interval between sending of RADIUS interim
+accounting records (in seconds).  Note: checking of this interval
+occurs no more frequently than
+.B cleanup_interval
+seconds (see below).
+.TP
 .B radius_secret
 Secret to be used in RADIUS packets.
+.TP
+.B radius_authtypes
+A comma separated list of supported RADIUS authentication methods
+("pap" or "chap"), in order of preference (default "pap").
 .TP
 .B bind_address
 When the tun interface is created, it is assigned the address
@@ -97,7 +115,7 @@ Address to send to clients as the default gateway.
 .B send_garp
 Determines whether or not to send a gratuitous ARP for the
 .B bind_address
-when the server is ready to handle traffic (default:  true).  This
+when the server is ready to handle traffic (default: true).  This
 setting is ignored if BGP is configured.
 .TP
 .B throttle_speed
@@ -119,8 +137,7 @@ doesn't work properly.
 If set to true, then the current bandwidth utilization will be logged
 every second.  Even if this is disabled, you can see this information
 by running the
-.B
-uptime
+.B uptime
 command on the CLI.
 .TP
 .B cleanup_interval
@@ -171,6 +188,9 @@ Interval in tenths of a second between cluster heartbeat/pings.
 Cluster heartbeat timeout in tenths of a second.  A new master will be
 elected when this interval has been passed without seeing a heartbeat
 from the master.
+.TP
+.B ipv6_prefix
+TODO: Noodles
 .RE
 .SS BGP ROUTING
 The routing configuration section is entered by the command
