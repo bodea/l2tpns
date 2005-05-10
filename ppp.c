@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.58 2005-05-10 09:57:50 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.59 2005-05-10 10:54:34 jonmcd Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -605,6 +605,8 @@ void processlcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 				    	LOG(2, s, t, "    Remote NAKed LCP type %u?\n", type);
 					break;
 			}
+			x -= length;
+			o += length;
 		}
 
 		if (!authtype)
@@ -1327,7 +1329,7 @@ void sendlcp(tunnelidt t, sessionidt s, int authtype)
 		return;
 
 	LOG(4, s, t, "Sending LCP ConfigReq for %s\n",
-	    config->radius_authprefer == AUTHCHAP ? "CHAP" : "PAP");
+	    authtype == AUTHCHAP ? "CHAP" : "PAP");
 
 	if (!session[s].mru)
 		session[s].mru = DEFAULT_MRU;
