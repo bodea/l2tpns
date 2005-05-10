@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.56 2005-05-10 09:47:23 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.57 2005-05-10 09:57:19 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -355,7 +355,34 @@ void processlcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 
 	if (*p == ConfigAck)
 	{
-		LOG(3, s, t, "LCP: Discarding ConfigAck\n");
+		int x = l - 4;
+		uint8_t *o = (p + 4);
+		int authtype = 0;
+
+		LOG(3, s, t, "LCP: ConfigAck (%d bytes)...\n", l);
+		if (config->debug > 3) dumplcp(p, l);
+
+		while (x > 2)
+		{
+			int type = o[0];
+			int length = o[1];
+
+			if (length == 0 || type == 0 || x < length) break;
+			switch (type)
+			{
+				case 3: // Authentication-Protocol
+					{
+						int proto = ntohs(*(uint16_t *)(o + 2));
+						if (proto == PPPCHAP && *(o + 4) == 5)
+							sendchap(t, s);
+					}
+
+					break;
+			}
+			x -= length;
+			o += length;
+		}
+
 		session[s].flags |= SF_LCP_ACKED;
 	}
 	else if (*p == ConfigReq)
