@@ -1,4 +1,4 @@
-* Mon May 9 2005 Brendan O'Dea <bod@optusnet.com.au> 2.1.0
+* Tue May 10 2005 Brendan O'Dea <bod@optusnet.com.au> 2.1.0
 - Add IPv6 support from Jonathan McDowell.
 - Add CHAP support from Jordan Hrycaj.
 - Add interim accounting support from Vladislav Bjelic.
@@ -60,6 +60,7 @@
   master kills all slaves once restarted).
 - Make "show running-config" a privileged command (contains clear text
   shared secrets).
+- Add sessionctl plugin to provide drop/kill via nsctl.
 
 * Fri Dec 17 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.13
 - Better cluster master collision resolution: keep a counter of state

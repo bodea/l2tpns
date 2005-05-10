@@ -29,8 +29,8 @@ OBJS = arp.o cli.o cluster.o constants.o control.o icmp.o l2tpns.o \
     ll.o md5.o ppp.o radius.o tbf.o util.o
 
 PROGRAMS = l2tpns nsctl
-PLUGINS = garden.so throttlectl.so autothrottle.so snoopctl.so \
-    autosnoop.so stripdomain.so setrxspeed.so
+PLUGINS = autosnoop.so autothrottle.so garden.so sessionctl.so \
+    setrxspeed.so snoopctl.so stripdomain.so throttlectl.so
 
 TESTS = generateload bounce 
 
@@ -127,10 +127,11 @@ radius.o: radius.c md5.h constants.h l2tpns.h plugin.h util.h
 tbf.o: tbf.c l2tpns.h util.h tbf.h
 util.o: util.c l2tpns.h bgp.h
 bgp.o: bgp.c l2tpns.h bgp.h util.h
-garden.so: garden.c l2tpns.h plugin.h control.h
-throttlectl.so: throttlectl.c l2tpns.h plugin.h control.h
-autothrottle.so: autothrottle.c l2tpns.h plugin.h
-snoopctl.so: snoopctl.c l2tpns.h plugin.h control.h
 autosnoop.so: autosnoop.c l2tpns.h plugin.h
-stripdomain.so: stripdomain.c l2tpns.h plugin.h
+autothrottle.so: autothrottle.c l2tpns.h plugin.h
+garden.so: garden.c l2tpns.h plugin.h control.h
+sessionctl.so: sessionctl.c l2tpns.h plugin.h control.h
 setrxspeed.so: setrxspeed.c l2tpns.h plugin.h
+snoopctl.so: snoopctl.c l2tpns.h plugin.h control.h
+stripdomain.so: stripdomain.c l2tpns.h plugin.h
+throttlectl.so: throttlectl.c l2tpns.h plugin.h control.h
