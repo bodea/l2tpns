@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.59 2005-05-10 10:54:34 jonmcd Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.60 2005-05-10 11:23:33 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -550,7 +550,7 @@ void processlcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 	{
 		int x = l - 4;
 		uint8_t *o = (p + 4);
-		int authtype = 0;
+		int authtype = -1;
 
 		LOG(3, s, t, "LCP: ConfigNak (%d bytes)...\n", l);
 		if (config->debug > 3) dumplcp(p, l);
@@ -569,7 +569,7 @@ void processlcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 					break;
 
 				case 3: // Authentication-Protocol
-					if (authtype)
+					if (authtype > 0)
 						break;
 
 					{
@@ -593,12 +593,6 @@ void processlcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 						}
 					}
 
-					if (!authtype)
-					{
-						sessionshutdown(s, "Unsupported authentication.", 3, 0);
-						return;
-					}
-
 					break;
 
 				default:
@@ -610,6 +604,12 @@ void processlcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 		}
 
 		if (!authtype)
+		{
+			sessionshutdown(s, "Unsupported authentication.", 3, 0);
+			return;
+		}
+
+		if (authtype == -1)
 			authtype = config->radius_authprefer;
 
 		sendlcp(t, s, authtype);
