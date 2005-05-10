@@ -41,8 +41,6 @@ DEFINES += -DRINGBUFFER
 DEFINES += -DBGP
 OBJS += bgp.o
 
-doit = echo $(1); $(1)
-
 all: programs plugins tests
 programs: $(PROGRAMS)
 plugins: $(PLUGINS)
@@ -95,18 +93,21 @@ install: all
 	    	cmp -s etc/$$config.default $(DESTDIR)$(etcdir)/$$config && continue; \
 		suffix=.default; \
 	    fi; \
-	    $(call doit,$(INSTALL) -m $$mode etc/$$config.default $(DESTDIR)$(etcdir)/$$config$$suffix); \
+	    echo $(INSTALL) -m $$mode etc/$$config.default $(DESTDIR)$(etcdir)/$$config$$suffix; \
+	    $(INSTALL) -m $$mode etc/$$config.default $(DESTDIR)$(etcdir)/$$config$$suffix; \
 	done
 
 	@for plugin in $(PLUGINS); \
 	do \
-		$(call doit,$(INSTALL) -m 0755 $$plugin $(DESTDIR)$(libdir)/$$plugin); \
+		echo $(INSTALL) -m 0755 $$plugin $(DESTDIR)$(libdir)/$$plugin; \
+		$(INSTALL) -m 0755 $$plugin $(DESTDIR)$(libdir)/$$plugin; \
 	done
 
 	@if [ -z $(DESTDIR) ] && [ ! -e /dev/net/tun ]; \
 	then \
 		mkdir /dev/net; \
-		$(call doit,mknod /dev/net/tun c 10 200); \
+		echo mknod /dev/net/tun c 10 200; \
+		mknod /dev/net/tun c 10 200; \
 	fi
 
 .PHONY: all clean depend install
