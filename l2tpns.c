@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.101 2005-05-10 08:48:00 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.102 2005-05-12 04:08:45 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -1323,11 +1323,11 @@ static void controlnull(tunnelidt t)
 }
 
 // add a control message to a tunnel, and send if within window
-static void controladd(controlt * c, tunnelidt t, sessionidt s)
+static void controladd(controlt * c, tunnelidt t, sessionidt far)
 {
 	*(uint16_t *) (c->buf + 2) = htons(c->length); // length
 	*(uint16_t *) (c->buf + 4) = htons(tunnel[t].far); // tunnel
-	*(uint16_t *) (c->buf + 6) = htons(s ? session[s].far : 0); // session
+	*(uint16_t *) (c->buf + 6) = htons(far); // session
 	*(uint16_t *) (c->buf + 8) = htons(tunnel[t].ns); // sequence
 	tunnel[t].ns++;              // advance sequence
 	// link in message in to queue
@@ -1518,7 +1518,7 @@ void sessionshutdown(sessionidt s, char *reason, int result, int error)
 			control16(c, 1, result, 1);
 
 		control16(c, 14, s, 1);   // assigned session (our end)
-		controladd(c, session[s].tunnel, s); // send the message
+		controladd(c, session[s].tunnel, session[s].far); // send the message
 	}
 
 	if (!session[s].die)
@@ -2277,7 +2277,7 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 						controls(c, 7, tunnel[t].hostname, 1); // host name (TBA)
 						if (chapresponse) controlb(c, 13, chapresponse, 16, 1); // Challenge response
 						control16(c, 9, t, 1); // assigned tunnel
-						controladd(c, t, s); // send the resply
+						controladd(c, t, 0); // send the resply
 					}
 					tunnel[t].state = TUNNELOPENING;
 					break;
@@ -2305,16 +2305,11 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 					// TBA
 					break;
 				case 10:      // ICRQ
-					if (!sessionfree)
-					{
-						STAT(session_overflow);
-						LOG(1, 0, t, "No free sessions\n");
-						return;
-					}
-					else
+					controlt *c;
+
+					if (sessionfree)
 					{
 						uint16_t r;
-						controlt *c;
 
 						s = sessionfree;
 						sessionfree = session[s].next;
@@ -2324,28 +2319,38 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 							config->cluster_highest_sessionid = s;
 
 						// make a RADIUS session
-						if (!(r = radiusnew(s)))
+						if ((r = radiusnew(s)))
 						{
-							LOG(1, s, t, "No free RADIUS sessions for ICRQ\n");
-							sessionclear(s);
-							return;
+							c = controlnew(11); // sending ICRP
+							session[s].opened = time_now;
+							session[s].tunnel = t;
+							session[s].far = asession;
+							session[s].last_packet = time_now;
+							LOG(3, s, t, "New session (%d/%d)\n", tunnel[t].far, session[s].far);
+							control16(c, 14, s, 1); // assigned session
+							controladd(c, t, asession); // send the reply
+
+							strncpy(radius[r].calling, calling, sizeof(radius[r].calling) - 1);
+							strncpy(session[s].called, called, sizeof(session[s].called) - 1);
+							strncpy(session[s].calling, calling, sizeof(session[s].calling) - 1);
+							STAT(session_created);
+							break;
 						}
 
-						c = controlnew(11); // sending ICRP
-						session[s].opened = time_now;
-						session[s].tunnel = t;
-						session[s].far = asession;
-						session[s].last_packet = time_now;
-						LOG(3, s, t, "New session (%d/%d)\n", tunnel[t].far, session[s].far);
-						control16(c, 14, s, 1); // assigned session
-						controladd(c, t, s); // send the reply
 
-						strncpy(radius[r].calling, calling, sizeof(radius[r].calling) - 1);
-						strncpy(session[s].called, called, sizeof(session[s].called) - 1);
-						strncpy(session[s].calling, calling, sizeof(session[s].calling) - 1);
-						STAT(session_created);
+						LOG(1, s, t, "No free RADIUS sessions for ICRQ\n");
+						sessionclear(s);
 					}
-					break;
+					else
+					{
+						STAT(session_overflow);
+						LOG(1, 0, t, "No free sessions\n");
+					}
+
+					c = controlnew(14); // CDN
+					control16(c, 1, 4, 1); // temporary lack of resources
+					controladd(c, session[s].tunnel, asession); // send the message
+					return;
 				case 11:      // ICRP
 					// TBA
 					break;
