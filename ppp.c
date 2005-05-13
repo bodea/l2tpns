@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.60 2005-05-10 11:23:33 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.61 2005-05-13 09:23:00 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -150,7 +150,6 @@ void processchap(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 	{
 		LOG(1, s, t, "Unexpected CHAP message\n");
 		STAT(tunnel_rx_errors);
-		sessionshutdown(s, "Unexpected CHAP message.", 3, 0);
 		return;
 	}
 
