@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.102 2005-05-12 04:08:45 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.103 2005-05-13 01:29:40 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -2305,8 +2305,6 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 					// TBA
 					break;
 				case 10:      // ICRQ
-					controlt *c;
-
 					if (sessionfree)
 					{
 						uint16_t r;
@@ -2321,7 +2319,7 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 						// make a RADIUS session
 						if ((r = radiusnew(s)))
 						{
-							c = controlnew(11); // sending ICRP
+							controlt *c = controlnew(11); // sending ICRP
 							session[s].opened = time_now;
 							session[s].tunnel = t;
 							session[s].far = asession;
@@ -2347,9 +2345,11 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 						LOG(1, 0, t, "No free sessions\n");
 					}
 
-					c = controlnew(14); // CDN
-					control16(c, 1, 4, 1); // temporary lack of resources
-					controladd(c, session[s].tunnel, asession); // send the message
+					{
+						controlt *c = controlnew(14); // CDN
+						control16(c, 1, 4, 1); // temporary lack of resources
+						controladd(c, session[s].tunnel, asession); // send the message
+					}
 					return;
 				case 11:      // ICRP
 					// TBA
@@ -2361,8 +2361,11 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 					LOG(3, s, t, "Magic %X Flags %X\n", amagic, aflags);
 					controlnull(t); // ack
 					// proxy authentication type is not supported
-					if (authtype && !(config->radius_authtypes & authtype))
-						sendlcp(t, s, config->radius_authprefer);
+					if (!(config->radius_authtypes & authtype))
+						authtype = config->radius_authprefer;
+
+					// start LCP
+					sendlcp(t, s, authtype);
 					break;
 				case 14:      // CDN
 					controlnull(t); // ack
