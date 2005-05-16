@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.57 2005-05-09 08:53:50 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.58 2005-05-16 06:01:08 bodea Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -1018,6 +1018,7 @@ static int cmd_show_radius(struct cli_def *cli, char *command, char **argv, int 
 		"IPCP",
 		"START",
 		"STOP",
+		"INTRM",
 		"WAIT",
 	};
 
