@@ -4,7 +4,16 @@
 
 /* set up throttling based on RADIUS reply */
 
-char const *cvs_id = "$Id: autothrottle.c,v 1.13 2004-11-30 07:14:45 bodea Exp $";
+/*
+ * lcp:interface-config#1=service-policy input N
+ * lcp:interface-config#2=service-policy output N
+ *
+ * throttle=N
+ * throttle=yes (use throttle_rate from config)
+ * throttle=no
+ */
+
+char const *cvs_id = "$Id: autothrottle.c,v 1.13.2.1 2005-05-16 05:00:50 bodea Exp $";
 
 int plugin_api_version = PLUGIN_API_VERSION;
 struct pluginfuncs *p;
@@ -69,31 +78,33 @@ int plugin_radius_response(struct param_radius_response *data)
 
 	if (!strcmp(data->key, "throttle"))
 	{
-		if (!strcmp(data->value, "yes"))
-		{
-		    	unsigned long *rate = p->getconfig("throttle_speed", UNSIGNED_LONG);
-			if (rate)
-			{
-				if (*rate)
-					p->log(3, p->get_id_by_session(data->s), data->s->tunnel,
-						"         Throttling user to %dkb/s\n", *rate);
-				else
-					p->log(3, p->get_id_by_session(data->s), data->s->tunnel,
-						"         Not throttling user (throttle_speed=0)\n");
+		char *e;
+		int rate;
 
-				data->s->throttle_in = data->s->throttle_out = *rate;
-			}
-			else
-				p->log(1, p->get_id_by_session(data->s), data->s->tunnel,
-					"         Not throttling user (can't get throttle_speed)\n");
-		}
-		else if (!strcmp(data->value, "no"))
+		if ((rate = strtol(data->value, &e, 10)) < 0 || *e)
 		{
+			rate = -1;
+			if (!strcmp(data->value, "yes"))
+			{
+				unsigned long *ts = p->getconfig("throttle_speed", UNSIGNED_LONG);
+				if (ts)
+					rate = *ts;
+			}
+			else if (!strcmp(data->value, "no"))
+				rate = 0;
+		}
+
+		if (rate < 0)
+			return PLUGIN_RET_OK;
+
+		if (rate)
+			p->log(3, p->get_id_by_session(data->s), data->s->tunnel,
+				"         Throttling user to %dkb/s\n", rate);
+		else
 			p->log(3, p->get_id_by_session(data->s), data->s->tunnel,
 				"         Not throttling user\n");
 
-			data->s->throttle_in = data->s->throttle_out = 0;
-		}
+		data->s->throttle_in = data->s->throttle_out = rate;
 	}
 
 	return PLUGIN_RET_OK;
