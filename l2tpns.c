@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.73.2.8 2005-05-07 03:51:21 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.73.2.9 2005-05-16 04:51:42 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -1212,7 +1212,7 @@ void sendipcp(tunnelidt t, sessionidt s)
 	if (!q) return;
 
 	*q = ConfigReq;
-	q[1] = r << RADIUS_SHIFT;                    // ID, dont care, we only send one type of request
+	q[1] = r >> RADIUS_SHIFT;                    // ID, dont care, we only send one type of request
 	*(uint16_t *) (q + 2) = htons(10);
 	q[4] = 3;
 	q[5] = 6;
@@ -3658,7 +3658,7 @@ static void update_config()
 	if (!config->numradiusservers)
 		LOG(0, 0, 0, "No RADIUS servers defined!\n");
 
-	config->num_radfds = 2 << RADIUS_SHIFT;
+	config->num_radfds = 1 << RADIUS_SHIFT;
 
 	// Update plugins
 	for (i = 0; i < MAXPLUGINS; i++)

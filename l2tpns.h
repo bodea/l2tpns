@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.49.2.7 2005-05-07 03:51:24 bodea Exp $
+// $Id: l2tpns.h,v 1.49.2.8 2005-05-16 04:51:42 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -22,9 +22,9 @@
 #define MAXSESSION	60000		// could be up to 65535
 #define MAXTBFS		6000		// Maximum token bucket filters. Might need up to 2 * session.
 
-#define RADIUS_SHIFT	5
-#define RADIUS_MASK	((unsigned short)(((unsigned short)~0) >> (16 - RADIUS_SHIFT)))
-#define	MAXRADIUS	((unsigned long)(1L << RADIUS_SHIFT) * 255)
+#define RADIUS_SHIFT	6
+#define RADIUS_MASK	((1 << RADIUS_SHIFT) - 1)
+#define MAXRADIUS	((1 << (RADIUS_SHIFT + 8)) - 1)
 
 #define T_UNDEF		(0xffff)	// A tunnel ID that won't ever be used. Mark session as undefined.
 #define T_FREE		(0)		// A tunnel ID that won't ever be used. Mark session as free.
