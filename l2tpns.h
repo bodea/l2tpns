@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.69 2005-05-16 04:51:16 bodea Exp $
+// $Id: l2tpns.h,v 1.70 2005-05-16 05:50:54 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -24,7 +24,7 @@
 
 #define RADIUS_SHIFT	6
 #define RADIUS_MASK	((1 << RADIUS_SHIFT) - 1)
-#define MAXRADIUS	((1 << (RADIUS_SHIFT + 8)) - 1)
+#define MAXRADIUS	(1 << 8 + RADIUS_SHIFT)
 
 #define T_UNDEF		(0xffff)	// A tunnel ID that won't ever be used. Mark session as undefined.
 #define T_FREE		(0)		// A tunnel ID that won't ever be used. Mark session as free.
