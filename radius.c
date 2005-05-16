@@ -1,6 +1,6 @@
 // L2TPNS Radius Stuff
 
-char const *cvs_id_radius = "$Id: radius.c,v 1.30 2005-05-07 08:17:26 bodea Exp $";
+char const *cvs_id_radius = "$Id: radius.c,v 1.31 2005-05-16 04:51:16 bodea Exp $";
 
 #include <time.h>
 #include <stdio.h>
@@ -163,12 +163,12 @@ void radiussend(uint16_t r, uint8_t state)
 	switch (state)
 	{
 		case RADIUSAUTH:
-			b[0] = 1;               // access request
+			b[0] = AccessRequest;               // access request
 			break;
 		case RADIUSSTART:
 		case RADIUSSTOP:
 		case RADIUSINTERIM:
-			b[0] = 4;               // accounting request
+			b[0] = AccountingRequest;               // accounting request
 			break;
 		default:
 			LOG(0, 0, 0, "Unknown radius state %d\n", state);

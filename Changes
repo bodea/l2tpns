@@ -1,4 +1,4 @@
-* Tue May 10 2005 Brendan O'Dea <bod@optusnet.com.au> 2.1.0
+* Mon May 16 2005 Brendan O'Dea <bod@optusnet.com.au> 2.1.0
 - Add IPv6 support from Jonathan McDowell.
 - Add CHAP support from Jordan Hrycaj.
 - Add interim accounting support from Vladislav Bjelic.
@@ -61,6 +61,8 @@
 - Make "show running-config" a privileged command (contains clear text
   shared secrets).
 - Add sessionctl plugin to provide drop/kill via nsctl.
+- Add handling of "throttle=N" RADIUS attributes.
+- Fix RADIUS indexing (should have 16K entries with 64 sockets).
 
 * Fri Dec 17 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.13
 - Better cluster master collision resolution: keep a counter of state
