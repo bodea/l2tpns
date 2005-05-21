@@ -1,3 +1,17 @@
+* Sat May 21 2005 Brendan O'Dea <bod@optusnet.com.au> 2.0.21
+- Cluster changes from Michael, intended to prevent a stray master
+  from trashing a cluster:
+  + Ignore heartbeats from peers claiming to be the master before the
+    timeout on the old master has expired.
+  + A master receiving a stray heartbeat sends a unicast HB back, which
+    should cause the rogue to die due to the tie-breaker code.
+  + Keep probing the master for late heartbeats.
+  + Drop BGP as soon as we become master with peers (TODO: pre-emptively
+    drop routes if the master is late and we are the best candidate).
+  + A slave (presumably a recently restarted master) receiving a
+    LASTSEEN message sends a zero basetime ping (as sent by the master
+    on clean shutdown).
+  
 * Mon May 16 2005 Brendan O'Dea <bod@optusnet.com.au> 2.0.20
 - Add handling of "throttle=N" RADIUS attributes.
 - Fix RADIUS indexing (should have 16K entries with 64 sockets).
@@ -113,7 +127,7 @@
 - Revise BGP config to use "router bgp AS" syntax (requires libcli >= 1.8.2)
 
 * Tue Nov 9 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.5
-- Handle routing properly in lone-master case 
+- Handle routing properly in lone-master case
 - Fix intercepts:  don't double-snoop throttled customers, ensure
   byte/packet counts are only updated once
 - Add a callback to allow plugins to fetch values from the running config

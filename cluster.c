@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.26.2.5 2005-05-02 09:03:27 bodea Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.26.2.6 2005-05-21 13:05:36 bodea Exp $";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -485,14 +485,15 @@ void cluster_check_master(void)
 
 	// If the master is late (missed 2 hearbeats by a second and a
 	// hair) it may be that the switch has dropped us from the
-	// multicast group, try unicasting one probe to the master
+	// multicast group, try unicasting probes to the master
 	// which will hopefully respond with a unicast heartbeat that
 	// will allow us to limp along until the querier next runs.
-	if (TIME > (config->cluster_last_hb + 2 * config->cluster_hb_interval + 11))
+	if (config->cluster_master_address
+	    && TIME > (config->cluster_last_hb + 2 * config->cluster_hb_interval + 11))
 	{
-		if (!probed && config->cluster_master_address)
+		if (!probed || (TIME > (probed + 2 * config->cluster_hb_interval)))
 		{
-			probed = 1;
+			probed = TIME;
 			LOG(1, 0, 0, "Heartbeat from master %.1fs late, probing...\n",
 				0.1 * (TIME - (config->cluster_last_hb + config->cluster_hb_interval)));
 
@@ -621,6 +622,11 @@ void cluster_check_master(void)
 
 	if (!num_peers) // lone master
 		advertise();
+#ifdef BGP
+	else if (bgp_configured)
+		bgp_enable_routing(0);
+#endif /* BGP */
+
 
 	// FIXME. We need to fix up the tunnel control message
 	// queue here! There's a number of other variables we
@@ -896,6 +902,14 @@ static int cluster_catchup_slave(int seq, in_addr_t slave)
 	int diff;
 
 	LOG(1, 0, 0, "Slave %s sent LASTSEEN with seq %d\n", fmtaddr(slave, 0), seq);
+	if (!config->cluster_iam_master) {
+		LOG(1, 0, 0, "Got LASTSEEN but I'm not a master! Sending a null PING.\n");
+			// Send a ping to the stray slave saying that we're a master that's
+			// just shutdown. This should force the slave to listen for the real
+			// master.
+		peer_send_message(slave, C_PING, 0, NULL, 0);
+		return 0;
+	}
 
 	diff = config->cluster_seq_number - seq;	// How many packet do we need to send?
 	if (diff < 0)
@@ -907,9 +921,11 @@ static int cluster_catchup_slave(int seq, in_addr_t slave)
 		return peer_send_message(slave, C_KILL, seq, NULL, 0);// Kill the slave. Nothing else to do.
 	}
 
+	LOG(1, 0, 0, "Sending %d catchup packets to slave %s\n", diff, fmtaddr(slave, 0) );
+
 		// Now resend every packet that it missed, in order.
 	while (seq != config->cluster_seq_number) {
-		s = seq%HB_HISTORY_SIZE;
+		s = seq % HB_HISTORY_SIZE;
 		if (seq != past_hearts[s].seq) {
 			LOG(0, 0, 0, "Tried to re-send heartbeat for %s but %d doesn't match %d! (%d,%d)\n",
 				fmtaddr(slave, 0), seq, past_hearts[s].seq, s, config->cluster_seq_number);
@@ -1174,7 +1190,31 @@ static int cluster_process_heartbeat(uint8_t *data, int size, int more, uint8_t 
 			exit(1);
 		}
 
+			//
+			// Send it a unicast heartbeat to see give it a chance to die.
+			// NOTE: It's actually safe to do seq-number - 1 without checking
+			// for wrap around.
+			//
+		cluster_catchup_slave(config->cluster_seq_number - 1, addr);
+
 		return -1; // Skip it.
+	}
+
+		//
+		// Try and guard against a stray master appearing.
+		//
+		// Ignore heartbeats received from another master before the
+		// timeout (less a smidgen) for the old master has elapsed.
+		//
+		// Note that after a clean failover, the cluster_master_address
+		// is cleared, so this doesn't run. 
+		//
+	if (config->cluster_master_address && addr != config->cluster_master_address
+	    && (config->cluster_last_hb + config->cluster_hb_timeout - 11) > TIME) {
+		    LOG(0, 0, 0, "Ignoring stray heartbeat from %s, current master %s has not yet timed out (last heartbeat %.1f seconds ago).\n",
+			    fmtaddr(addr, 0), fmtaddr(config->cluster_master_address, 1),
+			    0.1 * (TIME - config->cluster_last_hb));
+		    return -1; // ignore
 	}
 
 	if (config->cluster_seq_number == -1)	// Don't have one. Just align to the master...
