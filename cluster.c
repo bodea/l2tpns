@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.26.2.7 2005-05-22 04:15:32 bodea Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.26.2.8 2005-05-22 12:02:41 bodea Exp $";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -384,7 +384,7 @@ void cluster_send_ping(time_t basetime)
 	send_ping(0, basetime);
 }
 
-void peer_send_ping(in_addr_t peer, time_t basetime)
+static void peer_send_ping(in_addr_t peer, time_t basetime)
 {
 	LOG(5, 0, 0, "Sending unicast ping to %s...\n", fmtaddr(peer, 0));
 	send_ping(peer, basetime);
