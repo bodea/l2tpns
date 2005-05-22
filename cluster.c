@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.26.2.6 2005-05-21 13:05:36 bodea Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.26.2.7 2005-05-22 04:15:32 bodea Exp $";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -354,9 +354,9 @@ static void send_heartbeat(int seq, char *data, int size)
 }
 
 //
-// Send an 'i am alive' message to every machine in the cluster.
+// Send an 'i am alive' message to every machine in the cluster, or to a single peer
 //
-void cluster_send_ping(time_t basetime)
+static void send_ping(time_t basetime, in_addr_t peer)
 {
 	char buff[100 + sizeof(pingt)];
 	char *p = buff;
@@ -365,15 +365,29 @@ void cluster_send_ping(time_t basetime)
 	if (config->cluster_iam_master && basetime)		// We're heartbeating so no need to ping.
 		return;
 
-	LOG(5, 0, 0, "Sending cluster ping...\n");
-
 	x.ver = 1;
 	x.addr = config->bind_address;
 	x.undef = config->cluster_undefined_sessions + config->cluster_undefined_tunnels;
 	x.basetime = basetime;
 
 	add_type(&p, C_PING, basetime, (char *) &x, sizeof(x));
-	cluster_send_data(buff, (p-buff) );
+
+	if (peer)
+		peer_send_data(peer, buff, (p-buff));
+	else
+		cluster_send_data(buff, (p-buff) );
+}
+
+void cluster_send_ping(time_t basetime)
+{
+	LOG(5, 0, 0, "Sending cluster ping...\n");
+	send_ping(0, basetime);
+}
+
+void peer_send_ping(in_addr_t peer, time_t basetime)
+{
+	LOG(5, 0, 0, "Sending unicast ping to %s...\n", fmtaddr(peer, 0));
+	send_ping(peer, basetime);
 }
 
 //
@@ -903,11 +917,9 @@ static int cluster_catchup_slave(int seq, in_addr_t slave)
 
 	LOG(1, 0, 0, "Slave %s sent LASTSEEN with seq %d\n", fmtaddr(slave, 0), seq);
 	if (!config->cluster_iam_master) {
-		LOG(1, 0, 0, "Got LASTSEEN but I'm not a master! Sending a null PING.\n");
-			// Send a ping to the stray slave saying that we're a master that's
-			// just shutdown. This should force the slave to listen for the real
-			// master.
-		peer_send_message(slave, C_PING, 0, NULL, 0);
+		LOG(1, 0, 0, "Got LASTSEEN but I'm not a master! Sending a PING.\n");
+			// Send a ping to the slave so they know we're no longer a master
+		peer_send_ping(slave, basetime);
 		return 0;
 	}
 
@@ -978,8 +990,10 @@ static int cluster_add_peer(in_addr_t peer, time_t basetime, pingt *pp, int size
 	}
 
 	// Is this the master shutting down??
-	if (peer == config->cluster_master_address && !basetime) {
-		LOG(3, 0, 0, "Master %s shutting down...\n", fmtaddr(config->cluster_master_address, 0));
+	if (peer == config->cluster_master_address) {
+		LOG(3, 0, 0, "Master %s %s\n", fmtaddr(config->cluster_master_address, 0),
+			basetime ? "has restarted!" : "shutting down...");
+
 		config->cluster_master_address = 0;
 		config->cluster_last_hb = 0; // Force an election.
 		cluster_check_master();

@@ -1,4 +1,4 @@
-* Sat May 21 2005 Brendan O'Dea <bod@optusnet.com.au> 2.0.21
+* Sun May 22 2005 Brendan O'Dea <bod@optusnet.com.au> 2.0.21
 - Cluster changes from Michael, intended to prevent a stray master
   from trashing a cluster:
   + Ignore heartbeats from peers claiming to be the master before the
@@ -8,9 +8,10 @@
   + Keep probing the master for late heartbeats.
   + Drop BGP as soon as we become master with peers (TODO: pre-emptively
     drop routes if the master is late and we are the best candidate).
-  + A slave (presumably a recently restarted master) receiving a
-    LASTSEEN message sends a zero basetime ping (as sent by the master
-    on clean shutdown).
+  + Any PING seen from a master forces an election (rather than just
+    where basetime is zero).
+  + A slave which receives a LASTSEEN message (presumably a restarted
+    master) sends back a ping, indicating that it's not the master.
   
 * Mon May 16 2005 Brendan O'Dea <bod@optusnet.com.au> 2.0.20
 - Add handling of "throttle=N" RADIUS attributes.
