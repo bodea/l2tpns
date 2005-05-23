@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.26.2.8 2005-05-22 12:02:41 bodea Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.26.2.9 2005-05-23 12:48:17 bodea Exp $";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -354,9 +354,9 @@ static void send_heartbeat(int seq, char *data, int size)
 }
 
 //
-// Send an 'i am alive' message to every machine in the cluster, or to a single peer
+// Send an 'i am alive' message to every machine in the cluster.
 //
-static void send_ping(time_t basetime, in_addr_t peer)
+void cluster_send_ping(time_t basetime)
 {
 	char buff[100 + sizeof(pingt)];
 	char *p = buff;
@@ -365,29 +365,15 @@ static void send_ping(time_t basetime, in_addr_t peer)
 	if (config->cluster_iam_master && basetime)		// We're heartbeating so no need to ping.
 		return;
 
+	LOG(5, 0, 0, "Sending cluster ping...\n");
+
 	x.ver = 1;
 	x.addr = config->bind_address;
 	x.undef = config->cluster_undefined_sessions + config->cluster_undefined_tunnels;
 	x.basetime = basetime;
 
 	add_type(&p, C_PING, basetime, (char *) &x, sizeof(x));
-
-	if (peer)
-		peer_send_data(peer, buff, (p-buff));
-	else
-		cluster_send_data(buff, (p-buff) );
-}
-
-void cluster_send_ping(time_t basetime)
-{
-	LOG(5, 0, 0, "Sending cluster ping...\n");
-	send_ping(0, basetime);
-}
-
-static void peer_send_ping(in_addr_t peer, time_t basetime)
-{
-	LOG(5, 0, 0, "Sending unicast ping to %s...\n", fmtaddr(peer, 0));
-	send_ping(peer, basetime);
+	cluster_send_data(buff, (p-buff) );
 }
 
 //
@@ -917,9 +903,10 @@ static int cluster_catchup_slave(int seq, in_addr_t slave)
 
 	LOG(1, 0, 0, "Slave %s sent LASTSEEN with seq %d\n", fmtaddr(slave, 0), seq);
 	if (!config->cluster_iam_master) {
-		LOG(1, 0, 0, "Got LASTSEEN but I'm not a master! Sending a PING.\n");
-			// Send a ping to the slave so they know we're no longer a master
-		peer_send_ping(slave, basetime);
+		LOG(1, 0, 0, "Got LASTSEEN but I'm not a master! Redirecting it to %s.\n",
+			fmtaddr(config->cluster_master_address, 0));
+
+		peer_send_message(slave, C_MASTER, config->cluster_master_address, NULL, 0);
 		return 0;
 	}
 
@@ -1032,6 +1019,20 @@ static int cluster_add_peer(in_addr_t peer, time_t basetime, pingt *pp, int size
 	}
 
 	return 1;
+}
+
+// A slave responds with C_MASTER when it gets a message which should have gone to a master.
+static int cluster_set_master(in_addr_t peer, in_addr_t master)
+{
+	if (config->cluster_iam_master)	// Sanity...
+		return 0;
+
+	LOG(3, 0, 0, "Peer %s set the master to %s...\n", fmtaddr(peer, 0),
+		fmtaddr(master, 1));
+
+	config->cluster_master_address = master;
+	cluster_check_master();
+	return 0;
 }
 
 /* Handle the slave updating the byte counters for the master. */
@@ -1408,10 +1409,13 @@ int processcluster(char *data, int size, in_addr_t addr)
 	s -= sizeof(uint32_t);
 
 	switch (type) {
-	case C_PING:	// Update the peers table.
+	case C_PING: // Update the peers table.
 		return cluster_add_peer(addr, more, (pingt *) p, s);
 
-	case C_LASTSEEN:	// Catch up a slave (slave missed a packet).
+	case C_MASTER: // Our master is wrong
+	    	return cluster_set_master(addr, more);
+
+	case C_LASTSEEN: // Catch up a slave (slave missed a packet).
 		return cluster_catchup_slave(more, addr);
 
 	case C_FORWARD: { // Forwarded control packet. pass off to processudp.
@@ -1452,6 +1456,11 @@ int processcluster(char *data, int size, in_addr_t addr)
 		return 0;
 
 	case C_BYTES:
+		if (!config->cluster_iam_master) {
+			LOG(0, 0, 0, "I'm not the master, but I got a C_BYTES from %s?\n", fmtaddr(addr, 0));
+			return -1;
+		}
+
 		return cluster_handle_bytes(p, s);
 
 	case C_KILL:	// The master asked us to die!? (usually because we're too out of date).
