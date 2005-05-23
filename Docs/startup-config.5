@@ -2,7 +2,7 @@
 .de Id
 .ds Dt \\$4 \\$5
 ..
-.Id $Id: startup-config.5,v 1.3.2.1 2005-01-10 07:08:36 bodea Exp $
+.Id $Id: startup-config.5,v 1.3.2.2 2005-05-23 13:48:30 bodea Exp $
 .TH STARTUP-CONFIG 5 "\*(Dt" L2TPNS "File Formats and Conventions"
 .SH NAME
 startup\-config \- configuration file for l2tpns
@@ -179,6 +179,10 @@ Interval in tenths of a second between cluster heartbeat/pings.
 Cluster heartbeat timeout in tenths of a second.  A new master will be
 elected when this interval has been passed without seeing a heartbeat
 from the master.
+.TP
+.B cluster_master_min_adv
+Determines the minumum number of up to date slaves required before the
+master will drop routes (default: 1).
 .RE
 .SS BGP ROUTING
 The routing configuration section is entered by the command

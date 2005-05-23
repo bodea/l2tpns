@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.26.2.9 2005-05-23 12:48:17 bodea Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.26.2.10 2005-05-23 13:48:29 bodea Exp $";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -192,7 +192,7 @@ static void add_type(char **p, int type, int more, char *data, int size)
 }
 
 // advertise our presence via BGP or gratuitous ARP
-static void advertise(void)
+static void advertise_routes(void)
 {
 #ifdef BGP
 	if (bgp_configured)
@@ -201,6 +201,15 @@ static void advertise(void)
 #endif /* BGP */
 		if (config->send_garp)
 			send_garp(config->bind_address);	// Start taking traffic.
+}
+
+// withdraw our routes (BGP only)
+static void withdraw_routes(void)
+{
+#ifdef BGP
+	if (bgp_configured)
+		bgp_enable_routing(0);
+#endif /* BGP */
 }
 
 static void cluster_uptodate(void)
@@ -214,7 +223,7 @@ static void cluster_uptodate(void)
 	config->cluster_iam_uptodate = 1;
 
 	LOG(0, 0, 0, "Now uptodate with master.\n");
-	advertise();
+	advertise_routes();
 }
 
 //
@@ -456,17 +465,22 @@ void cluster_check_slaves(void)
 			continue;	// Shutdown peer! Skip them.
 
 		if (peers[i].uptodate)
-			have_peers = 1;
-
-		if (!peers[i].uptodate)
+			have_peers++;
+		else
 			config->cluster_iam_uptodate = 0; // Start fast heartbeats
 	}
 
-#ifdef BGP
-	// in a cluster, withdraw/add routes when we get a peer/lose all peers
-	if (bgp_configured && have_peers != had_peers)
-		bgp_enable_routing(!have_peers);
-#endif /* BGP */
+	// in a cluster, withdraw/add routes when we get a peer/lose peers
+	if (have_peers != had_peers)
+	{
+		if (had_peers < config->cluster_master_min_adv &&
+		    have_peers >= config->cluster_master_min_adv)
+			withdraw_routes();
+
+		else if (had_peers >= config->cluster_master_min_adv &&
+		    have_peers < config->cluster_master_min_adv)
+			advertise_routes();
+	}
 }
 
 //
@@ -479,6 +493,7 @@ void cluster_check_master(void)
 	int last_free = 0;
 	clockt t = TIME;
 	static int probed = 0;
+	int have_peers;
 
 	if (config->cluster_iam_master)
 		return;		// Only runs on the slaves...
@@ -511,7 +526,7 @@ void cluster_check_master(void)
 
 	LOG(0, 0, 0, "Master timed out! Holding election...\n");
 
-	for (i = 0; i < num_peers; i++)
+	for (i = have_peers = 0; i < num_peers; i++)
 	{
 		if ((peers[i].timestamp + config->cluster_hb_timeout) < t)
 			continue;	// Stale peer! Skip them.
@@ -529,6 +544,9 @@ void cluster_check_master(void)
 			LOG(1, 0, 0, "Expecting %s to become master\n", fmtaddr(peers[i].peer, 0));
 			return;		// They'll win the election. Wait for them to come up.
 		}
+
+		if (peers[i].uptodate)
+			have_peers++;
 	}
 
 		// Wow. it's been ages since I last heard a heartbeat
@@ -539,6 +557,11 @@ void cluster_check_master(void)
 	config->cluster_master_address = 0;
 
 	LOG(0, 0, 0, "I am declaring myself the master!\n");
+
+	if (have_peers < config->cluster_master_min_adv)
+		advertise_routes();
+	else
+		withdraw_routes();
 
 	if (config->cluster_seq_number == -1)
 		config->cluster_seq_number = 0;
@@ -619,14 +642,6 @@ void cluster_check_master(void)
 	config->cluster_undefined_sessions = 0;
 	config->cluster_undefined_tunnels = 0;
 	config->cluster_iam_uptodate = 1; // assume all peers are up-to-date
-
-	if (!num_peers) // lone master
-		advertise();
-#ifdef BGP
-	else if (bgp_configured)
-		bgp_enable_routing(0);
-#endif /* BGP */
-
 
 	// FIXME. We need to fix up the tunnel control message
 	// queue here! There's a number of other variables we
