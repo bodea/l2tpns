@@ -56,8 +56,6 @@
   is read.
 - Fix leak in session freelist when initial RADIUS session allocation
   fails.
-- Don't process C_LASTSEEN unless we're a master (otherwise a crashed
-  master kills all slaves once restarted).
 - Make "show running-config" a privileged command (contains clear text
   shared secrets).
 - Add sessionctl plugin to provide drop/kill via nsctl.

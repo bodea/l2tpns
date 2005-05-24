@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.37 2005-05-08 08:00:49 bodea Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.38 2005-05-24 07:45:13 bodea Exp $";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -1491,11 +1491,6 @@ int processcluster(char *data, int size, in_addr_t addr)
 		return cluster_add_peer(addr, more, (pingt *) p, s);
 
 	case C_LASTSEEN:	// Catch up a slave (slave missed a packet).
-		if (!config->cluster_iam_master) { // huh?
-			LOG(0, 0, 0, "I'm not the master, but I got a C_LASTSEEN from %s?\n", fmtaddr(addr, 0));
-			return -1;
-		}
-
 		return cluster_catchup_slave(more, addr);
 
 	case C_FORWARD: { // Forwarded control packet. pass off to processudp.
