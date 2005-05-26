@@ -1,4 +1,4 @@
-* Mon May 16 2005 Brendan O'Dea <bod@optusnet.com.au> 2.1.0
+* Thu May 26 2005 Brendan O'Dea <bod@optusnet.com.au> 2.1.0
 - Add IPv6 support from Jonathan McDowell.
 - Add CHAP support from Jordan Hrycaj.
 - Add interim accounting support from Vladislav Bjelic.
@@ -61,6 +61,22 @@
 - Add sessionctl plugin to provide drop/kill via nsctl.
 - Add handling of "throttle=N" RADIUS attributes.
 - Fix RADIUS indexing (should have 16K entries with 64 sockets).
+- Cluster changes from Michael, intended to prevent a stray master
+  from trashing a cluster:
+  + Ignore heartbeats from peers claiming to be the master before the
+    timeout on the old master has expired.
+  + A master receiving a stray heartbeat sends a unicast HB back, which
+    should cause the rogue to die due to the tie-breaker code.
+  + Keep probing the master for late heartbeats.
+  + Drop BGP as soon as we become master with the minumum required peers.
+  + Any PING seen from a master forces an election (rather than just
+    where basetime is zero).
+  + A slave which receives a LASTSEEN message (presumably a restarted
+    master) sends back new message type, C_MASTER which indicates the
+    address of the current master.
+- New config option: cluster_master_min_adv which determines the minimum
+  number of up to date slaves required before the master will drop
+  routes.
 
 * Fri Dec 17 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.13
 - Better cluster master collision resolution: keep a counter of state

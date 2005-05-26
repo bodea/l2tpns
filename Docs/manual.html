@@ -324,6 +324,11 @@ Cluster heartbeat timeout in tenths of a second.  A new master will be
 elected when this interval has been passed without seeing a heartbeat
 from the master.
 </LI>
+
+<LI><B>cluster_master_min_adv</B> (int)<BR>
+Determines the minumum number of up to date slaves required before the
+master will drop routes (default: 1).
+</LI>
 </UL>
 
 <P>BGP routing configuration is entered by the command:

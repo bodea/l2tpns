@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.38 2005-05-24 07:45:13 bodea Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.39 2005-05-26 12:17:30 bodea Exp $";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -193,7 +193,7 @@ static void add_type(char **p, int type, int more, char *data, int size)
 }
 
 // advertise our presence via BGP or gratuitous ARP
-static void advertise(void)
+static void advertise_routes(void)
 {
 #ifdef BGP
 	if (bgp_configured)
@@ -202,6 +202,15 @@ static void advertise(void)
 #endif /* BGP */
 		if (config->send_garp)
 			send_garp(config->bind_address);	// Start taking traffic.
+}
+
+// withdraw our routes (BGP only)
+static void withdraw_routes(void)
+{
+#ifdef BGP
+	if (bgp_configured)
+		bgp_enable_routing(0);
+#endif /* BGP */
 }
 
 static void cluster_uptodate(void)
@@ -215,7 +224,7 @@ static void cluster_uptodate(void)
 	config->cluster_iam_uptodate = 1;
 
 	LOG(0, 0, 0, "Now uptodate with master.\n");
-	advertise();
+	advertise_routes();
 }
 
 //
@@ -457,17 +466,22 @@ void cluster_check_slaves(void)
 			continue;	// Shutdown peer! Skip them.
 
 		if (peers[i].uptodate)
-			have_peers = 1;
-
-		if (!peers[i].uptodate)
+			have_peers++;
+		else
 			config->cluster_iam_uptodate = 0; // Start fast heartbeats
 	}
 
-#ifdef BGP
-	// in a cluster, withdraw/add routes when we get a peer/lose all peers
-	if (bgp_configured && have_peers != had_peers)
-		bgp_enable_routing(!have_peers);
-#endif /* BGP */
+	// in a cluster, withdraw/add routes when we get a peer/lose peers
+	if (have_peers != had_peers)
+	{
+		if (had_peers < config->cluster_master_min_adv &&
+		    have_peers >= config->cluster_master_min_adv)
+			withdraw_routes();
+
+		else if (had_peers >= config->cluster_master_min_adv &&
+		    have_peers < config->cluster_master_min_adv)
+			advertise_routes();
+	}
 }
 
 //
@@ -480,20 +494,22 @@ void cluster_check_master(void)
 	int last_free = 0;
 	clockt t = TIME;
 	static int probed = 0;
+	int have_peers;
 
 	if (config->cluster_iam_master)
 		return;		// Only runs on the slaves...
 
 	// If the master is late (missed 2 hearbeats by a second and a
 	// hair) it may be that the switch has dropped us from the
-	// multicast group, try unicasting one probe to the master
+	// multicast group, try unicasting probes to the master
 	// which will hopefully respond with a unicast heartbeat that
 	// will allow us to limp along until the querier next runs.
-	if (TIME > (config->cluster_last_hb + 2 * config->cluster_hb_interval + 11))
+	if (config->cluster_master_address
+	    && TIME > (config->cluster_last_hb + 2 * config->cluster_hb_interval + 11))
 	{
-		if (!probed && config->cluster_master_address)
+		if (!probed || (TIME > (probed + 2 * config->cluster_hb_interval)))
 		{
-			probed = 1;
+			probed = TIME;
 			LOG(1, 0, 0, "Heartbeat from master %.1fs late, probing...\n",
 				0.1 * (TIME - (config->cluster_last_hb + config->cluster_hb_interval)));
 
@@ -511,7 +527,7 @@ void cluster_check_master(void)
 
 	LOG(0, 0, 0, "Master timed out! Holding election...\n");
 
-	for (i = 0; i < num_peers; i++)
+	for (i = have_peers = 0; i < num_peers; i++)
 	{
 		if ((peers[i].timestamp + config->cluster_hb_timeout) < t)
 			continue;	// Stale peer! Skip them.
@@ -529,6 +545,9 @@ void cluster_check_master(void)
 			LOG(1, 0, 0, "Expecting %s to become master\n", fmtaddr(peers[i].peer, 0));
 			return;		// They'll win the election. Wait for them to come up.
 		}
+
+		if (peers[i].uptodate)
+			have_peers++;
 	}
 
 		// Wow. it's been ages since I last heard a heartbeat
@@ -539,6 +558,11 @@ void cluster_check_master(void)
 	config->cluster_master_address = 0;
 
 	LOG(0, 0, 0, "I am declaring myself the master!\n");
+
+	if (have_peers < config->cluster_master_min_adv)
+		advertise_routes();
+	else
+		withdraw_routes();
 
 	if (config->cluster_seq_number == -1)
 		config->cluster_seq_number = 0;
@@ -619,9 +643,6 @@ void cluster_check_master(void)
 	config->cluster_undefined_sessions = 0;
 	config->cluster_undefined_tunnels = 0;
 	config->cluster_iam_uptodate = 1; // assume all peers are up-to-date
-
-	if (!num_peers) // lone master
-		advertise();
 
 	// FIXME. We need to fix up the tunnel control message
 	// queue here! There's a number of other variables we
@@ -902,6 +923,13 @@ static int cluster_catchup_slave(int seq, in_addr_t slave)
 	int diff;
 
 	LOG(1, 0, 0, "Slave %s sent LASTSEEN with seq %d\n", fmtaddr(slave, 0), seq);
+	if (!config->cluster_iam_master) {
+		LOG(1, 0, 0, "Got LASTSEEN but I'm not a master! Redirecting it to %s.\n",
+			fmtaddr(config->cluster_master_address, 0));
+
+		peer_send_message(slave, C_MASTER, config->cluster_master_address, NULL, 0);
+		return 0;
+	}
 
 	diff = config->cluster_seq_number - seq;	// How many packet do we need to send?
 	if (diff < 0)
@@ -913,9 +941,11 @@ static int cluster_catchup_slave(int seq, in_addr_t slave)
 		return peer_send_message(slave, C_KILL, seq, NULL, 0);// Kill the slave. Nothing else to do.
 	}
 
+	LOG(1, 0, 0, "Sending %d catchup packets to slave %s\n", diff, fmtaddr(slave, 0) );
+
 		// Now resend every packet that it missed, in order.
 	while (seq != config->cluster_seq_number) {
-		s = seq%HB_HISTORY_SIZE;
+		s = seq % HB_HISTORY_SIZE;
 		if (seq != past_hearts[s].seq) {
 			LOG(0, 0, 0, "Tried to re-send heartbeat for %s but %d doesn't match %d! (%d,%d)\n",
 				fmtaddr(slave, 0), seq, past_hearts[s].seq, s, config->cluster_seq_number);
@@ -968,8 +998,10 @@ static int cluster_add_peer(in_addr_t peer, time_t basetime, pingt *pp, int size
 	}
 
 	// Is this the master shutting down??
-	if (peer == config->cluster_master_address && !basetime) {
-		LOG(3, 0, 0, "Master %s shutting down...\n", fmtaddr(config->cluster_master_address, 0));
+	if (peer == config->cluster_master_address) {
+		LOG(3, 0, 0, "Master %s %s\n", fmtaddr(config->cluster_master_address, 0),
+			basetime ? "has restarted!" : "shutting down...");
+
 		config->cluster_master_address = 0;
 		config->cluster_last_hb = 0; // Force an election.
 		cluster_check_master();
@@ -1008,6 +1040,20 @@ static int cluster_add_peer(in_addr_t peer, time_t basetime, pingt *pp, int size
 	}
 
 	return 1;
+}
+
+// A slave responds with C_MASTER when it gets a message which should have gone to a master.
+static int cluster_set_master(in_addr_t peer, in_addr_t master)
+{
+	if (config->cluster_iam_master)	// Sanity...
+		return 0;
+
+	LOG(3, 0, 0, "Peer %s set the master to %s...\n", fmtaddr(peer, 0),
+		fmtaddr(master, 1));
+
+	config->cluster_master_address = master;
+	cluster_check_master();
+	return 0;
 }
 
 /* Handle the slave updating the byte counters for the master. */
@@ -1283,7 +1329,31 @@ static int cluster_process_heartbeat(uint8_t *data, int size, int more, uint8_t 
 			exit(1);
 		}
 
+			//
+			// Send it a unicast heartbeat to see give it a chance to die.
+			// NOTE: It's actually safe to do seq-number - 1 without checking
+			// for wrap around.
+			//
+		cluster_catchup_slave(config->cluster_seq_number - 1, addr);
+
 		return -1; // Skip it.
+	}
+
+		//
+		// Try and guard against a stray master appearing.
+		//
+		// Ignore heartbeats received from another master before the
+		// timeout (less a smidgen) for the old master has elapsed.
+		//
+		// Note that after a clean failover, the cluster_master_address
+		// is cleared, so this doesn't run. 
+		//
+	if (config->cluster_master_address && addr != config->cluster_master_address
+	    && (config->cluster_last_hb + config->cluster_hb_timeout - 11) > TIME) {
+		    LOG(0, 0, 0, "Ignoring stray heartbeat from %s, current master %s has not yet timed out (last heartbeat %.1f seconds ago).\n",
+			    fmtaddr(addr, 0), fmtaddr(config->cluster_master_address, 1),
+			    0.1 * (TIME - config->cluster_last_hb));
+		    return -1; // ignore
 	}
 
 	if (config->cluster_seq_number == -1)	// Don't have one. Just align to the master...
@@ -1487,10 +1557,13 @@ int processcluster(char *data, int size, in_addr_t addr)
 	s -= sizeof(uint32_t);
 
 	switch (type) {
-	case C_PING:	// Update the peers table.
+	case C_PING: // Update the peers table.
 		return cluster_add_peer(addr, more, (pingt *) p, s);
 
-	case C_LASTSEEN:	// Catch up a slave (slave missed a packet).
+	case C_MASTER: // Our master is wrong
+	    	return cluster_set_master(addr, more);
+
+	case C_LASTSEEN: // Catch up a slave (slave missed a packet).
 		return cluster_catchup_slave(more, addr);
 
 	case C_FORWARD: { // Forwarded control packet. pass off to processudp.
@@ -1531,6 +1604,11 @@ int processcluster(char *data, int size, in_addr_t addr)
 		return 0;
 
 	case C_BYTES:
+		if (!config->cluster_iam_master) {
+			LOG(0, 0, 0, "I'm not the master, but I got a C_BYTES from %s?\n", fmtaddr(addr, 0));
+			return -1;
+		}
+
 		return cluster_handle_bytes(p, s);
 
 	case C_KILL:	// The master asked us to die!? (usually because we're too out of date).

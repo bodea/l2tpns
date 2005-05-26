@@ -1,5 +1,5 @@
 // L2TPNS Clustering Stuff
-// $Id: cluster.h,v 1.10 2005-05-08 08:00:50 bodea Exp $
+// $Id: cluster.h,v 1.11 2005-05-26 12:17:30 bodea Exp $
 
 #ifndef __CLUSTER_H__
 #define __CLUSTER_H__
@@ -14,11 +14,12 @@
 #define C_LASTSEEN		7	// Tell master the last heartbeat that I handled.
 #define C_KILL			8	// Tell a slave to die.
 #define C_FORWARD		9	// Forwarded packet..
-#define C_BYTES                 10      // Update byte counters.
+#define C_BYTES			10	// Update byte counters.
 #define C_THROTTLE		11	// A packet for the master to throttle. (The TBF tells direction).
 #define C_CSESSION		12	// Compressed session structure.
 #define C_CTUNNEL		13	// Compressed tunnel structure.
 #define C_GARDEN		14	// Gardened packet
+#define C_MASTER		15	// Tell a slave the address of the master.
 
 #define HB_VERSION		5	// Protocol version number..
 #define HB_MAX_SEQ		(1<<30)	// Maximum sequence number. (MUST BE A POWER OF 2!)

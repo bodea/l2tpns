@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.72 2005-05-20 01:32:14 bodea Exp $
+// $Id: l2tpns.h,v 1.73 2005-05-26 12:17:30 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -474,7 +474,8 @@ typedef struct
 	char		old_plugins[64][MAXPLUGINS];
 
 	int		next_tbf;			// Next HTB id available to use
-	int		scheduler_fifo;			// If the system has multiple CPUs, use FIFO scheduling policy for this process.
+	int		scheduler_fifo;			// If the system has multiple CPUs, use FIFO scheduling
+							// policy for this process.
 	int		lock_pages;			// Lock pages into memory.
 	int		icmp_rate;			// Max number of ICMP unreachable per second to send
 	int		max_packets;			// DoS prevention: per session limit of packets/0.1s
@@ -500,6 +501,10 @@ typedef struct
 	uint64_t	cluster_table_version;		// # state changes processed by cluster
 
 	struct in6_addr ipv6_prefix;			// Our IPv6 network pool.
+
+
+	int		cluster_master_min_adv;		// Master advertises routes while the number of up to date
+							// slaves is less than this value.
 
 #ifdef BGP
 #define BGP_NUM_PEERS	2

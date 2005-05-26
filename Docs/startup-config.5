@@ -2,7 +2,7 @@
 .de Id
 .ds Dt \\$4 \\$5
 ..
-.Id $Id: startup-config.5,v 1.7 2005-05-10 11:59:25 bodea Exp $
+.Id $Id: startup-config.5,v 1.8 2005-05-26 12:17:31 bodea Exp $
 .TH STARTUP-CONFIG 5 "\*(Dt" L2TPNS "File Formats and Conventions"
 .SH NAME
 startup\-config \- configuration file for l2tpns
@@ -188,6 +188,10 @@ Interval in tenths of a second between cluster heartbeat/pings.
 Cluster heartbeat timeout in tenths of a second.  A new master will be
 elected when this interval has been passed without seeing a heartbeat
 from the master.
+.TP
+.B cluster_master_min_adv
+Determines the minumum number of up to date slaves required before the
+master will drop routes (default: 1).
 .TP
 .B ipv6_prefix
 Enable negotiation of IPv6.  This forms the the first 64 bits of the
