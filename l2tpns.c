@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.73.2.12 2005-05-30 06:35:19 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.73.2.13 2005-05-30 07:03:01 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -2635,12 +2635,12 @@ static void mainloop(void)
 
 			// Handle timeouts, retries etc.
 		{
-			clockt last_clean = 0;
+			static clockt last_clean = 0;
+			if (!last_clean)
+				last_clean = TIME - 1;
+
 			if (last_clean != TIME)
 			{
-				if (!last_clean)
-					last_clean = TIME - 10;
-
 				regular_cleanups(TIME - last_clean);
 				last_clean = TIME;
 				TIME = now();
