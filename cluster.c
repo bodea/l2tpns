@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.26.2.10 2005-05-23 13:48:29 bodea Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.26.2.11 2005-05-30 02:55:40 bodea Exp $";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -525,6 +525,10 @@ void cluster_check_master(void)
 	config->cluster_last_hb = TIME + 1;	// Just the one election thanks.
 
 	LOG(0, 0, 0, "Master timed out! Holding election...\n");
+
+	// In the process of shutting down, can't be master
+	if (main_quit)
+		return;
 
 	for (i = have_peers = 0; i < num_peers; i++)
 	{

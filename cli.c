@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.43.2.5 2005-01-13 08:26:51 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.43.2.6 2005-05-30 02:55:40 bodea Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -406,6 +406,7 @@ static int cmd_show_session(struct cli_def *cli, char *command, char **argv, int
 			cli_print(cli, "\tTunnel ID:\t%d", session[s].tunnel);
 			cli_print(cli, "\tIP address:\t%s", fmtaddr(htonl(session[s].ip), 0));
 			cli_print(cli, "\tUnique SID:\t%lu", session[s].unique_id);
+			cli_print(cli, "\tOpened:\t\t%u seconds", abs(time_now - session[s].opened));
 			cli_print(cli, "\tIdle time:\t%u seconds", abs(time_now - session[s].last_packet));
 			cli_print(cli, "\tNext Recv:\t%u", session[s].nr);
 			cli_print(cli, "\tNext Send:\t%u", session[s].ns);

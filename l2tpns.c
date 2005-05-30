@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.73.2.10 2005-05-23 13:48:29 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.73.2.11 2005-05-30 02:55:41 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -83,7 +83,7 @@ uint32_t eth_tx = 0;
 static uint32_t ip_pool_size = 1;	// Size of the pool of addresses used for dynamic address allocation.
 time_t time_now = 0;			// Current time in seconds since epoch.
 static char time_now_string[64] = {0};	// Current time as a string.
-static char main_quit = 0;		// True if we're in the process of exiting.
+char main_quit = 0;			// True if we're in the process of exiting.
 linked_list *loaded_plugins;
 linked_list *plugins[MAX_PLUGIN_TYPES];
 
@@ -113,6 +113,7 @@ config_descriptt config_values[] = {
 	CONFIG("setuid", target_uid, INT),
 	CONFIG("dump_speed", dump_speed, BOOL),
 	CONFIG("cleanup_interval", cleanup_interval, INT),
+	CONFIG("cleanup_limit", cleanup_limit, INT),
 	CONFIG("multi_read_count", multi_read_count, INT),
 	CONFIG("scheduler_fifo", scheduler_fifo, BOOL),
 	CONFIG("lock_pages", lock_pages, BOOL),
@@ -180,6 +181,9 @@ static void plugins_done(void);
 static void processcontrol(uint8_t *buf, int len, struct sockaddr_in *addr, int alen);
 static tunnelidt new_tunnel(void);
 static int unhide_avp(uint8_t *avp, tunnelidt t, sessionidt s, uint16_t length);
+
+// on slaves, alow BGP to withdraw cleanly before exiting
+#define QUIT_DELAY	5
 
 // return internal time (10ths since process startup)
 static clockt now(void)
@@ -2059,12 +2063,7 @@ static void processtun(uint8_t * buf, int len)
 	// Else discard.
 }
 
-//
-// Maximum number of actions to complete.
-// This is to avoid sending out too many packets
-// at once.
-#define MAX_ACTIONS 500
-
+// Handle retries, timeouts
 static int regular_cleanups(void)
 {
 	static sessionidt s = 0;	// Next session to check for actions on.
@@ -2158,7 +2157,7 @@ static int regular_cleanups(void)
 		if (session[s].die && session[s].die <= TIME)
 		{
 			sessionkill(s, "Expired");
-			if (++count >= MAX_ACTIONS) break;
+			if (++count >= config->cleanup_limit) break;
 			continue;
 		}
 
@@ -2167,7 +2166,7 @@ static int regular_cleanups(void)
 		{
 			sessionshutdown(s, "No response to LCP ECHO requests");
 			STAT(session_timeout);
-			if (++count >= MAX_ACTIONS) break;
+			if (++count >= config->cleanup_limit) break;
 			continue;
 		}
 
@@ -2187,7 +2186,7 @@ static int regular_cleanups(void)
 			LOG(4, s, session[s].tunnel, "No data in %d seconds, sending LCP ECHO\n",
 					(int)(time_now - session[s].last_packet));
 			tunnelsend(b, 24, session[s].tunnel); // send it
-			if (++count >= MAX_ACTIONS) break;
+			if (++count >= config->cleanup_limit) break;
 		}
 
 		// Check for actions requested from the CLI
@@ -2256,7 +2255,7 @@ static int regular_cleanups(void)
 			if (send)
 				cluster_send_session(s);
 
-			if (++count >= MAX_ACTIONS) break;
+			if (++count >= config->cleanup_limit) break;
 		}
 	}
 
@@ -2278,7 +2277,7 @@ static int regular_cleanups(void)
 		}
 	}
 
-	if (count >= MAX_ACTIONS)
+	if (count >= config->cleanup_limit)
 		return 1;	// Didn't finish!
 
 	LOG(3, 0, 0, "End regular cleanup (%d actions), next in %d seconds\n", count, config->cleanup_interval);
@@ -2293,8 +2292,39 @@ static int regular_cleanups(void)
 static int still_busy(void)
 {
 	int i;
+	static time_t stopped_bgp = 0;
 	static clockt last_talked = 0;
 	static clockt start_busy_wait = 0;
+
+	if (!config->cluster_iam_master)
+	{
+#ifdef BGP
+	    	if (bgp_configured)
+		{
+			if (!stopped_bgp)
+			{
+			    	LOG(1, 0, 0, "Shutting down in %d seconds, stopping BGP...\n", QUIT_DELAY);
+
+				for (i = 0; i < BGP_NUM_PEERS; i++)
+					if (bgp_peers[i].state == Established)
+						bgp_stop(&bgp_peers[i]);
+
+				stopped_bgp = time_now;
+
+				// we don't want to become master
+				cluster_send_ping(0);
+
+				return 1;
+			}
+
+			if (time_now < (stopped_bgp + QUIT_DELAY))
+				return 1;
+		}
+#endif /* BGP */
+
+		return 0;
+	}
+
 	if (start_busy_wait == 0)
 		start_busy_wait = TIME;
 
@@ -2572,7 +2602,6 @@ static void mainloop(void)
 
 		/* Handle timeouts. Make sure that this gets run anyway, even if there was
 		 * something to read, else under load this will never actually run....
-		 *
 		 */
 		if (config->cluster_iam_master && next_clean <= time_now)
 		{
@@ -2598,6 +2627,7 @@ static void mainloop(void)
 
 	//
 	// Important!!! We MUST not process any packets past this point!
+	LOG(1, 0, 0, "Clean shutdown complete\n");
 }
 
 static void stripdomain(char *host)
@@ -3278,14 +3308,6 @@ int main(int argc, char *argv[])
 
 	mainloop();
 
-#ifdef BGP
-	/* try to shut BGP down cleanly; with luck the sockets will be
-	   writable since we're out of the select */
-	for (i = 0; i < BGP_NUM_PEERS; i++)
-		if (bgp_peers[i].state == Established)
-			bgp_stop(&bgp_peers[i]);
-#endif /* BGP */
-
 	/* remove plugins (so cleanup code gets run) */
 	plugins_done();
 
@@ -3680,7 +3702,8 @@ static void update_config()
 		}
 	}
 	memcpy(config->old_plugins, config->plugins, sizeof(config->plugins));
-	if (!config->cleanup_interval) config->cleanup_interval = 10;
+	if (!config->cleanup_interval) config->cleanup_interval = 2;
+	if (!config->cleanup_limit) config->cleanup_limit = 50;
 	if (!config->multi_read_count) config->multi_read_count = 10;
 	if (!config->cluster_address) config->cluster_address = inet_addr(DEFAULT_MCAST_ADDR);
 	if (!*config->cluster_interface)

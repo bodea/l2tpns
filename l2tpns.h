@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.49.2.13 2005-05-23 13:48:29 bodea Exp $
+// $Id: l2tpns.h,v 1.49.2.14 2005-05-30 02:55:41 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -15,7 +15,7 @@
 #include <sys/types.h>
 #include <libcli.h>
 
-#define VERSION	"2.0.21"
+#define VERSION	"2.0.22"
 
 // Limits
 #define MAXTUNNEL	500		// could be up to 65535
@@ -421,6 +421,7 @@ typedef struct
 	char		config_file[128];
 	int		reload_config;			// flag to re-read config (set by cli)
 	int		cleanup_interval;		// interval between regular cleanups (in seconds)
+	int		cleanup_limit;			// maximum number of actions to perform on sessions in each cleanup
 	int		multi_read_count;		// amount of packets to read per fd in processing loop
 
 	char		tundevice[10];			// tun device name
@@ -648,6 +649,7 @@ if (count++ < max) { \
 extern configt *config;
 extern time_t basetime;		// Time when this process started.
 extern time_t time_now;		// Seconds since EPOCH.
+extern char main_quit;
 extern uint32_t last_id;
 extern struct Tstats *_statistics;
 extern in_addr_t my_address;
