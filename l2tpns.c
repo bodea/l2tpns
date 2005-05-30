@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.73.2.11 2005-05-30 02:55:41 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.73.2.12 2005-05-30 06:35:19 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -112,8 +112,6 @@ config_descriptt config_values[] = {
 	CONFIG("accounting_dir", accounting_dir, STRING),
 	CONFIG("setuid", target_uid, INT),
 	CONFIG("dump_speed", dump_speed, BOOL),
-	CONFIG("cleanup_interval", cleanup_interval, INT),
-	CONFIG("cleanup_limit", cleanup_limit, INT),
 	CONFIG("multi_read_count", multi_read_count, INT),
 	CONFIG("scheduler_fifo", scheduler_fifo, BOOL),
 	CONFIG("lock_pages", lock_pages, BOOL),
@@ -2063,37 +2061,64 @@ static void processtun(uint8_t * buf, int len)
 	// Else discard.
 }
 
-// Handle retries, timeouts
-static int regular_cleanups(void)
+// Handle retries, timeouts.  Runs every 1/10th sec, want to ensure
+// that we look at the whole of the tunnel, radius and session tables
+// every second
+static void regular_cleanups(int period)
 {
-	static sessionidt s = 0;	// Next session to check for actions on.
-	tunnelidt t;
-	int count=0,i;
-	uint16_t r;
-	static clockt next_acct = 0;
-	static clockt next_shut_acct = 0;
+	// Next tunnel, radius and session to check for actions on.
+	static tunnelidt t = 0;
+	static int r = 0;
+	static sessionidt s = 0;
+
+	int t_actions = 0;
+	int r_actions = 0;
+	int s_actions = 0;
+
+	int t_slice;
+	int r_slice;
+	int s_slice;
+
+	int i;
 	int a;
 
-	LOG(3, 0, 0, "Begin regular cleanup\n");
+	// paranoia
+	if (period < 1) period = 1;
 
-	for (r = 1; r < MAXRADIUS; r++)
+	// divide up tables into period * 1/10th sec slices
+	t_slice = config->cluster_highest_tunnelid  / 10.0 * period + 0.5;
+	r_slice = (MAXRADIUS - 1)                   / 10.0 * period + 0.5;
+	s_slice = config->cluster_highest_sessionid / 10.0 * period + 0.5;
+
+	if (t_slice < 1)
+	    t_slice = 1;
+	else if (t_slice > config->cluster_highest_tunnelid)
+	    t_slice = config->cluster_highest_tunnelid;
+
+	if (r_slice < 1)
+	    r_slice = 1;
+	else if (r_slice > (MAXRADIUS - 1))
+	    r_slice = MAXRADIUS - 1;
+
+	if (s_slice < 1)
+	    s_slice = 1;
+	else if (s_slice > config->cluster_highest_sessionid)
+	    s_slice = config->cluster_highest_sessionid;
+
+	LOG(4, 0, 0, "Begin regular cleanup (last %d/10s ago)\n", period);
+
+	for (i = 0; i < t_slice; i++)
 	{
-		if (!radius[r].state)
-			continue;
-		if (radius[r].retry)
-		{
-			if (radius[r].retry <= TIME)
-				radiusretry(r);
-		} else
-			radius[r].retry = backoff(radius[r].try+1);	// Is this really needed? --mo
-	}
-	for (t = 1; t <= config->cluster_highest_tunnelid; t++)
-	{
+		t++;
+		if (t > config->cluster_highest_tunnelid)
+			t = 1;
+
 		// check for expired tunnels
 		if (tunnel[t].die && tunnel[t].die <= TIME)
 		{
 			STAT(tunnel_timeout);
 			tunnelkill(t, "Expired");
+			t_actions++;
 			continue;
 		}
 		// check for message resend
@@ -2113,6 +2138,8 @@ static int regular_cleanups(void)
 						tunnelsend(c->buf, c->length, t);
 						c = c->next;
 					}
+
+				t_actions++;
 			}
 		}
 		// Send hello
@@ -2121,6 +2148,7 @@ static int regular_cleanups(void)
 			controlt *c = controlnew(6); // sending HELLO
 			controladd(c, t, 0); // send the message
 			LOG(3, 0, t, "Sending HELLO message\n");
+			t_actions++;
 		}
 
 		// Check for tunnel changes requested from the CLI
@@ -2131,13 +2159,28 @@ static int regular_cleanups(void)
 			{
 				LOG(2, 0, t, "Dropping tunnel by CLI\n");
 				tunnelshutdown(t, "Requested by administrator");
+				t_actions++;
 			}
 		}
-
 	}
 
-	count = 0;
-	for (i = 1; i <= config->cluster_highest_sessionid; i++)
+	for (i = 0; i < r_slice; i++)
+	{
+		r++;
+		if (r >= MAXRADIUS)
+			r = 1;
+
+		if (!radius[r].state)
+			continue;
+
+		if (radius[r].retry <= TIME)
+		{
+			radiusretry(r);
+			r_actions++;
+		}
+	}
+
+	for (i = 0; i < s_slice; i++)
 	{
 		s++;
 		if (s > config->cluster_highest_sessionid)
@@ -2151,13 +2194,14 @@ static int regular_cleanups(void)
 			// IPCP has not completed yet. Resend
 			LOG(3, s, session[s].tunnel, "No ACK for initial IPCP ConfigReq... resending\n");
 			sendipcp(session[s].tunnel, s);
+			s_actions++;
 		}
 
 		// check for expired sessions
 		if (session[s].die && session[s].die <= TIME)
 		{
 			sessionkill(s, "Expired");
-			if (++count >= config->cleanup_limit) break;
+			s_actions++;
 			continue;
 		}
 
@@ -2166,7 +2210,7 @@ static int regular_cleanups(void)
 		{
 			sessionshutdown(s, "No response to LCP ECHO requests");
 			STAT(session_timeout);
-			if (++count >= config->cleanup_limit) break;
+			s_actions++;
 			continue;
 		}
 
@@ -2186,7 +2230,7 @@ static int regular_cleanups(void)
 			LOG(4, s, session[s].tunnel, "No data in %d seconds, sending LCP ECHO\n",
 					(int)(time_now - session[s].last_packet));
 			tunnelsend(b, 24, session[s].tunnel); // send it
-			if (++count >= config->cleanup_limit) break;
+			s_actions++;
 		}
 
 		// Check for actions requested from the CLI
@@ -2200,6 +2244,7 @@ static int regular_cleanups(void)
 				LOG(2, s, session[s].tunnel, "Dropping session by CLI\n");
 				sessionshutdown(s, "Requested by administrator");
 				a = 0; // dead, no need to check for other actions
+				s_actions++;
 			}
 
 			if (a & CLI_SESS_NOSNOOP)
@@ -2207,6 +2252,7 @@ static int regular_cleanups(void)
 				LOG(2, s, session[s].tunnel, "Unsnooping session by CLI\n");
 				session[s].snoop_ip = 0;
 				session[s].snoop_port = 0;
+				s_actions++;
 				send++;
 			}
 			else if (a & CLI_SESS_SNOOP)
@@ -2217,6 +2263,7 @@ static int regular_cleanups(void)
 
 				session[s].snoop_ip = cli_session_actions[s].snoop_ip;
 				session[s].snoop_port = cli_session_actions[s].snoop_port;
+				s_actions++;
 				send++;
 			}
 
@@ -2224,6 +2271,7 @@ static int regular_cleanups(void)
 			{
 				LOG(2, s, session[s].tunnel, "Un-throttling session by CLI\n");
 				throttle_session(s, 0, 0);
+				s_actions++;
 				send++;
 			}
 			else if (a & CLI_SESS_THROTTLE)
@@ -2233,6 +2281,7 @@ static int regular_cleanups(void)
 				    cli_session_actions[s].throttle_out);
 
 				throttle_session(s, cli_session_actions[s].throttle_in, cli_session_actions[s].throttle_out);
+				s_actions++;
 				send++;
 			}
 
@@ -2240,6 +2289,7 @@ static int regular_cleanups(void)
 			{
 				LOG(2, s, session[s].tunnel, "Un-filtering session by CLI\n");
 				filter_session(s, 0, 0);
+				s_actions++;
 				send++;
 			}
 			else if (a & CLI_SESS_FILTER)
@@ -2249,39 +2299,17 @@ static int regular_cleanups(void)
 				    cli_session_actions[s].filter_out);
 
 				filter_session(s, cli_session_actions[s].filter_in, cli_session_actions[s].filter_out);
+				s_actions++;
 				send++;
 			}
 
 			if (send)
 				cluster_send_session(s);
-
-			if (++count >= config->cleanup_limit) break;
 		}
 	}
 
-	if (*config->accounting_dir)
-	{
-		if (next_acct <= TIME)
-		{
-			// Dump accounting data
-			next_acct = TIME + ACCT_TIME;
-			next_shut_acct = TIME + ACCT_SHUT_TIME;
-			dump_acct_info(1);
-		}
-		else if (next_shut_acct <= TIME)
-		{
-			// Dump accounting data for shutdown sessions
-			next_shut_acct = TIME + ACCT_SHUT_TIME;
-			if (shut_acct_n)
-				dump_acct_info(0);
-		}
-	}
-
-	if (count >= config->cleanup_limit)
-		return 1;	// Didn't finish!
-
-	LOG(3, 0, 0, "End regular cleanup (%d actions), next in %d seconds\n", count, config->cleanup_interval);
-	return 0;
+	LOG(3, 0, 0, "End regular cleanup: scanned %d/%d/%d tunnels/radius/sessions, %d/%d/%d actions\n",
+		t_slice, r_slice, s_slice, t_actions, r_actions, s_actions);
 }
 
 
@@ -2376,7 +2404,6 @@ static void mainloop(void)
 	uint8_t buf[65536];
 	struct timeval to;
 	clockt next_cluster_ping = 0;	// send initial ping immediately
-	time_t next_clean = time_now + config->cleanup_interval;
 
 	LOG(4, 0, 0, "Beginning of main loop.  udpfd=%d, tunfd=%d, cluster_sockfd=%d, controlfd=%d\n",
 		udpfd, tunfd, cluster_sockfd, controlfd);
@@ -2567,6 +2594,8 @@ static void mainloop(void)
 
 				STAT(multi_read_exceeded);
 			}
+
+			TIME = now();
 		}
 
 			// Runs on every machine (master and slaves).
@@ -2582,37 +2611,60 @@ static void mainloop(void)
 
 			master_update_counts();		// If we're a slave, send our byte counters to our master.
 
+			TIME = now();
 			if (config->cluster_iam_master && !config->cluster_iam_uptodate)
 				next_cluster_ping = TIME + 1; // out-of-date slaves, do fast updates
 			else
 				next_cluster_ping = TIME + config->cluster_hb_interval;
 		}
 
+		if (!config->cluster_iam_master)
+			continue;
+
 			// Run token bucket filtering queue..
 			// Only run it every 1/10th of a second.
-			// Runs on all machines both master and slave.
 		{
 			static clockt last_run = 0;
 			if (last_run != TIME)
 			{
-				last_run = TIME;
 				tbf_run_timer();
+				last_run = TIME;
+				TIME = now();
 			}
 		}
 
-		/* Handle timeouts. Make sure that this gets run anyway, even if there was
-		 * something to read, else under load this will never actually run....
-		 */
-		if (config->cluster_iam_master && next_clean <= time_now)
+			// Handle timeouts, retries etc.
 		{
-			if (regular_cleanups())
+			clockt last_clean = 0;
+			if (last_clean != TIME)
 			{
-				// Did it finish?
-				next_clean = time_now + 1 ;	// Didn't finish. Check quickly.
+				if (!last_clean)
+					last_clean = TIME - 10;
+
+				regular_cleanups(TIME - last_clean);
+				last_clean = TIME;
+				TIME = now();
 			}
-			else
+		}
+
+		if (*config->accounting_dir)
+		{
+			static clockt next_acct = 0;
+			static clockt next_shut_acct = 0;
+
+			if (next_acct <= TIME)
 			{
-				next_clean = time_now + config->cleanup_interval; // Did. Move to next interval.
+				// Dump accounting data
+				next_acct = TIME + ACCT_TIME;
+				next_shut_acct = TIME + ACCT_SHUT_TIME;
+				dump_acct_info(1);
+			}
+			else if (next_shut_acct <= TIME)
+			{
+				// Dump accounting data for shutdown sessions
+				next_shut_acct = TIME + ACCT_SHUT_TIME;
+				if (shut_acct_n)
+					dump_acct_info(0);
 			}
 		}
 	}
@@ -3702,8 +3754,6 @@ static void update_config()
 		}
 	}
 	memcpy(config->old_plugins, config->plugins, sizeof(config->plugins));
-	if (!config->cleanup_interval) config->cleanup_interval = 2;
-	if (!config->cleanup_limit) config->cleanup_limit = 50;
 	if (!config->multi_read_count) config->multi_read_count = 10;
 	if (!config->cluster_address) config->cluster_address = inet_addr(DEFAULT_MCAST_ADDR);
 	if (!*config->cluster_interface)

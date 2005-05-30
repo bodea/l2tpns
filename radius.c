@@ -1,6 +1,6 @@
 // L2TPNS Radius Stuff
 
-char const *cvs_id_radius = "$Id: radius.c,v 1.20.2.2 2005-05-03 05:10:52 bodea Exp $";
+char const *cvs_id_radius = "$Id: radius.c,v 1.20.2.3 2005-05-30 06:35:19 bodea Exp $";
 
 #include <time.h>
 #include <stdio.h>
@@ -142,7 +142,7 @@ void radiussend(uint16_t r, uint8_t state)
 	if (radius[r].state != state)
 		radius[r].try = 0;
 	radius[r].state = state;
-	radius[r].retry = backoff(radius[r].try++);
+	radius[r].retry = backoff(radius[r].try++) + 20; // 3s, 4s, 6s, 10s...
 	LOG(4, s, session[s].tunnel, "Send RADIUS id %d sock %d state %s try %d\n",
 		r >> RADIUS_SHIFT, r & RADIUS_MASK,
 		radius_state(radius[r].state), radius[r].try);
@@ -691,7 +691,6 @@ void radiusretry(uint16_t r)
 	if (s)
 		t = session[s].tunnel;
 
-	radius[r].retry = backoff(radius[r].try + 1);
 	switch (radius[r].state)
 	{
 		case RADIUSCHAP:           // sending CHAP down PPP

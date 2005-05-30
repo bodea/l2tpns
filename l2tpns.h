@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.49.2.14 2005-05-30 02:55:41 bodea Exp $
+// $Id: l2tpns.h,v 1.49.2.15 2005-05-30 06:35:19 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -420,8 +420,6 @@ typedef struct
 
 	char		config_file[128];
 	int		reload_config;			// flag to re-read config (set by cli)
-	int		cleanup_interval;		// interval between regular cleanups (in seconds)
-	int		cleanup_limit;			// maximum number of actions to perform on sessions in each cleanup
 	int		multi_read_count;		// amount of packets to read per fd in processing loop
 
 	char		tundevice[10];			// tun device name
