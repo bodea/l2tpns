@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.73.2.14 2005-05-31 11:39:36 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.73.2.15 2005-05-31 12:09:33 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -2306,14 +2306,13 @@ static void regular_cleanups(double period)
 		}
 	}
 
-	LOG((t_actions || r_actions || s_actions) ? 4 : 5, 0, 0,
+	LOG((t_actions || r_actions || s_actions) ? 3 : 4, 0, 0,
 		"Regular cleanup: processed %d tunnels, %d radius and %d sessions\n",
 		t_actions, r_actions, s_actions);
 
 	LOG(5, 0, 0, "End regular cleanup: checked %d tunnels, %d radius and %d sessions\n",
 		t_slice, r_slice, s_slice);
 }
-
 
 //
 // Are we in the middle of a tunnel update, or radius
