@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.73.2.13 2005-05-30 07:03:01 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.73.2.14 2005-05-31 11:39:36 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -183,11 +183,12 @@ static int unhide_avp(uint8_t *avp, tunnelidt t, sessionidt s, uint16_t length);
 // on slaves, alow BGP to withdraw cleanly before exiting
 #define QUIT_DELAY	5
 
-// return internal time (10ths since process startup)
-static clockt now(void)
+// return internal time (10ths since process startup), set f if given
+static clockt now(double *f)
 {
 	struct timeval t;
 	gettimeofday(&t, 0);
+	if (f) *f = t.tv_sec + t.tv_usec / 1000000.0;
 	return (t.tv_sec - basetime) * 10 + t.tv_usec / 100000 + 1;
 }
 
@@ -197,7 +198,7 @@ static clockt now(void)
 clockt backoff(uint8_t try)
 {
 	if (try > 5) try = 5;                  // max backoff
-	return now() + 10 * (1 << try);
+	return now(NULL) + 10 * (1 << try);
 }
 
 
@@ -2064,7 +2065,7 @@ static void processtun(uint8_t * buf, int len)
 // Handle retries, timeouts.  Runs every 1/10th sec, want to ensure
 // that we look at the whole of the tunnel, radius and session tables
 // every second
-static void regular_cleanups(int period)
+static void regular_cleanups(double period)
 {
 	// Next tunnel, radius and session to check for actions on.
 	static tunnelidt t = 0;
@@ -2082,13 +2083,10 @@ static void regular_cleanups(int period)
 	int i;
 	int a;
 
-	// paranoia
-	if (period < 1) period = 1;
-
-	// divide up tables into period * 1/10th sec slices
-	t_slice = config->cluster_highest_tunnelid  / 10.0 * period + 0.5;
-	r_slice = (MAXRADIUS - 1)                   / 10.0 * period + 0.5;
-	s_slice = config->cluster_highest_sessionid / 10.0 * period + 0.5;
+	// divide up tables into slices based on the last run
+	t_slice = config->cluster_highest_tunnelid  * period;
+	r_slice = (MAXRADIUS - 1)                   * period;
+	s_slice = config->cluster_highest_sessionid * period;
 
 	if (t_slice < 1)
 	    t_slice = 1;
@@ -2105,7 +2103,7 @@ static void regular_cleanups(int period)
 	else if (s_slice > config->cluster_highest_sessionid)
 	    s_slice = config->cluster_highest_sessionid;
 
-	LOG(4, 0, 0, "Begin regular cleanup (last %d/10s ago)\n", period);
+	LOG(5, 0, 0, "Begin regular cleanup (last %f seconds ago)\n", period);
 
 	for (i = 0; i < t_slice; i++)
 	{
@@ -2308,8 +2306,12 @@ static void regular_cleanups(int period)
 		}
 	}
 
-	LOG(3, 0, 0, "End regular cleanup: scanned %d/%d/%d tunnels/radius/sessions, %d/%d/%d actions\n",
-		t_slice, r_slice, s_slice, t_actions, r_actions, s_actions);
+	LOG((t_actions || r_actions || s_actions) ? 4 : 5, 0, 0,
+		"Regular cleanup: processed %d tunnels, %d radius and %d sessions\n",
+		t_actions, r_actions, s_actions);
+
+	LOG(5, 0, 0, "End regular cleanup: checked %d tunnels, %d radius and %d sessions\n",
+		t_slice, r_slice, s_slice);
 }
 
 
@@ -2428,6 +2430,7 @@ static void mainloop(void)
 		fd_set w;
 		int bgp_set[BGP_NUM_PEERS];
 #endif /* BGP */
+		int more = 0;
 
 		if (config->reload_config)
 		{
@@ -2466,7 +2469,7 @@ static void mainloop(void)
 
 		STAT(select_called);
 
-		TIME = now();
+		TIME = now(NULL);
 		if (n < 0)
 		{
 			if (errno == EINTR ||
@@ -2593,9 +2596,8 @@ static void mainloop(void)
 					config->multi_read_count, udp_pkts, tun_pkts, cluster_pkts);
 
 				STAT(multi_read_exceeded);
+				more++;
 			}
-
-			TIME = now();
 		}
 
 			// Runs on every machine (master and slaves).
@@ -2611,7 +2613,6 @@ static void mainloop(void)
 
 			master_update_counts();		// If we're a slave, send our byte counters to our master.
 
-			TIME = now();
 			if (config->cluster_iam_master && !config->cluster_iam_uptodate)
 				next_cluster_ping = TIME + 1; // out-of-date slaves, do fast updates
 			else
@@ -2627,23 +2628,26 @@ static void mainloop(void)
 			static clockt last_run = 0;
 			if (last_run != TIME)
 			{
-				tbf_run_timer();
 				last_run = TIME;
-				TIME = now();
+				tbf_run_timer();
 			}
 		}
 
 			// Handle timeouts, retries etc.
 		{
-			static clockt last_clean = 0;
-			if (!last_clean)
-				last_clean = TIME - 1;
+			static double last_clean = 0;
+			double this_clean;
+			double diff;
 
-			if (last_clean != TIME)
+			TIME = now(&this_clean);
+			diff = this_clean - last_clean;
+
+			// Run during idle time (after we've handled
+			// all incoming packets) or every 1/10th sec
+			if (!more || diff > 0.1)
 			{
-				regular_cleanups(TIME - last_clean);
-				last_clean = TIME;
-				TIME = now();
+				regular_cleanups(diff);
+				last_clean = this_clean;
 			}
 		}
 

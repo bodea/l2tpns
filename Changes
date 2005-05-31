@@ -1,11 +1,11 @@
-* Mon May 30 2005 Brendan O'Dea <bod@optusnet.com.au> 2.0.22
+* Tue May 31 2005 Brendan O'Dea <bod@optusnet.com.au> 2.0.22
 - Show session open time in "show session"/"show user" detailed output.
 - Have slaves with BGP configured drop BGP on receipt of a shutdown
   signal, but hang about for an additional 5s to process any remaining
   traffic.
-- Run regular_cleanups every 1/10th second, looking at a sufficient
-  slice of each table to ensure that each entry is examined at least
-  once per second.
+- Run regular_cleanups after processing the results of the select,
+  looking at a sufficient slice of each table to ensure that all
+  entries are examined at least once per second.
 
 * Mon May 23 2005 Brendan O'Dea <bod@optusnet.com.au> 2.0.21
 - Cluster changes from Michael, intended to prevent a stray master
