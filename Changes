@@ -2,38 +2,17 @@
 - Add IPv6 support from Jonathan McDowell.
 - Add CHAP support from Jordan Hrycaj.
 - Add interim accounting support from Vladislav Bjelic.
+- Add Acct-Output-Gigawords, Acct-Input-Gigawords attributes to RADIUS
+  accounting packets.
 - Negotiate MRU, default 1458 to avoid fragmentation.
 - Sanity check that cluster_send_session is not called from a child
   process.
-- Throttle outgoing LASTSEEN packets to at most one per second for a
-  given seq#.
-- More DoS prevention: add packet_limit option to apply a hard limit
-  to downstream packets per session.
 - Use bounds-checking lookup functions for string constants.
 - Add enum for RADIUS codes.
 - Make "call_" prefix implict in CSTAT() macro.
 - Fix some format string problems.
-- Fix "clear counters".
-- Log "Accepted connection to CLI" at 4 when connection is from localhost
-  to reduce noise in logs.
-- Show time since last counter reset in "show counters".
 - Remove "save_state" option.  Not maintained anymore; use clustering
   to retain state across restarts.
-- Ensure that sessionkill is not called on an unopened session (borks
-  the freelist).
-- Bump MAXSESSION to 60K.
-- Fix off-by-one errors in session/tunnel initialisation and
-  sessiont <-> sessionidt functions.
-- Use session[s].opened consistently when checking for in-use sessions
-  (rather than session[s].tunnel).
-- Use <= cluster_highest_sessionid rather than < MAXSESSION in a
-  couple of loops.
-- Don't kill a whole tunnel if we're out of sessions.
-- Change session[s].ip to 0 if set from RADIUS to 255.255.255.254;
-  avoids the possibility that it will be interpreted as a valid IP
-  address.
-- Avoid a possible buffer overflow in processpap.
-- Kill session if authentication was rejected.
 - Simplify AVP unhiding code.
 - Add optional "username" parameter to ungarden control, allowing the
   username to be reset before going online.
@@ -41,51 +20,84 @@
 - Add result/error codes to CDN when shutting down sessions.  Sends 2/7
   (general error, try another LNS) when out of IP addresses, and 3
   (adminstrative) for everything else (suggestion from Chris Gates).
-- Only send RADIUS stop record in sessionshutdown when there's an ip address.
-- Reset .die on master takeover (so that dying sessions don't have to
-  hang around until the new master has the same uptime as the old one).
-- Update .last_packet in cluster_handle_bytes only when there have
-  been bytes received from the modem (dead sessions were having the
-  idle timeout reset by stray packets).
 - Use cli_error() for error messages and help.
-- Add a Cisco-Avpair with intercept details to RADIUS Start/Stop
-  records.
 - Don't use LOG() macro in initdata() until the config struct has been
   allocated (uses config->debug).
 - Initialise log_stream to stderr to catch errors before the config file
   is read.
-- Fix leak in session freelist when initial RADIUS session allocation
-  fails.
 - Make "show running-config" a privileged command (contains clear text
   shared secrets).
 - Add sessionctl plugin to provide drop/kill via nsctl.
-- Add handling of "throttle=N" RADIUS attributes.
-- Fix RADIUS indexing (should have 16K entries with 64 sockets).
-- Cluster changes from Michael, intended to prevent a stray master
-  from trashing a cluster:
-  + Ignore heartbeats from peers claiming to be the master before the
-    timeout on the old master has expired.
-  + A master receiving a stray heartbeat sends a unicast HB back, which
-    should cause the rogue to die due to the tie-breaker code.
-  + Keep probing the master for late heartbeats.
-  + Drop BGP as soon as we become master with the minumum required peers.
-  + Any PING seen from a master forces an election (rather than just
-    where basetime is zero).
-  + A slave which receives a LASTSEEN message (presumably a restarted
-    master) sends back new message type, C_MASTER which indicates the
-    address of the current master.
-- New config option: cluster_master_min_adv which determines the minimum
-  number of up to date slaves required before the master will drop
-  routes.
 - New config option: allow_duplicate_users which determines whether
   or not to kill older sessions with the same username.
-- Show session open time in "show session"/"show user" detailed output.
-- Have slaves with BGP configured drop BGP on receipt of a shutdown
-  signal, but hang about for an additional 5s to process any remaining
-  traffic.
-- Run regular_cleanups after processing the results of the select,
-  looking at a sufficient slice of each table to ensure that all
-  entries are examined at least once per second.
+- Fix byte counters in accounting records.
+- Merge 2.0.22:
+  + Show session open time in "show session"/"show user" detailed output.
+  + Have slaves with BGP configured drop BGP on receipt of a shutdown
+    signal, but hang about for an additional 5s to process any remaining
+    traffic.
+  + Run regular_cleanups after processing the results of the select,
+    looking at a sufficient slice of each table to ensure that all
+    entries are examined at least once per second.
+- Merge 2.0.21:
+  + Cluster changes from Michael, intended to prevent a stray master
+    from trashing a cluster:
+    = Ignore heartbeats from peers claiming to be the master before the
+      timeout on the old master has expired.
+    = A master receiving a stray heartbeat sends a unicast HB back, which
+      should cause the rogue to die due to the tie-breaker code.
+    = Keep probing the master for late heartbeats.
+    = Drop BGP as soon as we become master with the minumum required peers.
+    = Any PING seen from a master forces an election (rather than just
+      where basetime is zero).
+    = A slave which receives a LASTSEEN message (presumably a restarted
+      master) sends back new message type, C_MASTER which indicates the
+      address of the current master.
+  + New config option: cluster_master_min_adv which determines the minimum
+    number of up to date slaves required before the master will drop
+    routes.
+- Merge 2.0.20:
+  + Add handling of "throttle=N" RADIUS attributes.
+  + Fix RADIUS indexing (should have 16K entries with 64 sockets).
+- Merge 2.0.19:
+  + Fix leak in session freelist when initial RADIUS session allocation
+    fails.
+- Merge 2.0.18:
+  + Add a Cisco-Avpair with intercept details to RADIUS Start/Stop
+    records.
+- Merge 2.0.17:
+  + Only send RADIUS stop record in sessionshutdown when there's an ip address.
+  + Reset .die on master takeover (so that dying sessions don't have to
+    hang around until the new master has the same uptime as the old one).
+  + Update .last_packet in cluster_handle_bytes only when there have
+    been bytes received from the modem (dead sessions were having the
+    idle timeout reset by stray packets).
+- Merge 2.0.16:
+  + Ensure that sessionkill is not called on an unopened session (borks
+    the freelist).
+  + Bump MAXSESSION to 60K.
+  + Fix off-by-one errors in session/tunnel initialisation and
+    sessiont <-> sessionidt functions.
+  + Use session[s].opened consistently when checking for in-use sessions
+    (rather than session[s].tunnel).
+  + Use <= cluster_highest_sessionid rather than < MAXSESSION in a
+    couple of loops.
+  + Don't kill a whole tunnel if we're out of sessions.
+  + Change session[s].ip to 0 if set from RADIUS to 255.255.255.254;
+    avoids the possibility that it will be interpreted as a valid IP
+    address.
+  + Avoid a possible buffer overflow in processpap.
+  + Kill session if authentication was rejected.
+- Merge 2.0.15:
+  + More DoS prevention:  add packet_limit option to apply a hard limit
+    to downstream packets per session.
+  + Fix "clear counters".
+  + Log "Accepted connection to CLI" at 4 when connection is from localhost
+    to reduce noise in logs.
+  + Show time since last counter reset in "show counters".
+- Merge 2.0.14:
+  + Throttle outgoing LASTSEEN packets to at most one per second for a
+    given seq#.
 
 * Fri Dec 17 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.13
 - Better cluster master collision resolution: keep a counter of state
