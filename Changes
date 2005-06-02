@@ -1,4 +1,4 @@
-* Thu May 26 2005 Brendan O'Dea <bod@optusnet.com.au> 2.1.0
+* Thu Jun 2 2005 Brendan O'Dea <bod@optusnet.com.au> 2.1.0
 - Add IPv6 support from Jonathan McDowell.
 - Add CHAP support from Jordan Hrycaj.
 - Add interim accounting support from Vladislav Bjelic.
@@ -77,6 +77,8 @@
 - New config option: cluster_master_min_adv which determines the minimum
   number of up to date slaves required before the master will drop
   routes.
+- New config option: allow_duplicate_users which determines whether
+  or not to kill older sessions with the same username.
 
 * Fri Dec 17 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.13
 - Better cluster master collision resolution: keep a counter of state
