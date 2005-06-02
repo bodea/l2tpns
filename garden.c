@@ -9,7 +9,7 @@
 
 /* walled garden */
 
-char const *cvs_id = "$Id: garden.c,v 1.22 2005-05-07 08:17:25 bodea Exp $";
+char const *cvs_id = "$Id: garden.c,v 1.23 2005-06-02 11:32:30 bodea Exp $";
 
 int plugin_api_version = PLUGIN_API_VERSION;
 static struct pluginfuncs *p = 0;
@@ -206,8 +206,10 @@ int garden_session(sessiont *s, int flag, char *newuser)
 			p->sessionkill(other, "Duplicate session when user released from walled garden");
 		}
 		/* Clean up counters */
-		s->cin = s->cout = 0;
 		s->pin = s->pout = 0;
+		s->cin = s->cout = 0;
+		s->cin_delta = s->cout_delta = 0;
+		s->cin_wrap = s->cout_wrap = 0;
 
 		snprintf(cmd, sizeof(cmd), "iptables -t nat -D garden_users -s %s -j garden", p->fmtaddr(htonl(s->ip), 0));
 		p->log(3, sess, s->tunnel, "%s\n", cmd);

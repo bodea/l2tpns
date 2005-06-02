@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.74 2005-06-02 04:04:07 bodea Exp $
+// $Id: l2tpns.h,v 1.75 2005-06-02 11:32:31 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -173,10 +173,10 @@ typedef struct
 	uint16_t nr;			// next receive
 	uint16_t ns;			// next send
 	uint32_t magic;			// ppp magic number
-	uint32_t cin, cout;		// byte counts
 	uint32_t pin, pout;		// packet counts
-	uint32_t total_cin;		// This counter is never reset while a session is open
-	uint32_t total_cout;		// This counter is never reset while a session is open
+	uint32_t cin, cout;		// byte counts
+	uint32_t cin_wrap, cout_wrap;	// byte counter wrap count (RADIUS accounting giagawords)
+	uint32_t cin_delta, cout_delta;	// byte count changes (for dump_session())
 	uint16_t throttle_in;		// upstream throttle rate (kbps)
 	uint16_t throttle_out;		// downstream throttle rate
 	uint8_t filter_in;		// input filter index (to ip_filters[N-1]; 0 if none)
@@ -201,7 +201,7 @@ typedef struct
 	uint8_t walled_garden;		// is this session gardened?
 	uint8_t ipv6prefixlen;		// IPv6 route prefix length
 	struct in6_addr ipv6route;	// Static IPv6 route
-	char reserved[24];		// Space to expand structure without changing HB_VERSION
+	char reserved[16];		// Space to expand structure without changing HB_VERSION
 }
 sessiont;
 
@@ -217,6 +217,10 @@ sessiont;
 
 typedef struct
 {
+	// packet counters
+	uint32_t pin;
+	uint32_t pout;
+
 	// byte counters
 	uint32_t cin;
 	uint32_t cout;
@@ -437,7 +441,6 @@ typedef struct
 
 	char		config_file[128];
 	int		reload_config;			// flag to re-read config (set by cli)
-	int		cleanup_interval;		// interval between regular cleanups (in seconds)
 	int		multi_read_count;		// amount of packets to read per fd in processing loop
 
 	char		tundevice[10];			// tun device name
@@ -496,6 +499,7 @@ typedef struct
 	int		cluster_highest_sessionid;
 	int		cluster_highest_tunnelid;
 	clockt		cluster_last_hb;		// Last time we saw a heartbeat from the master.
+	int		cluster_last_hb_ver;		// Heartbeat version last seen from master
 	int		cluster_num_changes;		// Number of changes queued.
 
 	int		cluster_hb_interval;		// How often to send a heartbeat.
@@ -616,6 +620,7 @@ void route6set(sessionidt s, struct in6_addr ip, int prefixlen, int add);
 sessionidt sessionbyip(in_addr_t ip);
 sessionidt sessionbyipv6(struct in6_addr ip);
 sessionidt sessionbyuser(char *username);
+void increment_counter(uint32_t *counter, uint32_t *wrap, uint32_t delta);
 void random_data(uint8_t *buf, int len);
 void sessionkill(sessionidt s, char *reason);
 void sessionshutdown(sessionidt s, char *reason, int result, int error);
@@ -681,6 +686,7 @@ if (count++ < max) { \
 extern configt *config;
 extern time_t basetime;		// Time when this process started.
 extern time_t time_now;		// Seconds since EPOCH.
+extern char main_quit;
 extern uint32_t last_id;
 extern struct Tstats *_statistics;
 extern in_addr_t my_address;

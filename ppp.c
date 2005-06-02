@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.61 2005-05-13 09:23:00 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.62 2005-06-02 11:32:31 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -1015,21 +1015,26 @@ void processipin(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 		return;
 	}
 
+	p += 4;
+	l -= 4;
+
 	if (session[s].snoop_ip && session[s].snoop_port)
 	{
 		// Snooping this session
-		snoop_send_packet(p + 4, l - 4, session[s].snoop_ip, session[s].snoop_port);
+		snoop_send_packet(p, l, session[s].snoop_ip, session[s].snoop_port);
 	}
 
-	session[s].cin += l - 4;
-	session[s].total_cin += l - 4;
-	sess_local[s].cin += l - 4;
-
+	increment_counter(&session[s].cin, &session[s].cin_wrap, l);
+	session[s].cin_delta += l;
 	session[s].pin++;
-	eth_tx += l - 4;
+
+	sess_local[s].cin += l;
+	sess_local[s].pin++;
+
+	eth_tx += l;
 
 	STAT(tun_tx_packets);
-	INC_STAT(tun_tx_bytes, l - 4);
+	INC_STAT(tun_tx_bytes, l);
 }
 
 // process IPv6 packet received
@@ -1103,21 +1108,26 @@ void processipv6in(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 		return;
 	}
 
+	p += 4;
+	l -= 4;
+
 	if (session[s].snoop_ip && session[s].snoop_port)
 	{
 		// Snooping this session
-		snoop_send_packet(p + 4, l - 4, session[s].snoop_ip, session[s].snoop_port);
+		snoop_send_packet(p, l, session[s].snoop_ip, session[s].snoop_port);
 	}
 
-	session[s].cin += l - 4;
-	session[s].total_cin += l - 4;
-	sess_local[s].cin += l - 4;
-
+	increment_counter(&session[s].cin, &session[s].cin_wrap, l);
+	session[s].cin_delta += l;
 	session[s].pin++;
-	eth_tx += l - 4;
+
+	sess_local[s].cin += l;
+	sess_local[s].pin++;
+
+	eth_tx += l;
 
 	STAT(tun_tx_packets);
-	INC_STAT(tun_tx_bytes, l - 4);
+	INC_STAT(tun_tx_bytes, l);
 }
 
 //
@@ -1137,19 +1147,24 @@ void send_ipin(sessionidt s, uint8_t *buf, int len)
 		return;
 	}
 
+	buf += 4;
+	len -= 4;
+
 	if (session[s].snoop_ip && session[s].snoop_port)
 	{
 		// Snooping this session
-		snoop_send_packet(buf + 4, len - 4, session[s].snoop_ip, session[s].snoop_port);
+		snoop_send_packet(buf, len, session[s].snoop_ip, session[s].snoop_port);
 	}
 
 	// Increment packet counters
-	session[s].cin += len - 4;
-	session[s].total_cin += len - 4;
-	sess_local[s].cin += len - 4;
-
+	increment_counter(&session[s].cin, &session[s].cin_wrap, len);
+	session[s].cin_delta += len;
 	session[s].pin++;
-	eth_tx += len - 4;
+
+	sess_local[s].cin += len;
+	sess_local[s].pin++;
+
+	eth_tx += len;
 
 	STAT(tun_tx_packets);
 	INC_STAT(tun_tx_bytes, len - 4);

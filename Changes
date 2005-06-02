@@ -79,6 +79,13 @@
   routes.
 - New config option: allow_duplicate_users which determines whether
   or not to kill older sessions with the same username.
+- Show session open time in "show session"/"show user" detailed output.
+- Have slaves with BGP configured drop BGP on receipt of a shutdown
+  signal, but hang about for an additional 5s to process any remaining
+  traffic.
+- Run regular_cleanups after processing the results of the select,
+  looking at a sufficient slice of each table to ensure that all
+  entries are examined at least once per second.
 
 * Fri Dec 17 2004 Brendan O'Dea <bod@optusnet.com.au> 2.0.13
 - Better cluster master collision resolution: keep a counter of state

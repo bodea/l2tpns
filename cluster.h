@@ -1,5 +1,5 @@
 // L2TPNS Clustering Stuff
-// $Id: cluster.h,v 1.11 2005-05-26 12:17:30 bodea Exp $
+// $Id: cluster.h,v 1.12 2005-06-02 11:32:30 bodea Exp $
 
 #ifndef __CLUSTER_H__
 #define __CLUSTER_H__
@@ -57,8 +57,10 @@ typedef struct {
 typedef struct {		/* Used to update byte counters on the */
 				/* master. */
 	uint32_t sid;
-	uint32_t in;
-	uint32_t out;
+	uint32_t pin;
+	uint32_t pout;
+	uint32_t cin;
+	uint32_t cout;
 } bytest;
 
 typedef struct {

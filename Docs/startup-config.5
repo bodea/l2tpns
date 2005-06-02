@@ -2,7 +2,7 @@
 .de Id
 .ds Dt \\$4 \\$5
 ..
-.Id $Id: startup-config.5,v 1.9 2005-06-02 04:04:08 bodea Exp $
+.Id $Id: startup-config.5,v 1.10 2005-06-02 11:32:33 bodea Exp $
 .TH STARTUP-CONFIG 5 "\*(Dt" L2TPNS "File Formats and Conventions"
 .SH NAME
 startup\-config \- configuration file for l2tpns
@@ -91,10 +91,7 @@ record when the session is closed.
 If
 .B radius_accounting
 is on, defines the interval between sending of RADIUS interim
-accounting records (in seconds).  Note: checking of this interval
-occurs no more frequently than
-.B cleanup_interval
-seconds (see below).
+accounting records (in seconds).
 .TP
 .B radius_secret
 Secret to be used in RADIUS packets.
@@ -144,9 +141,6 @@ every second.  Even if this is disabled, you can see this information
 by running the
 .B uptime
 command on the CLI.
-.TP
-.B cleanup_interval
-Interval between regular cleanups (in seconds).
 .TP
 .B multi_read_count
 Number of packets to read off each of the UDP and TUN fds when

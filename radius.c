@@ -1,6 +1,6 @@
 // L2TPNS Radius Stuff
 
-char const *cvs_id_radius = "$Id: radius.c,v 1.31 2005-05-16 04:51:16 bodea Exp $";
+char const *cvs_id_radius = "$Id: radius.c,v 1.32 2005-06-02 11:32:32 bodea Exp $";
 
 #include <time.h>
 #include <stdio.h>
@@ -132,7 +132,7 @@ void radiussend(uint16_t r, uint8_t state)
 		radius[r].try = 0;
 
 	radius[r].state = state;
-	radius[r].retry = backoff(radius[r].try++);
+	radius[r].retry = backoff(radius[r].try++) + 20; // 3s, 4s, 6s, 10s...
 	LOG(4, s, session[s].tunnel, "Send RADIUS id %d sock %d state %s try %d\n",
 		r >> RADIUS_SHIFT, r & RADIUS_MASK,
 		radius_state(radius[r].state), radius[r].try);
@@ -233,46 +233,62 @@ void radiussend(uint16_t r, uint8_t state)
 		}
 	}
 	else if (state == RADIUSSTART || state == RADIUSSTOP || state == RADIUSINTERIM)
-	{                          // accounting
-		*p = 40;                // accounting type
+	{			// accounting
+		*p = 40;	// accounting type
 		p[1] = 6;
 		*(uint32_t *) (p + 2) = htonl(state - RADIUSSTART + 1); // start=1, stop=2, interim=3
 		p += p[1];
 		if (s)
 		{
-			*p = 44;           // session ID
+			*p = 44;	// session ID
 			p[1] = 18;
 			sprintf(p + 2, "%08X%08X", session[s].unique_id, session[s].opened);
 			p += p[1];
 			if (state == RADIUSSTART)
-			{                // start
-				*p = 41;      // delay
+			{			// start
+				*p = 41;	// delay
 				p[1] = 6;
 				*(uint32_t *) (p + 2) = htonl(time(NULL) - session[s].opened);
 				p += p[1];
 				sess_local[s].last_interim = time_now; // Setup "first" Interim
 			}
 			else
-			{                // stop, interim
-				*p = 42;      // input octets
+			{			// stop, interim
+				*p = 42;	// input octets
 				p[1] = 6;
 				*(uint32_t *) (p + 2) = htonl(session[s].cin);
 				p += p[1];
-				*p = 43;      // output octets
+
+				*p = 43;	// output octets
 				p[1] = 6;
 				*(uint32_t *) (p + 2) = htonl(session[s].cout);
 				p += p[1];
-				*p = 46;      // session time
-				p[1] = 6;
-				*(uint32_t *) (p + 2) = htonl(time(NULL) - session[s].opened);
-				p += p[1];
-				*p = 47;      // input packets
+				if (state == RADIUSSTOP)
+				{
+					*p = 46;	// session time
+					p[1] = 6;
+					*(uint32_t *) (p + 2) = htonl(time(NULL) - session[s].opened);
+					p += p[1];
+				}
+
+				*p = 47;	// input packets
 				p[1] = 6;
 				*(uint32_t *) (p + 2) = htonl(session[s].pin);
 				p += p[1];
-				*p = 48;      // output spackets
+
+				*p = 48;	// output packets
 				p[1] = 6;
 				*(uint32_t *) (p + 2) = htonl(session[s].pout);
+				p += p[1];
+
+				*p = 52;	// input gigawords
+				p[1] = 6;
+				*(uint32_t *) (p + 2) = htonl(session[s].cin_wrap);
+				p += p[1];
+
+				*p = 53;	// output gigawords
+				p[1] = 6;
+				*(uint32_t *) (p + 2) = htonl(session[s].cout_wrap);
 				p += p[1];
 			}
 
@@ -711,7 +727,6 @@ void radiusretry(uint16_t r)
 
 	if (s) t = session[s].tunnel;
 
-	radius[r].retry = backoff(radius[r].try + 1);
 	switch (radius[r].state)
 	{
 		case RADIUSCHAP:	// sending CHAP down PPP

@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.59 2005-06-02 03:52:46 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.60 2005-06-02 11:32:30 bodea Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -411,7 +411,7 @@ static int cmd_show_session(struct cli_def *cli, char *command, char **argv, int
 			cli_print(cli, "\tIdle time:\t%u seconds", abs(time_now - session[s].last_packet));
 			cli_print(cli, "\tNext Recv:\t%u", session[s].nr);
 			cli_print(cli, "\tNext Send:\t%u", session[s].ns);
-			cli_print(cli, "\tBytes In/Out:\t%u/%u", session[s].total_cout, session[s].total_cin);
+			cli_print(cli, "\tBytes In/Out:\t%u/%u", session[s].cout, session[s].cin);
 			cli_print(cli, "\tPkts In/Out:\t%u/%u", session[s].pout, session[s].pin);
 			cli_print(cli, "\tMRU:\t\t%d", session[s].mru);
 			cli_print(cli, "\tRx Speed:\t%u", session[s].rx_connect_speed);
@@ -507,8 +507,8 @@ static int cmd_show_session(struct cli_def *cli, char *command, char **argv, int
 				(session[i].walled_garden) ? "Y" : "N",
 				(session[i].flags & SF_IPV6CP_ACKED) ? "Y" : "N",
 				abs(time_now - (unsigned long)session[i].opened),
-				(unsigned long)session[i].total_cout,
-				(unsigned long)session[i].total_cin,
+				(unsigned long)session[i].cout,
+				(unsigned long)session[i].cin,
 				abs(time_now - (session[i].last_packet ? session[i].last_packet : time_now)),
 				fmtaddr(htonl(tunnel[ session[i].tunnel ].ip), 1),
 				session[i].calling[0] ? session[i].calling : "*");
