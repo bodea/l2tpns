@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.73 2005-05-26 12:17:30 bodea Exp $
+// $Id: l2tpns.h,v 1.74 2005-06-02 04:04:07 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -457,6 +457,8 @@ typedef struct
 	char		radius_authtypes_s[32];		// list of valid authentication types (chap, pap) in order of preference
 	int		radius_authtypes;
 	int		radius_authprefer;
+
+	int		allow_duplicate_users;		// allow multiple logins with the same username
 
 	in_addr_t	default_dns1, default_dns2;
 

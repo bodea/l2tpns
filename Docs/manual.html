@@ -223,6 +223,17 @@ This secret will be used in all RADIUS queries.  If this is not set then
 RADIUS queries will fail.
 </LI>
 
+<LI><B>radius_authtypes</B> (string)</BR>
+A comma separated list of supported RADIUS authentication methods
+(<B>pap</B> or <B>chap</B>), in order of preference (default <B>pap</B>).
+</LI>
+
+<LI><B>allow_duplicate_users</B> (boolean)</BR>
+Allow multiple logins with the same username.  If false (the default),
+any prior session with the same username will be dropped when a new
+session is established.
+</LI>
+
 <LI><B>bind_address</B> (ip address)<BR>
 When the tun interface is created, it is assigned the address
 specified here.  If no address is given, 1.1.1.1 is used.  Packets

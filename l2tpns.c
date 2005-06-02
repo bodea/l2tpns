@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.105 2005-05-26 12:17:30 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.106 2005-06-02 04:04:07 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -113,6 +113,7 @@ config_descriptt config_values[] = {
 	CONFIG("radius_interim", radius_interim, INT),
 	CONFIG("radius_secret", radiussecret, STRING),
 	CONFIG("radius_authtypes", radius_authtypes_s, STRING),
+	CONFIG("allow_duplicate_users", allow_duplicate_users, BOOL),
 	CONFIG("bind_address", bind_address, IPv4),
 	CONFIG("peer_address", peer_address, IPv4),
 	CONFIG("send_garp", send_garp, BOOL),
@@ -4190,8 +4191,16 @@ int sessionsetup(tunnelidt t, sessionidt s)
 		for (i = 1; i <= config->cluster_highest_sessionid; i++)
 		{
 			if (i == s) continue;
-			if (ip == session[i].ip) sessionkill(i, "Duplicate IP address");
-			if (!session[s].walled_garden && !session[i].walled_garden && strcasecmp(user, session[i].user) == 0)
+			if (!session[s].opened) continue;
+			if (ip == session[i].ip)
+			{
+				sessionkill(i, "Duplicate IP address");
+				continue;
+			}
+
+			if (config->allow_duplicate_users) continue;
+			if (session[s].walled_garden || session[i].walled_garden) continue;
+			if (!strcasecmp(user, session[i].user))
 				sessionkill(i, "Duplicate session for users");
 		}
 	}
