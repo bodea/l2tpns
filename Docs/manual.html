@@ -56,6 +56,7 @@ H3 {
     <LI><A HREF="#Filtering">Filtering</A></LI>
     <LI><A HREF="#Clustering">Clustering</A></LI>
     <LI><A HREF="#Routing">Routing</A></LI>
+    <LI><A HREF="#AvoidingFragmentation">Avoiding Fragmentation</A></LI>
     <LI><A HREF="#Performance">Performance</A></LI>
 </OL>
 
@@ -1029,6 +1030,22 @@ and configure multi-path load-balancing.  Cisco uses "maximum-paths
 ibgp" for IBGP.  If this is not supported by your IOS revision, you
 can use "maximum-paths" (which works for EBGP) and set
 <B>as_number</B> to a private value such as 64512.<P>
+
+<H2 ID="AvoidingFragmentation">Avoiding Fragmentation</H2>
+
+Fragmentation of encapsulated return packets to the LAC may be avoided
+for TCP sessions by adding a firewall rule to clamps the MSS on
+outgoing SYN packets.
+
+The following is appropriate for interfaces with a typical MTU of
+1500:
+
+<pre>
+iptables -A FORWARD -i tun+ -o eth0 	\
+    -p tcp --tcp-flags SYN,RST SYN	\
+    -m tcpmss --mss 1413:1600		\
+    -j TCPMSS --set-mss 1412
+</pre>
 
 <H2 ID="Performance">Performance</H2>
 
