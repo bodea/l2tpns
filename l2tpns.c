@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.107 2005-06-02 11:32:30 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.108 2005-06-04 15:42:35 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -52,7 +52,7 @@ char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.107 2005-06-02 11:32:30 bodea Exp
 
 #ifdef BGP
 #include "bgp.h"
-#endif /* BGP */
+#endif
 
 // Globals
 configt *config = NULL;		// all configuration
@@ -64,13 +64,14 @@ int snoopfd = -1;		// UDP file handle for sending out intercept data
 int *radfds = NULL;		// RADIUS requests file handles
 int ifrfd = -1;			// File descriptor for routing, etc
 int ifr6fd = -1;		// File descriptor for IPv6 routing, etc
-static int rand_fd = -1;	// Random data source
+int rand_fd = -1;		// Random data source
+int cluster_sockfd = -1;	// Intra-cluster communications socket.
+int epollfd = -1;		// event polling
 time_t basetime = 0;		// base clock
 char hostname[1000] = "";	// us.
 static int tunidx;		// ifr_ifindex of tun device
 static int syslog_log = 0;	// are we logging to syslog
 static FILE *log_stream = 0;	// file handle for direct logging (i.e. direct into file, not via syslog).
-extern int cluster_sockfd;	// Intra-cluster communications socket.
 uint32_t last_id = 0;		// Unique ID for radius accounting
 
 struct cli_session_actions *cli_session_actions = NULL;	// Pending session changes requested by CLI
@@ -1012,7 +1013,8 @@ static void processipout(uint8_t * buf, int len)
 		if (rate++ < config->icmp_rate) // Only send a max of icmp_rate per second.
 		{
 			LOG(4, 0, 0, "IP: Sending ICMP host unreachable to %s\n", fmtaddr(*(in_addr_t *)(buf + 12), 0));
-			host_unreachable(*(in_addr_t *)(buf + 12), *(uint16_t *)(buf + 4), ip, buf, (len < 64) ? 64 : len);
+			host_unreachable(*(in_addr_t *)(buf + 12), *(uint16_t *)(buf + 4),
+				config->bind_address ? config->bind_address : my_address, buf, len);
 		}
 		return;
 	}
@@ -2850,13 +2852,13 @@ static void regular_cleanups(double period)
 static int still_busy(void)
 {
 	int i;
-	static time_t stopped_bgp = 0;
 	static clockt last_talked = 0;
 	static clockt start_busy_wait = 0;
 
 	if (!config->cluster_iam_master)
 	{
 #ifdef BGP
+		static time_t stopped_bgp = 0;
 	    	if (bgp_configured)
 		{
 			if (!stopped_bgp)
@@ -2924,41 +2926,89 @@ static int still_busy(void)
 	return 0;
 }
 
-static fd_set readset;
-static int readset_n = 0;
+#ifdef HAVE_EPOLL
+# include <sys/epoll.h>
+#else
+# define FAKE_EPOLL_IMPLEMENTATION /* include the functions */
+# include "fake_epoll.h"
+#endif
+
+// the base set of fds polled: control, cli, udp, tun, cluster
+#define BASE_FDS	5
+
+// additional polled fds
+#ifdef BGP
+# define EXTRA_FDS	BGP_NUM_PEERS
+#else
+# define EXTRA_FDS	0
+#endif
 
 // main loop - gets packets on tun or udp and processes them
 static void mainloop(void)
 {
 	int i;
 	uint8_t buf[65536];
-	struct timeval to;
 	clockt next_cluster_ping = 0;	// send initial ping immediately
+	struct epoll_event events[BASE_FDS + RADIUS_FDS + EXTRA_FDS];
+	int maxevent = sizeof(events)/sizeof(*events);
+
+	if ((epollfd = epoll_create(maxevent)) < 0)
+	{
+	    	LOG(0, 0, 0, "epoll_create failed: %s\n", strerror(errno));
+		exit(1);
+	}
 
 	LOG(4, 0, 0, "Beginning of main loop.  udpfd=%d, tunfd=%d, cluster_sockfd=%d, controlfd=%d\n",
 		udpfd, tunfd, cluster_sockfd, controlfd);
 
-	FD_ZERO(&readset);
-	FD_SET(udpfd, &readset);
-	FD_SET(tunfd, &readset);
-	FD_SET(controlfd, &readset);
-	FD_SET(clifd, &readset);
-	if (cluster_sockfd) FD_SET(cluster_sockfd, &readset);
-	readset_n = udpfd;
-	if (tunfd > readset_n)          readset_n = tunfd;
-	if (controlfd > readset_n)      readset_n = controlfd;
-	if (clifd > readset_n)          readset_n = clifd;
-	if (cluster_sockfd > readset_n) readset_n = cluster_sockfd;
+	/* setup our fds to poll for input */
+	{
+		static struct event_data d[BASE_FDS];
+		struct epoll_event e;
+
+		e.events = EPOLLIN;
+		i = 0;
+
+		d[i].type = FD_TYPE_CONTROL;
+		e.data.ptr = &d[i++];
+		epoll_ctl(epollfd, EPOLL_CTL_ADD, controlfd, &e);
+
+		d[i].type = FD_TYPE_CLI;
+		e.data.ptr = &d[i++];
+		epoll_ctl(epollfd, EPOLL_CTL_ADD, clifd, &e);
+
+		d[i].type = FD_TYPE_UDP;
+		e.data.ptr = &d[i++];
+		epoll_ctl(epollfd, EPOLL_CTL_ADD, udpfd, &e);
+
+		d[i].type = FD_TYPE_TUN;
+		e.data.ptr = &d[i++];
+		epoll_ctl(epollfd, EPOLL_CTL_ADD, tunfd, &e);
+
+		d[i].type = FD_TYPE_CLUSTER;
+		e.data.ptr = &d[i++];
+		epoll_ctl(epollfd, EPOLL_CTL_ADD, cluster_sockfd, &e);
+	}
+
+#ifdef BGP
+	signal(SIGPIPE, SIG_IGN);
+	bgp_setup(config->as_number);
+	if (config->bind_address)
+		bgp_add_route(config->bind_address, 0xffffffff);
+
+	for (i = 0; i < BGP_NUM_PEERS; i++)
+	{
+		if (config->neighbour[i].name[0])
+			bgp_start(&bgp_peers[i], config->neighbour[i].name,
+				config->neighbour[i].as, config->neighbour[i].keepalive,
+				config->neighbour[i].hold, 0); /* 0 = routing disabled */
+	}
+#endif /* BGP */
 
 	while (!main_quit || still_busy())
 	{
-		fd_set r;
-		int n = readset_n;
-#ifdef BGP
-		fd_set w;
-		int bgp_set[BGP_NUM_PEERS];
-#endif /* BGP */
 		int more = 0;
+		int n;
 
 		if (config->reload_config)
 		{
@@ -2966,35 +3016,11 @@ static void mainloop(void)
 			update_config();
 		}
 
-		memcpy(&r, &readset, sizeof(fd_set));
-		to.tv_sec = 0;
-		to.tv_usec = 100000; // 1/10th of a second.
-
 #ifdef BGP
-		FD_ZERO(&w);
-		for (i = 0; i < BGP_NUM_PEERS; i++)
-		{
-			bgp_set[i] = bgp_select_state(&bgp_peers[i]);
-			if (bgp_set[i] & 1)
-			{
-				FD_SET(bgp_peers[i].sock, &r);
-				if (bgp_peers[i].sock > n)
-					n = bgp_peers[i].sock;
-			}
-
-			if (bgp_set[i] & 2)
-			{
-				FD_SET(bgp_peers[i].sock, &w);
-				if (bgp_peers[i].sock > n)
-					n = bgp_peers[i].sock;
-			}
-		}
-
-		n = select(n + 1, &r, &w, 0, &to);
-#else /* BGP */
-		n = select(n + 1, &r, 0, 0, &to);
+		bgp_set_poll();
 #endif /* BGP */
 
+		n = epoll_wait(epollfd, events, maxevent, 100); // timeout 100ms (1/10th sec)
 		STAT(select_called);
 
 		TIME = now(NULL);
@@ -3008,67 +3034,83 @@ static void mainloop(void)
 			main_quit++;
 			break;
 		}
-		else if (n)
+
+		if (n)
 		{
 			struct sockaddr_in addr;
 			int alen, c, s;
+			int udp_ready = 0;
+			int tun_ready = 0;
+			int cluster_ready = 0;
 			int udp_pkts = 0;
 			int tun_pkts = 0;
 			int cluster_pkts = 0;
+#ifdef BGP
+			uint32_t bgp_events[BGP_NUM_PEERS];
+			memset(bgp_events, 0, sizeof(bgp_events));
+#endif /* BGP */
 
-			// nsctl commands
-			if (FD_ISSET(controlfd, &r))
+			for (c = n, i = 0; i < c; i++)
 			{
-				alen = sizeof(addr);
-				processcontrol(buf, recvfrom(controlfd, buf, sizeof(buf), MSG_WAITALL, (void *) &addr, &alen), &addr, alen);
-				n--;
-			}
-
-			// RADIUS responses
-			if (config->cluster_iam_master)
-			{
-				for (i = 0; i < config->num_radfds; i++)
+				struct event_data *d = events[i].data.ptr;
+				switch (d->type)
 				{
-					if (FD_ISSET(radfds[i], &r))
+				case FD_TYPE_CONTROL: // nsctl commands
+					alen = sizeof(addr);
+					processcontrol(buf, recvfrom(controlfd, buf, sizeof(buf), MSG_WAITALL, (void *) &addr, &alen), &addr, alen);
+					n--;
+					break;
+
+				case FD_TYPE_CLI: // CLI connections
+				{
+					int cli;
+					
+					alen = sizeof(addr);
+					if ((cli = accept(clifd, (struct sockaddr *)&addr, &alen)) >= 0)
 					{
-						processrad(buf, recv(radfds[i], buf, sizeof(buf), 0), i);
-						n--;
+						cli_do(cli);
+						close(cli);
 					}
-				}
-			}
+					else
+						LOG(0, 0, 0, "accept error: %s\n", strerror(errno));
 
-			// CLI connections
-			if (FD_ISSET(clifd, &r))
-			{
-				int cli;
-				
-				alen = sizeof(addr);
-				if ((cli = accept(clifd, (struct sockaddr *)&addr, &alen)) >= 0)
-				{
-					cli_do(cli);
-					close(cli);
+					n--;
+					break;
 				}
-				else
-					LOG(0, 0, 0, "accept error: %s\n", strerror(errno));
 
-				n--;
+				// these are handled below, with multiple interleaved reads
+				case FD_TYPE_UDP:	udp_ready++; break;
+				case FD_TYPE_TUN:	tun_ready++; break;
+				case FD_TYPE_CLUSTER:	cluster_ready++; break;
+
+				case FD_TYPE_RADIUS: // RADIUS response
+					s = recv(radfds[d->index], buf, sizeof(buf), 0);
+					if (s >= 0 && config->cluster_iam_master)
+						processrad(buf, s, d->index);
+
+					n--;
+					break;
+
+#ifdef BGP
+				case FD_TYPE_BGP:
+				    	bgp_events[d->index] = events[i].events;
+				    	n--;
+					break;
+#endif /* BGP */
+
+				default:
+				    	LOG(0, 0, 0, "Unexpected fd type returned from epoll_wait: %d\n", d->type);
+				}
 			}
 
 #ifdef BGP
-			for (i = 0; i < BGP_NUM_PEERS; i++)
-			{
-				int isr = bgp_set[i] ? FD_ISSET(bgp_peers[i].sock, &r) : 0;
-				int isw = bgp_set[i] ? FD_ISSET(bgp_peers[i].sock, &w) : 0;
-				bgp_process(&bgp_peers[i], isr, isw);
-				if (isr) n--;
-				if (isw) n--;
-			}
+			bgp_process(bgp_events);
 #endif /* BGP */
 
 			for (c = 0; n && c < config->multi_read_count; c++)
 			{
 				// L2TP
-				if (FD_ISSET(udpfd, &r))
+				if (udp_ready)
 				{
 					alen = sizeof(addr);
 					if ((s = recvfrom(udpfd, buf, sizeof(buf), 0, (void *) &addr, &alen)) > 0)
@@ -3078,13 +3120,13 @@ static void mainloop(void)
 					}
 					else
 					{
-						FD_CLR(udpfd, &r);
+						udp_ready = 0;
 						n--;
 					}
 				}
 
 				// incoming IP
-				if (FD_ISSET(tunfd, &r))
+				if (tun_ready)
 				{
 					if ((s = read(tunfd, buf, sizeof(buf))) > 0)
 					{
@@ -3093,13 +3135,13 @@ static void mainloop(void)
 					}
 					else
 					{
-						FD_CLR(tunfd, &r);
+						tun_ready = 0;
 						n--;
 					}
 				}
 
 				// cluster
-				if (FD_ISSET(cluster_sockfd, &r))
+				if (cluster_ready)
 				{
 					alen = sizeof(addr);
 					if ((s = recvfrom(cluster_sockfd, buf, sizeof(buf), MSG_WAITALL, (void *) &addr, &alen)) > 0)
@@ -3109,7 +3151,7 @@ static void mainloop(void)
 					}
 					else
 					{
-						FD_CLR(cluster_sockfd, &r);
+						cluster_ready = 0;
 						n--;
 					}
 				}
@@ -3129,7 +3171,7 @@ static void mainloop(void)
 		}
 
 			// Runs on every machine (master and slaves).
-		if (cluster_sockfd && next_cluster_ping <= TIME)
+		if (next_cluster_ping <= TIME)
 		{
 			// Check to see which of the cluster is still alive..
 
@@ -3707,10 +3749,12 @@ static int dump_session(FILE **f, sessiont *s)
 		LOG(3, 0, 0, "Dumping accounting information to %s\n", filename);
 		fprintf(*f, "# dslwatch.pl dump file V1.01\n"
 			"# host: %s\n"
+			"# endpoint: %s\n"
 			"# time: %ld\n"
 			"# uptime: %ld\n"
 			"# format: username ip qos uptxoctets downrxoctets\n",
 			hostname,
+			fmtaddr(config->bind_address ? config->bind_address : my_address, 0),
 			now,
 			now - basetime);
 	}
@@ -3850,19 +3894,6 @@ int main(int argc, char *argv[])
 	/* Set up the cluster communications port. */
 	if (cluster_init() < 0)
 		exit(1);
-
-#ifdef BGP
-	signal(SIGPIPE, SIG_IGN);
-	bgp_setup(config->as_number);
-	bgp_add_route(config->bind_address, 0xffffffff);
-	for (i = 0; i < BGP_NUM_PEERS; i++)
-	{
-		if (config->neighbour[i].name[0])
-			bgp_start(&bgp_peers[i], config->neighbour[i].name,
-				config->neighbour[i].as, config->neighbour[i].keepalive,
-				config->neighbour[i].hold, 0); /* 0 = routing disabled */
-	}
-#endif /* BGP */
 
 	inittun();
 	LOG(1, 0, 0, "Set up on interface %s\n", config->tundevice);
@@ -4093,8 +4124,6 @@ static void update_config()
 
 	if (!config->numradiusservers)
 		LOG(0, 0, 0, "No RADIUS servers defined!\n");
-
-	config->num_radfds = 1 << RADIUS_SHIFT;
 
 	// parse radius_authtypes_s
 	config->radius_authtypes = config->radius_authprefer = 0;
@@ -4853,6 +4882,9 @@ static tunnelidt new_tunnel()
 void become_master(void)
 {
 	int s, i;
+	static struct event_data d[RADIUS_FDS];
+	struct epoll_event e;
+
 	run_plugins(PLUGIN_BECOME_MASTER, NULL);
 
 	// running a bunch of iptables commands is slow and can cause
@@ -4871,11 +4903,14 @@ void become_master(void)
 	}
 
 	// add radius fds
-	for (i = 0; i < config->num_radfds; i++)
+	e.events = EPOLLIN;
+	for (i = 0; i < RADIUS_FDS; i++)
 	{
-		FD_SET(radfds[i], &readset);
-		if (radfds[i] > readset_n)
-			readset_n = radfds[i];
+	    	d[i].type = FD_TYPE_RADIUS;
+		d[i].index = i;
+		e.data.ptr = &d[i];
+
+		epoll_ctl(epollfd, EPOLL_CTL_ADD, radfds[i], &e);
 	}
 }
 

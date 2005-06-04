@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.60 2005-06-02 11:32:30 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.61 2005-06-04 15:42:35 bodea Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -49,15 +49,6 @@ extern struct cli_tunnel_actions *cli_tunnel_actions;
 extern tbft *filter_list;
 extern ip_filtert *ip_filters;
 
-static char *debug_levels[] = {
-	"CRIT",
-	"ERROR",
-	"WARN",
-	"INFO",
-	"CALL",
-	"DATA",
-};
-
 struct
 {
 	char critical;
@@ -68,15 +59,24 @@ struct
 	char data;
 } debug_flags;
 
-static int debug_session;
-static int debug_tunnel;
+#ifdef RINGBUFFER
+
 static int debug_rb_tail;
+static char *debug_levels[] = {
+	"CRIT",
+	"ERROR",
+	"WARN",
+	"INFO",
+	"CALL",
+	"DATA",
+};
+
+#endif
 
 static int cmd_show_session(struct cli_def *cli, char *command, char **argv, int argc);
 static int cmd_show_tunnels(struct cli_def *cli, char *command, char **argv, int argc);
 static int cmd_show_users(struct cli_def *cli, char *command, char **argv, int argc);
 static int cmd_show_radius(struct cli_def *cli, char *command, char **argv, int argc);
-static int cmd_show_counters(struct cli_def *cli, char *command, char **argv, int argc);
 static int cmd_show_version(struct cli_def *cli, char *command, char **argv, int argc);
 static int cmd_show_pool(struct cli_def *cli, char *command, char **argv, int argc);
 static int cmd_show_run(struct cli_def *cli, char *command, char **argv, int argc);
@@ -84,7 +84,6 @@ static int cmd_show_banana(struct cli_def *cli, char *command, char **argv, int 
 static int cmd_show_plugins(struct cli_def *cli, char *command, char **argv, int argc);
 static int cmd_show_throttle(struct cli_def *cli, char *command, char **argv, int argc);
 static int cmd_write_memory(struct cli_def *cli, char *command, char **argv, int argc);
-static int cmd_clear_counters(struct cli_def *cli, char *command, char **argv, int argc);
 static int cmd_drop_user(struct cli_def *cli, char *command, char **argv, int argc);
 static int cmd_drop_tunnel(struct cli_def *cli, char *command, char **argv, int argc);
 static int cmd_drop_session(struct cli_def *cli, char *command, char **argv, int argc);
@@ -101,6 +100,11 @@ static int cmd_uptime(struct cli_def *cli, char *command, char **argv, int argc)
 
 static int regular_stuff(struct cli_def *cli);
 static void parsemac(char *string, char mac[6]);
+
+#ifdef STATISTICS
+static int cmd_show_counters(struct cli_def *cli, char *command, char **argv, int argc);
+static int cmd_clear_counters(struct cli_def *cli, char *command, char **argv, int argc);
+#endif /* STATISTICS */
 
 #ifdef BGP
 #define MODE_CONFIG_BGP 8
@@ -312,8 +316,6 @@ void cli_do(int sockfd)
 		cli->users = 0;
 	}
 
-	debug_session = 0;
-	debug_tunnel = 0;
 #ifdef RINGBUFFER
 	debug_rb_tail = ringbuffer->tail;
 #endif
@@ -646,6 +648,7 @@ static int cmd_show_users(struct cli_def *cli, char *command, char **argv, int a
 	return CLI_OK;
 }
 
+#ifdef STATISTICS
 static int cmd_show_counters(struct cli_def *cli, char *command, char **argv, int argc)
 {
 	if (CLI_HELP_REQUESTED)
@@ -697,7 +700,7 @@ static int cmd_show_counters(struct cli_def *cli, char *command, char **argv, in
 	cli_print(cli, "%-30s%u", "multi_read_exceeded",	GET_STAT(multi_read_exceeded));
 
 
-#ifdef STATISTICS
+#ifdef STAT_CALLS
 	cli_print(cli, "\n%-30s%-10s", "Counter", "Value");
 	cli_print(cli, "-----------------------------------------");
 	cli_print(cli, "%-30s%u", "call_processtun",		GET_STAT(call_processtun));
@@ -731,7 +734,7 @@ static int cmd_show_counters(struct cli_def *cli, char *command, char **argv, in
 	cli_print(cli, "%-30s%u", "call_radiussend",		GET_STAT(call_radiussend));
 	cli_print(cli, "%-30s%u", "call_radiusretry",		GET_STAT(call_radiusretry));
 	cli_print(cli, "%-30s%u", "call_random_data",		GET_STAT(call_random_data));
-#endif
+#endif /* STAT_CALLS */
 
 	{
 		time_t l = GET_STAT(last_reset);
@@ -745,6 +748,19 @@ static int cmd_show_counters(struct cli_def *cli, char *command, char **argv, in
 
 	return CLI_OK;
 }
+
+static int cmd_clear_counters(struct cli_def *cli, char *command, char **argv, int argc)
+{
+	if (CLI_HELP_REQUESTED)
+		return CLI_HELP_NO_ARGS;
+
+	memset(_statistics, 0, sizeof(struct Tstats));
+	SET_STAT(last_reset, time(NULL));
+
+	cli_print(cli, "Counters cleared");
+	return CLI_OK;
+}
+#endif /* STATISTICS */
 
 static int cmd_show_version(struct cli_def *cli, char *command, char **argv, int argc)
 {
@@ -1131,18 +1147,6 @@ static int cmd_show_banana(struct cli_def *cli, char *command, char **argv, int 
 			"             `-.__  `----\"\"\"    __.-'\n"
 			"hh                `--..____..--'");
 
-	return CLI_OK;
-}
-
-static int cmd_clear_counters(struct cli_def *cli, char *command, char **argv, int argc)
-{
-	if (CLI_HELP_REQUESTED)
-		return CLI_HELP_NO_ARGS;
-
-	memset(_statistics, 0, sizeof(struct Tstats));
-	SET_STAT(last_reset, time(NULL));
-
-	cli_print(cli, "Counters cleared");
 	return CLI_OK;
 }
 
@@ -1896,10 +1900,10 @@ static int cmd_set(struct cli_def *cli, char *command, char **argv, int argc)
 
 int regular_stuff(struct cli_def *cli)
 {
+#ifdef RINGBUFFER
 	int out = 0;
 	int i;
 
-#ifdef RINGBUFFER
 	for (i = debug_rb_tail; i != ringbuffer->tail; i = (i + 1) % RINGBUFFER_SIZE)
 	{
 		char *m = ringbuffer->buffer[i].message;

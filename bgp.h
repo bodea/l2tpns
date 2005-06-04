@@ -1,5 +1,5 @@
 /* BGPv4 (RFC1771) */
-/* $Id: bgp.h,v 1.4 2004-12-16 08:49:52 bodea Exp $ */
+/* $Id: bgp.h,v 1.5 2005-06-04 15:42:35 bodea Exp $ */
 
 #ifndef __BGP_H__
 #define __BGP_H__
@@ -173,6 +173,8 @@ struct bgp_peer {
     int cli_flag;			/* updates requested from CLI */
     char *path_attrs;			/* path attrs to send in UPDATE message */
     int path_attr_len;			/* length of path attrs */
+    uint32_t events;			/* events to poll */
+    struct event_data edata;		/* poll data */
 };
 
 /* bgp_peer.cli_flag */
@@ -194,8 +196,8 @@ int bgp_restart(struct bgp_peer *peer);
 int bgp_add_route(in_addr_t ip, in_addr_t mask);
 int bgp_del_route(in_addr_t ip, in_addr_t mask);
 void bgp_enable_routing(int enable);
-int bgp_select_state(struct bgp_peer *peer);
-int bgp_process(struct bgp_peer *peer, int readable, int writable);
+int bgp_set_poll(void);
+int bgp_process(uint32_t events[]);
 char const *bgp_state_str(enum bgp_state state);
 
 extern char const *cvs_id_bgp;

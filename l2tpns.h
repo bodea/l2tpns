@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.75 2005-06-02 11:32:31 bodea Exp $
+// $Id: l2tpns.h,v 1.76 2005-06-04 15:42:36 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -23,6 +23,7 @@
 #define MAXTBFS		6000		// Maximum token bucket filters. Might need up to 2 * session.
 
 #define RADIUS_SHIFT	6
+#define	RADIUS_FDS	(1 << RADIUS_SHIFT)
 #define RADIUS_MASK	((1 << RADIUS_SHIFT) - 1)
 #define MAXRADIUS	(1 << (8 + RADIUS_SHIFT))
 
@@ -455,7 +456,6 @@ typedef struct
 	in_addr_t	radiusserver[MAXRADSERVER];	// radius servers
 	uint16_t	radiusport[MAXRADSERVER];	// radius base ports
 	uint8_t		numradiusservers;		// radius server count
-	short		num_radfds;			// Number of radius filehandles allocated
 
 	char		radius_authtypes_s[32];		// list of valid authentication types (chap, pap) in order of preference
 	int		radius_authtypes;
@@ -692,7 +692,20 @@ extern struct Tstats *_statistics;
 extern in_addr_t my_address;
 extern int tun_write(uint8_t *data, int size);
 extern int clifd;
+extern int epollfd;
 
+struct event_data {
+	enum {
+	    	FD_TYPE_CONTROL,
+	    	FD_TYPE_CLI,
+	    	FD_TYPE_UDP,
+	    	FD_TYPE_TUN,
+	    	FD_TYPE_CLUSTER,
+		FD_TYPE_RADIUS,
+		FD_TYPE_BGP,
+	} type;
+	int index; // for RADIUS, BGP
+};
 
 #define TIME (config->current_time)
 

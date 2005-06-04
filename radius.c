@@ -1,6 +1,6 @@
 // L2TPNS Radius Stuff
 
-char const *cvs_id_radius = "$Id: radius.c,v 1.32 2005-06-02 11:32:32 bodea Exp $";
+char const *cvs_id_radius = "$Id: radius.c,v 1.33 2005-06-04 15:42:36 bodea Exp $";
 
 #include <time.h>
 #include <stdio.h>
@@ -29,9 +29,9 @@ extern ip_filtert *ip_filters;
 void initrad(void)
 {
 	int i;
-	LOG(3, 0, 0, "Creating %d sockets for RADIUS queries\n", config->num_radfds);
-	radfds = calloc(sizeof(int), config->num_radfds);
-	for (i = 0; i < config->num_radfds; i++)
+	LOG(3, 0, 0, "Creating %d sockets for RADIUS queries\n", RADIUS_FDS);
+	radfds = calloc(sizeof(int), RADIUS_FDS);
+	for (i = 0; i < RADIUS_FDS; i++)
 	{
 		int flags;
 		radfds[i] = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);

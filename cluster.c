@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.40 2005-06-02 11:32:30 bodea Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.41 2005-06-04 15:42:35 bodea Exp $";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -38,7 +38,7 @@ char const *cvs_id_cluster = "$Id: cluster.c,v 1.40 2005-06-02 11:32:30 bodea Ex
  */
 
 // Module variables.
-int cluster_sockfd = 0;			// The filedescriptor for the cluster communications port.
+extern int cluster_sockfd;		// The filedescriptor for the cluster communications port.
 
 in_addr_t my_address = 0;		// The network address of my ethernet port.
 static int walk_session_number = 0;	// The next session to send when doing the slow table walk.

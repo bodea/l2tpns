@@ -10,7 +10,7 @@
  *   nor RFC2385 (which requires a kernel patch on 2.4 kernels).
  */
 
-char const *cvs_id_bgp = "$Id: bgp.c,v 1.9 2004-12-16 08:49:52 bodea Exp $";
+char const *cvs_id_bgp = "$Id: bgp.c,v 1.10 2005-06-04 15:42:35 bodea Exp $";
 
 #include <stdlib.h>
 #include <unistd.h>
@@ -75,6 +75,10 @@ int bgp_setup(int as)
 
 	    return 0;
 	}
+
+	peer->edata.type = FD_TYPE_BGP;
+	peer->edata.index = i;
+	peer->events = 0;
     }
 
     if (as < 1)
@@ -270,6 +274,7 @@ static void bgp_clear(struct bgp_peer *peer)
     peer->inbuf->done = 0;
 
     peer->cli_flag = 0;
+    peer->events = 0;
 
     if (peer->state != peer->next_state)
     {
@@ -487,130 +492,160 @@ void bgp_enable_routing(int enable)
     LOG(4, 0, 0, "%s BGP routing\n", enable ? "Enabled" : "Suspended");
 }
 
-/* return a bitmask indicating if the socket should be added to the
-   read set (1) and or write set (2) for select */
-int bgp_select_state(struct bgp_peer *peer)
+#ifdef HAVE_EPOLL
+# include <sys/epoll.h>
+#else
+# include "fake_epoll.h"
+#endif
+
+/* return a bitmask of the events required to poll this peer's fd */
+int bgp_set_poll()
 {
-    int flags = 0;
+    int i;
 
     if (!bgp_configured)
     	return 0;
 
-    if (peer->state == Disabled || peer->state == Idle)
-    	return 0;
+    for (i = 0; i < BGP_NUM_PEERS; i++)
+    {
+	struct bgp_peer *peer = &bgp_peers[i];
+	int events = 0;
 
-    if (peer->inbuf->done < BGP_MAX_PACKET_SIZE)
-	flags |= 1;
+	if (peer->state == Disabled || peer->state == Idle)
+	    continue;
 
-    if (peer->state == Connect ||		/* connection in progress */
-	peer->update_routes ||			/* routing updates */
-	peer->outbuf->packet.header.len)	/* pending output */
-    	flags |= 2;
+	if (peer->inbuf->done < BGP_MAX_PACKET_SIZE)
+	    events |= EPOLLIN;
 
-    return flags;
+	if (peer->state == Connect ||		/* connection in progress */
+	    peer->update_routes ||		/* routing updates */
+	    peer->outbuf->packet.header.len)	/* pending output */
+	    events |= EPOLLOUT;
+
+    	if (peer->events != events)
+	{
+	    struct epoll_event ev;
+
+	    ev.events = peer->events = events;
+	    ev.data.ptr = &peer->edata;
+	    epoll_ctl(epollfd, EPOLL_CTL_MOD, peer->sock, &ev);
+	}
+    }
+
+    return 1;
 }
 
-/* process bgp peer */
-int bgp_process(struct bgp_peer *peer, int readable, int writable)
+/* process bgp events/timers */
+int bgp_process(uint32_t events[])
 {
+    int i;
+
     if (!bgp_configured)
     	return 0;
 
-    if (*peer->name && peer->cli_flag == BGP_CLI_RESTART)
-	return bgp_restart(peer);
-
-    if (peer->state == Disabled)
-    	return 1;
-
-    if (peer->cli_flag)
+    for (i = 0; i < BGP_NUM_PEERS; i++)
     {
-	switch (peer->cli_flag)
+	struct bgp_peer *peer = &bgp_peers[i];
+
+	if (*peer->name && peer->cli_flag == BGP_CLI_RESTART)
 	{
-	case BGP_CLI_SUSPEND:
-	    if (peer->routing)
-	    {
-		peer->routing = 0;
-		if (peer->state == Established)
-		    peer->update_routes = 1;
-	    }
-
-	    break;
-
-	case BGP_CLI_ENABLE:
-	    if (!peer->routing)
-	    {
-		peer->routing = 1;
-		if (peer->state == Established)
-		    peer->update_routes = 1;
-	    }
-
-	    break;
+	    bgp_restart(peer);
+	    continue;
 	}
 
-	peer->cli_flag = 0;
-    }
+	if (peer->state == Disabled)
+	    continue;
 
-    /* handle empty/fill of buffers */
-    if (writable)
-    {
-	int r = 1;
-	if (peer->state == Connect)
-	    r = bgp_handle_connect(peer);
-	else if (peer->outbuf->packet.header.len)
-	    r = bgp_write(peer);
-
-	if (!r)
-	    return 0;
-    }
-
-    if (readable)
-    {
-	if (!bgp_read(peer))
-	    return 0;
-    }
-
-    /* process input buffer contents */
-    while (peer->inbuf->done >= sizeof(peer->inbuf->packet.header)
-	&& !peer->outbuf->packet.header.len) /* may need to queue a response */
-    {
-	if (bgp_handle_input(peer) < 0)
-	    return 0;
-    }
-
-    /* process pending updates */
-    if (peer->update_routes
-	&& !peer->outbuf->packet.header.len) /* ditto */
-    {
-	if (!bgp_send_update(peer))
-	    return 0;
-    }
-
-    /* process timers */
-    if (peer->state == Established)
-    {
-	if (time_now > peer->expire_time)
+	if (peer->cli_flag)
 	{
-	    LOG(1, 0, 0, "No message from BGP peer %s in %ds\n",
-		peer->name, peer->hold);
+	    switch (peer->cli_flag)
+	    {
+	    case BGP_CLI_SUSPEND:
+		if (peer->routing)
+		{
+		    peer->routing = 0;
+		    if (peer->state == Established)
+			peer->update_routes = 1;
+		}
 
-	    bgp_send_notification(peer, BGP_ERR_HOLD_TIMER_EXP, 0);
-	    return 0;
+		break;
+
+	    case BGP_CLI_ENABLE:
+		if (!peer->routing)
+		{
+		    peer->routing = 1;
+		    if (peer->state == Established)
+			peer->update_routes = 1;
+		}
+
+		break;
+	    }
+
+	    peer->cli_flag = 0;
 	}
 
-	if (time_now > peer->keepalive_time && !peer->outbuf->packet.header.len)
-	    bgp_send_keepalive(peer);
-    }
-    else if (peer->state == Idle)
-    {
-	if (time_now > peer->retry_time)
-	    return bgp_connect(peer);
-    }
-    else if (time_now > peer->state_time + BGP_STATE_TIME)
-    {
-	LOG(1, 0, 0, "%s timer expired for BGP peer %s\n",
-	    bgp_state_str(peer->state), peer->name);
+	/* handle empty/fill of buffers */
+	if (events[i] & EPOLLOUT)
+	{
+	    int r = 1;
+	    if (peer->state == Connect)
+		r = bgp_handle_connect(peer);
+	    else if (peer->outbuf->packet.header.len)
+		r = bgp_write(peer);
 
-	return bgp_restart(peer);
+	    if (!r)
+		continue;
+	}
+
+	if (events[i] & (EPOLLIN|EPOLLHUP))
+	{
+	    if (!bgp_read(peer))
+		continue;
+	}
+
+	/* process input buffer contents */
+	while (peer->inbuf->done >= sizeof(peer->inbuf->packet.header)
+	    && !peer->outbuf->packet.header.len) /* may need to queue a response */
+	{
+	    if (bgp_handle_input(peer) < 0)
+		continue;
+	}
+
+	/* process pending updates */
+	if (peer->update_routes
+	    && !peer->outbuf->packet.header.len) /* ditto */
+	{
+	    if (!bgp_send_update(peer))
+		continue;
+	}
+
+	/* process timers */
+	if (peer->state == Established)
+	{
+	    if (time_now > peer->expire_time)
+	    {
+		LOG(1, 0, 0, "No message from BGP peer %s in %ds\n",
+		    peer->name, peer->hold);
+
+		bgp_send_notification(peer, BGP_ERR_HOLD_TIMER_EXP, 0);
+		continue;
+	    }
+
+	    if (time_now > peer->keepalive_time && !peer->outbuf->packet.header.len)
+		bgp_send_keepalive(peer);
+	}
+	else if (peer->state == Idle)
+	{
+	    if (time_now > peer->retry_time)
+		bgp_connect(peer);
+	}
+	else if (time_now > peer->state_time + BGP_STATE_TIME)
+	{
+	    LOG(1, 0, 0, "%s timer expired for BGP peer %s\n",
+		bgp_state_str(peer->state), peer->name);
+
+	    bgp_restart(peer);
+	}
     }
 
     return 1;
@@ -661,6 +696,7 @@ static int bgp_connect(struct bgp_peer *peer)
 {
     static int bgp_port = 0;
     struct sockaddr_in addr;
+    struct epoll_event ev;
 
     if (!bgp_port)
     {
@@ -682,6 +718,11 @@ static int bgp_connect(struct bgp_peer *peer)
 	peer->state = peer->next_state = Disabled;
 	return 0;
     }
+
+    /* add to poll set */
+    ev.events = peer->events = EPOLLOUT;
+    ev.data.ptr = &peer->edata;
+    epoll_ctl(epollfd, EPOLL_CTL_ADD, peer->sock, &ev);
 
     /* set to non-blocking */
     fcntl(peer->sock, F_SETFL, fcntl(peer->sock, F_GETFL, 0) | O_NONBLOCK);

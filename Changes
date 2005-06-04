@@ -1,9 +1,7 @@
-* Thu Jun 2 2005 Brendan O'Dea <bod@optusnet.com.au> 2.1.0
+* Sun Jun 5 2005 Brendan O'Dea <bod@optusnet.com.au> 2.1.0
 - Add IPv6 support from Jonathan McDowell.
 - Add CHAP support from Jordan Hrycaj.
 - Add interim accounting support from Vladislav Bjelic.
-- Add Acct-Output-Gigawords, Acct-Input-Gigawords attributes to RADIUS
-  accounting packets.
 - Negotiate MRU, default 1458 to avoid fragmentation.
 - Sanity check that cluster_send_session is not called from a child
   process.
@@ -31,6 +29,13 @@
 - New config option: allow_duplicate_users which determines whether
   or not to kill older sessions with the same username.
 - Fix byte counters in accounting records.
+- Add Acct-Output-Gigawords, Acct-Input-Gigawords attributes to RADIUS
+  accounting packets.
+- Fix icmp host unreachable to use router address.
+- Include endpoint address in accounting dump files.
+- Convert mainloop to use epoll rather than select.
+- Add note about fragmentation in Docs/manual.html, and a sample
+  iptables rule for MSS clamping.
 - Merge 2.0.22:
   + Show session open time in "show session"/"show user" detailed output.
   + Have slaves with BGP configured drop BGP on receipt of a shutdown
