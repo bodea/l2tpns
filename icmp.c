@@ -1,6 +1,6 @@
 // L2TPNS: icmp
 
-char const *cvs_id_icmp = "$Id: icmp.c,v 1.7 2005-01-25 04:19:05 bodea Exp $";
+char const *cvs_id_icmp = "$Id: icmp.c,v 1.8 2005-06-04 15:42:06 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -33,7 +33,6 @@ void host_unreachable(in_addr_t destination, uint16_t id, in_addr_t source, char
 	char buf[128] = {0};
 	struct iphdr *iph;
 	struct icmphdr *icmp;
-	char *data;
 	int len = 0, on = 1, icmp_socket;
 	struct sockaddr_in whereto = {0};
 
@@ -49,9 +48,13 @@ void host_unreachable(in_addr_t destination, uint16_t id, in_addr_t source, char
 	len = sizeof(struct iphdr);
 	icmp = (struct icmphdr *)(buf + len);
 	len += sizeof(struct icmphdr);
-	data = (char *)(buf + len);
-	len += (packet_len < 64) ? packet_len : 64;
-	memcpy(data, packet, (packet_len < 64) ? packet_len : 64);
+
+	/* ip header + first 8 bytes of payload */
+	if (packet_len > (sizeof(struct iphdr) + 8))
+		packet_len = sizeof(struct iphdr) + 8;
+
+	memcpy(buf + len, packet, packet_len);
+	len += packet_len;
 
 	iph->tos = 0;
 	iph->id = id;
@@ -69,7 +72,7 @@ void host_unreachable(in_addr_t destination, uint16_t id, in_addr_t source, char
 
 	icmp->type = ICMP_DEST_UNREACH;
 	icmp->code = ICMP_HOST_UNREACH;
-	icmp->checksum = _checksum((char *) icmp, sizeof(struct icmphdr) + ((packet_len < 64) ? packet_len : 64));
+	icmp->checksum = _checksum((char *) icmp, sizeof(struct icmphdr) + packet_len);
 
 	iph->check = _checksum((char *) iph, sizeof(struct iphdr));
 
