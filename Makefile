@@ -37,7 +37,10 @@ TESTS = generateload bounce
 DEFINES += -DSTATISTICS
 DEFINES += -DSTAT_CALLS
 DEFINES += -DRINGBUFFER
-DEFINES += -DHAVE_EPOLL
+
+ifneq (2.4, $(shell uname -r | perl -pe 's/^(\d+\.\d+).*/$$1/'))
+ DEFINES += -DHAVE_EPOLL
+endif
 
 DEFINES += -DBGP
 OBJS += bgp.o
