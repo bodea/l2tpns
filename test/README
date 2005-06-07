@@ -1,0 +1,9 @@
+generateload, bounce
+
+    L2TP load test.  "generateload" simulates a LAC, each session
+    sends UDP packets to a specified IP address, which should be
+    running "bounce" to return the packets to LNS.
+
+radius
+
+    RADIUS authentication load test.  
