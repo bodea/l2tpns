@@ -43,7 +43,7 @@ endif
 DEFINES += -DBGP
 OBJS += bgp.o
 
-all: programs plugins tests
+all: programs plugins
 programs: $(PROGRAMS)
 plugins: $(PLUGINS)
 
