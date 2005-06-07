@@ -645,14 +645,14 @@ __u16 checksum(unsigned char *addr, int count)
 
 	for (; count > 1; count -= 2)
 	{
-		sum += ntohs(*(u32 *)addr);
+		sum += ntohs(*(u16 *)addr);
 		addr += 2;
 	}
 
-	if (count > 1) sum += *(unsigned char *)addr;
+	if (count > 0) sum += *(unsigned char *)addr;
 
 	// take only 16 bits out of the 32 bit sum and add up the carries
-	while (sum >> 16)
+	if (sum >> 16)
 		sum = (sum & 0xFFFF) + (sum >> 16);
 
 	// one's complement the result
