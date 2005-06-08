@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.76 2005-06-04 15:42:36 bodea Exp $
+// $Id: l2tpns.h,v 1.77 2005-06-08 04:02:39 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -672,12 +672,12 @@ if (count++ < max) { \
 	void *array[20]; \
 	char **strings; \
 	int size, i; \
-	LOG(0, 0, t, "Backtrace follows"); \
+	LOG(0, 0, t, "Backtrace follows:\n"); \
 	size = backtrace(array, 10); \
 	strings = backtrace_symbols(array, size); \
 	if (strings) for (i = 0; i < size; i++) \
 	{ \
-		LOG(0, 0, t, "%s\n", strings[i]); \
+		LOG(0, 0, t, " %s\n", strings[i]); \
 	} \
 	free(strings); \
 }
