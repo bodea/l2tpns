@@ -136,7 +136,7 @@ int main(int argc, char *argv[])
     int instances = 1;
     int fake = 0;
     int bad = 0;
-    int limit = 0;
+    int limit = 100000;
     int o;
 
     while ((o = getopt(argc, argv, "i:n:f:b:l:")) != -1)
