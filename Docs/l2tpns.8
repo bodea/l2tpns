@@ -2,7 +2,7 @@
 .de Id
 .ds Dt \\$4 \\$5
 ..
-.Id $Id: l2tpns.8,v 1.3 2004-11-19 07:46:52 bodea Exp $
+.Id $Id: l2tpns.8,v 1.4 2005-06-12 06:09:35 bodea Exp $
 .TH L2TPNS 8 "\*(Dt" L2TPNS "System Management Commands"
 .SH NAME
 l2tpns \- Layer 2 tunneling protocol network server (LNS)
@@ -50,6 +50,18 @@ IP address pool configuration.
 .TP
 .I /etc/l2tpns/users
 Username/password configuration for access to admin interface.
+.SH SIGNALS
+.TP
+.B SIGHUP
+Reload the config from disk and re-open log file.
+.TP
+.BR SIGTERM ", " SIGINT
+Stop process.  Tunnels and sessions are not terminated.  This signal
+should be used to stop l2tpns on a cluster node where there are other
+machines to continue handling traffic.
+.TP
+.B SIGQUIT
+Shut down tunnels and sessions, exit process when complete.
 .SH SEE ALSO
 .BR startup-config (5),
 .BR nsctl (8)
