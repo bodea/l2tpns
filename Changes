@@ -1,3 +1,12 @@
+* Sun Jun 12 2005 Brendan O'Dea <bod@optusnet.com.au> 2.1.1
+- Add missing newline to backtrace macro.
+- Don't send CDN for each session when shutting down tunnels (this is
+  implicit).
+- Move tunnel shutdown from SIGQUIT signal handler to be run once from
+  still_busy().  Reject new tunnels/sessions while in the process of
+  shutting down.
+- Clarify usage of shutdown signals in documentation.
+
 * Sun Jun 5 2005 Brendan O'Dea <bod@optusnet.com.au> 2.1.0
 - Add IPv6 support from Jonathan McDowell.
 - Add CHAP support from Jordan Hrycaj.

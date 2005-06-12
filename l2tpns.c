@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.108 2005-06-04 15:42:35 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.109 2005-06-12 06:10:29 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -177,8 +177,7 @@ static void free_ip_address(sessionidt s);
 static void dump_acct_info(int all);
 static void sighup_handler(int sig);
 static void sigalrm_handler(int sig);
-static void sigterm_handler(int sig);
-static void sigquit_handler(int sig);
+static void shutdown_handler(int sig);
 static void sigchild_handler(int sig);
 static void build_chap_response(char *challenge, uint8_t id, uint16_t challenge_length, char **challenge_response);
 static void update_config(void);
@@ -193,6 +192,10 @@ static void unhide_value(uint8_t *value, size_t len, uint16_t type, uint8_t *vec
 
 // on slaves, alow BGP to withdraw cleanly before exiting
 #define QUIT_DELAY	5
+
+// quit actions (master)
+#define QUIT_FAILOVER	1 // SIGTERM: exit when all control messages have been acked (for cluster failover)
+#define QUIT_SHUTDOWN	2 // SIGQUIT: shutdown sessions/tunnels, reject new connections
 
 // return internal time (10ths since process startup), set f if given
 static clockt now(double *f)
@@ -1717,7 +1720,7 @@ static void tunnelshutdown(tunnelidt t, char *reason, int result, int error, cha
 	// close session
 	for (s = 1; s <= config->cluster_highest_sessionid ; ++s)
 		if (session[s].tunnel == t)
-			sessionshutdown(s, reason, 3, 0);
+			sessionshutdown(s, reason, 0, 0);
 
 	tunnel[t].state = TUNNELDIE;
 	tunnel[t].die = TIME + 700; // Clean up in 70 seconds
@@ -2293,6 +2296,8 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 				switch (message)
 				{
 				case 1:       // SCCRQ - Start Control Connection Request
+					tunnel[t].state = TUNNELOPENING;
+					if (main_quit != QUIT_SHUTDOWN)
 					{
 						controlt *c = controlnew(2); // sending SCCRP
 						control16(c, 2, version, 1); // protocol version
@@ -2302,7 +2307,10 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 						control16(c, 9, t, 1); // assigned tunnel
 						controladd(c, t, 0); // send the resply
 					}
-					tunnel[t].state = TUNNELOPENING;
+					else
+					{
+						tunnelshutdown(t, "Shutting down", 6, 0, 0);
+					}
 					break;
 				case 2:       // SCCRP
 					tunnel[t].state = TUNNELOPEN;
@@ -2328,7 +2336,7 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 					// TBA
 					break;
 				case 10:      // ICRQ
-					if (sessionfree)
+					if (sessionfree && main_quit != QUIT_SHUTDOWN)
 					{
 						uint16_t r;
 
@@ -2370,8 +2378,12 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 
 					{
 						controlt *c = controlnew(14); // CDN
-						control16(c, 1, 4, 1); // temporary lack of resources
-						controladd(c, session[s].tunnel, asession); // send the message
+						if (main_quit == QUIT_SHUTDOWN)
+							control16(c, 1, 2, 7); // try another
+						else
+							control16(c, 1, 4, 0); // temporary lack of resources
+
+						controladd(c, t, asession); // send the message
 					}
 					return;
 				case 11:      // ICRP
@@ -2885,6 +2897,22 @@ static int still_busy(void)
 		return 0;
 	}
 
+	if (main_quit == QUIT_SHUTDOWN)
+	{
+		static int dropped = 0;
+		if (!dropped)
+		{
+		    	int i;
+
+			LOG(1, 0, 0, "Dropping sessions and tunnels\n");
+			for (i = 1; i < MAXTUNNEL; i++)
+				if (tunnel[i].ip || tunnel[i].state)
+					tunnelshutdown(i, "L2TPNS Closing", 6, 0, 0);
+
+			dropped = 1;
+		}
+	}
+
 	if (start_busy_wait == 0)
 		start_busy_wait = TIME;
 
@@ -3031,8 +3059,7 @@ static void mainloop(void)
 				continue;
 
 			LOG(0, 0, 0, "Error returned from select(): %s\n", strerror(errno));
-			main_quit++;
-			break;
+			break; // exit
 		}
 
 		if (n)
@@ -3253,7 +3280,7 @@ static void mainloop(void)
 
 	//
 	// Important!!! We MUST not process any packets past this point!
-	LOG(1, 0, 0, "Clean shutdown complete\n");
+	LOG(1, 0, 0, "Shutdown complete\n");
 }
 
 static void stripdomain(char *host)
@@ -3902,11 +3929,11 @@ int main(int argc, char *argv[])
 	initrad();
 	initippool();
 
-	signal(SIGHUP, sighup_handler);
-	signal(SIGTERM, sigterm_handler);
-	signal(SIGINT, sigterm_handler);
-	signal(SIGQUIT, sigquit_handler);
+	signal(SIGHUP,  sighup_handler);
 	signal(SIGCHLD, sigchild_handler);
+	signal(SIGTERM, shutdown_handler);
+	signal(SIGINT,  shutdown_handler);
+	signal(SIGQUIT, shutdown_handler);
 
 	// Prevent us from getting paged out
 	if (config->lock_pages)
@@ -3984,33 +4011,10 @@ static void sigalrm_handler(int sig)
 
 }
 
-static void sigterm_handler(int sig)
+static void shutdown_handler(int sig)
 {
-	LOG(1, 0, 0, "Shutting down cleanly\n");
-	main_quit++;
-}
-
-static void sigquit_handler(int sig)
-{
-	int i;
-
-	LOG(1, 0, 0, "Shutting down without saving sessions\n");
-
-	if (config->cluster_iam_master)
-	{
-		for (i = 1; i < MAXSESSION; i++)
-		{
-			if (session[i].opened)
-				sessionkill(i, "L2TPNS Closing");
-		}
-		for (i = 1; i < MAXTUNNEL; i++)
-		{
-			if (tunnel[i].ip || tunnel[i].state)
-				tunnelshutdown(i, "L2TPNS Closing", 6, 0, 0);
-		}
-	}
-
-	main_quit++;
+	LOG(1, 0, 0, "Shutting down\n");
+	main_quit = (sig == SIGQUIT) ? QUIT_SHUTDOWN : QUIT_FAILOVER;
 }
 
 static void sigchild_handler(int sig)
@@ -4285,7 +4289,7 @@ int sessionsetup(tunnelidt t, sessionidt s)
 		if (!session[s].ip)
 		{
 			LOG(0, s, t, "   No IP allocated.  The IP address pool is FULL!\n");
-			sessionshutdown(s, "No IP addresses available.", 2, 7);
+			sessionshutdown(s, "No IP addresses available.", 2, 7); // try another
 			return 0;
 		}
 		LOG(3, s, t, "   No IP allocated.  Assigned %s from pool\n",
