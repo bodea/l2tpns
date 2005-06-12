@@ -696,12 +696,14 @@ killall -HUP l2tpns
 </PRE>
 
 The signals understood are:
-<UL>
-<LI>SIGHUP - Reload the config from disk and re-open log file</LI>
-<LI>SIGTERM / SIGINT - Shut down.</LI>
-<LI>SIGQUIT - Shut down cleanly.  This will send a disconnect message for
-every active session and tunnel before shutting down.</LI>
-</UL>
+<DL>
+<DT>SIGHUP</DT><DD>Reload the config from disk and re-open log file.</DD>
+<DT>SIGTERM, SIGINT</DT><DD>Stop process.  Tunnels and sessions are not
+terminated.  This signal should be used to stop l2tpns on a
+<A HREF="#Clustering">cluster node</A> where there are other machines to
+continue handling traffic.</DD>
+<DT>SIGQUIT</DT><DD>Shut down: closes sessions and tunnels.</DD>
+</DL>
 
 <H2 ID="Throttling">Throttling</H2>
 
