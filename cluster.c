@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.41 2005-06-04 15:42:35 bodea Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.42 2005-06-14 05:37:09 bodea Exp $";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -1022,7 +1022,6 @@ static int cluster_add_peer(in_addr_t peer, time_t basetime, pingt *pp, int size
 		config->cluster_master_address = 0;
 		config->cluster_last_hb = 0; // Force an election.
 		cluster_check_master();
-		return 0;
 	}
 
 	if (i >= num_peers)
@@ -1069,6 +1068,16 @@ static int cluster_set_master(in_addr_t peer, in_addr_t master)
 		fmtaddr(master, 1));
 
 	config->cluster_master_address = master;
+	if (master)
+	{
+		// catchup with new master
+		peer_send_message(master, C_LASTSEEN, config->cluster_seq_number, NULL, 0);
+
+		// delay next election
+		config->cluster_last_hb = TIME;
+	}
+
+	// run election (or reset "probed" if master was set)
 	cluster_check_master();
 	return 0;
 }

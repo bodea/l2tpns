@@ -9,6 +9,8 @@
 - Always initialise PRNG.
 - Sanity check length of random_vector.
 - Fix segv in unhide_value.
+- Ping new master when we get C_MASTER and delay next election to allow
+  the unicast limp-along code to kick in if required.
 
 * Sun Jun 5 2005 Brendan O'Dea <bod@optusnet.com.au> 2.1.0
 - Add IPv6 support from Jonathan McDowell.
