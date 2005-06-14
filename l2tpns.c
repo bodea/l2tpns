@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.109 2005-06-12 06:10:29 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.110 2005-06-14 03:36:23 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -326,7 +326,8 @@ static void initrandom(char *source)
 		return;
 
 	// close previous source, if any
-	if (rand_fd >= 0) close(rand_fd);
+	if (rand_fd >= 0)
+		close(rand_fd);
 
 	rand_fd = -1;
 
@@ -342,13 +343,6 @@ static void initrandom(char *source)
 				LOG(0, 0, 0, "Error opening the random device %s: %s\n",
 					path, strerror(errno));
 		}
-	}
-
-	// no source: seed prng
-	{
-		unsigned seed = time_now ^ getpid();
-		LOG(4, 0, 0, "Seeding the pseudo random generator: %u\n", seed);
-		srand(seed);
 	}
 }
 
@@ -370,7 +364,7 @@ void random_data(uint8_t *buf, int len)
 					strerror(errno));
 
 				// fall back to rand()
-				initrandom(0);
+				initrandom(NULL);
 			}
 
 			n = 0;
@@ -2274,6 +2268,8 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 				case 36:    // Random Vector
 					LOG(4, s, t, "   Random Vector received.  Enabled AVP Hiding.\n");
 					memset(session[s].random_vector, 0, sizeof(session[s].random_vector));
+					if (n > sizeof(session[s].random_vector))
+						n = sizeof(session[s].random_vector);
 					memcpy(session[s].random_vector, b, n);
 					session[s].random_vector_length = n;
 					break;
@@ -3928,6 +3924,13 @@ int main(int argc, char *argv[])
 	initudp();
 	initrad();
 	initippool();
+
+	// seed prng
+	{
+		unsigned seed = time_now ^ getpid();
+		LOG(4, 0, 0, "Seeding the pseudo random generator: %u\n", seed);
+		srand(seed);
+	}
 
 	signal(SIGHUP,  sighup_handler);
 	signal(SIGCHLD, sigchild_handler);
