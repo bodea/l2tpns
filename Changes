@@ -8,6 +8,7 @@
 - Clarify usage of shutdown signals in documentation.
 - Always initialise PRNG.
 - Sanity check length of random_vector.
+- Fix segv in unhide_value.
 
 * Sun Jun 5 2005 Brendan O'Dea <bod@optusnet.com.au> 2.1.0
 - Add IPv6 support from Jonathan McDowell.

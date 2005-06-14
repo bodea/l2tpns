@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.110 2005-06-14 03:36:23 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.111 2005-06-14 04:47:24 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -2024,8 +2024,6 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 						continue;
 					}
 
-					LOG(4, s, t, "Hidden AVP\n");
-
 					// Unhide the AVP
 					unhide_value(b, n, mtype, session[s].random_vector, session[s].random_vector_length);
 
@@ -2046,7 +2044,9 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 					n = orig_len;
 				}
 
-				LOG(4, s, t, "   AVP %d (%s) len %d\n", mtype, avp_name(mtype), n);
+				LOG(4, s, t, "   AVP %d (%s) len %d%s%s\n", mtype, avp_name(mtype), n,
+					flags & 0x40 ? ", hidden" : "", flags & 0x80 ? ", mandatory" : "");
+
 				switch (mtype)
 				{
 				case 0:     // message type
@@ -5011,11 +5011,11 @@ static void unhide_value(uint8_t *value, size_t len, uint16_t type, uint8_t *vec
 	uint8_t digest[16];
 	uint8_t *last;
 	size_t d = 0;
+	uint16_t m = htons(type);
 
 	// Compute initial pad
 	MD5Init(&ctx);
-	MD5Update(&ctx, (uint8_t) (type >> 8) & 0xff, 1);
-	MD5Update(&ctx, (uint8_t)  type       & 0xff, 1);
+	MD5Update(&ctx, (unsigned char *) &m, 2);
 	MD5Update(&ctx, config->l2tpsecret, strlen(config->l2tpsecret));
 	MD5Update(&ctx, vector, vec_len);
 	MD5Final(digest, &ctx);
