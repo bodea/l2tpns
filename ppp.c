@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.63 2005-06-24 06:59:06 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.64 2005-06-24 08:34:53 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -718,21 +718,31 @@ void processipcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 
 	if (*p == ConfigAck)
 	{
-		// happy with our IPCP
 		uint16_t r = sess_local[s].radius;
-		if ((!r || radius[r].state == RADIUSIPCP) && !session[s].walled_garden)
-		{
-			if (!r)
-				r = radiusnew(s);
-			if (r)
-				radiussend(r, RADIUSSTART); // send radius start, having got IPCP at last
-		}
+
+		// ignore duplicate ACKs
+		if (session[s].flags & SF_IPCP_ACKED)
+			return;
+
+		// happy with our IPCP
 		session[s].flags |= SF_IPCP_ACKED;
 
 		LOG(3, s, t, "IPCP Acked, session is now active\n");
 
 		// clear LCP_ACKED/CCP_ACKED flag for possible fast renegotiation for routers
 		session[s].flags &= ~(SF_LCP_ACKED|SF_CCP_ACKED);
+
+		if (r && session[s].walled_garden)
+		{
+			radiusclear(r, s);
+			return;
+		}
+
+		if (!r)
+			r = radiusnew(s);
+
+		if (r)
+			radiussend(r, RADIUSSTART); // send radius start, having got IPCP at last
 
 		return;
 	}
