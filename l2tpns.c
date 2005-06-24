@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.111 2005-06-14 04:47:24 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.112 2005-06-24 07:05:04 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -2717,7 +2717,8 @@ static void regular_cleanups(double period)
 			continue;
 		}
 
-		if (session[s].ip && !(session[s].flags & SF_IPCP_ACKED))
+		if (session[s].ip && !(session[s].flags & SF_IPCP_ACKED)
+		    && !(sess_local[s].radius && radius[sess_local[s].radius].state == RADIUSIPCP))
 		{
 			// IPCP has not completed yet. Resend
 			LOG(3, s, session[s].tunnel, "No ACK for initial IPCP ConfigReq... resending\n");
@@ -2833,7 +2834,8 @@ static void regular_cleanups(double period)
 		    && !sess_local[s].radius // RADIUS already in progress
 		    && time_now - sess_local[s].last_interim >= config->radius_interim)
 		{
-			if (!(r = radiusnew(s)))
+		    	int rad = radiusnew(s);
+			if (!rad)
 			{
 				LOG(1, s, session[s].tunnel, "No free RADIUS sessions for Interim message\n");
 				STAT(radius_overflow);
@@ -2843,7 +2845,7 @@ static void regular_cleanups(double period)
 			LOG(3, s, session[s].tunnel, "Sending RADIUS Interim for %s (%u)\n",
 				session[s].user, session[s].unique_id);
 
-			radiussend(r, RADIUSINTERIM);
+			radiussend(rad, RADIUSINTERIM);
 			sess_local[s].last_interim = time_now;
 			s_actions++;
 		}
