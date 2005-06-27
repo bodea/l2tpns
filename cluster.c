@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.42 2005-06-14 05:37:09 bodea Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.43 2005-06-27 04:52:54 bodea Exp $";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -533,6 +533,7 @@ void cluster_check_master(void)
 		return;	// Everything's ok!
 
 	config->cluster_last_hb = TIME + 1;	// Just the one election thanks.
+	config->cluster_master_address = 0;
 
 	LOG(0, 0, 0, "Master timed out! Holding election...\n");
 
@@ -568,7 +569,6 @@ void cluster_check_master(void)
 		// to become a master!!!
 
 	config->cluster_iam_master = 1;
-	config->cluster_master_address = 0;
 
 	LOG(0, 0, 0, "I am declaring myself the master!\n");
 
@@ -1377,8 +1377,7 @@ static int cluster_process_heartbeat(uint8_t *data, int size, int more, uint8_t 
 		// Note that after a clean failover, the cluster_master_address
 		// is cleared, so this doesn't run. 
 		//
-	if (config->cluster_master_address && addr != config->cluster_master_address
-	    && (config->cluster_last_hb + config->cluster_hb_timeout - 11) > TIME) {
+	if (config->cluster_master_address && addr != config->cluster_master_address) {
 		    LOG(0, 0, 0, "Ignoring stray heartbeat from %s, current master %s has not yet timed out (last heartbeat %.1f seconds ago).\n",
 			    fmtaddr(addr, 0), fmtaddr(config->cluster_master_address, 1),
 			    0.1 * (TIME - config->cluster_last_hb));
