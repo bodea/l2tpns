@@ -822,14 +822,14 @@ supplied structure:
 		some way.
 		</TD>
 		<TD>
-		<UL>
-			<LI>t - Tunnel ID</LI>
-			<LI>s - Session ID</LI>
-			<LI>username</LI>
-			<LI>password</LI>
-			<LI>protocol (0xC023 for PAP, 0xC223 for CHAP)</LI>
-			<LI>continue_auth - Set to 0 to stop processing authentication modules</LI>
-		</UL>
+		<DL>
+			<DT>t<DD>Tunnel
+			<DT>s<DD>Session
+			<DT>username
+			<DT>password
+			<DT>protocol<DD>0xC023 for PAP, 0xC223 for CHAP
+			<DT>continue_auth<DD>Set to 0 to stop processing authentication modules
+		</DL>
 		</TD>
 	</TR>
 	<TR VALIGN=TOP BGCOLOR=WHITE><TD><B>post_auth</B></TD>
@@ -839,16 +839,16 @@ supplied structure:
 		to be accepted.
 		</TD>
 		<TD>
-		<UL>
-			<LI>t - Tunnel ID</LI>
-			<LI>s - Session ID</LI>
-			<LI>username</LI>
-			<LI>auth_allowed - This is already set to true or
+		<DL>
+			<DT>t<DD>Tunnel
+			<DT>s<DD>Session
+			<DT>username
+			<DT>auth_allowed<DD>This is already set to true or
 			false depending on whether authentication has been
 			allowed so far.  You can set this to 1 or 0 to force
-			allow or disallow authentication</LI>
-			<LI>protocol (0xC023 for PAP, 0xC223 for CHAP)</LI>
-		</UL>
+			allow or disallow authentication
+			<DT>protocol<DD>0xC023 for PAP, 0xC223 for CHAP
+		</DL>
 		</TD>
 	</TR>
 	<TR VALIGN=TOP BGCOLOR=WHITE><TD><B>packet_rx</B></TD>
@@ -857,12 +857,12 @@ supplied structure:
 		seriously slow down the system.</FONT>
 		</TD>
 		<TD>
-		<UL>
-			<LI>t - Tunnel ID</LI>
-			<LI>s - Session ID</LI>
-			<LI>buf - The raw packet data</LI>
-			<LI>len - The length of buf</LI>
-		</UL>
+		<DL>
+			<DT>t<DD>Tunnel
+			<DT>s<DD>Session
+			<DT>buf<DD>The raw packet data
+			<DT>len<DD>The length of buf
+		</DL>
 		</TD>
 	</TR>
 	<TR VALIGN=TOP BGCOLOR=WHITE><TD><B>packet_tx</B></TD>
@@ -871,12 +871,12 @@ supplied structure:
 		seriously slow down the system.</FONT>
 		</TD>
 		<TD>
-		<UL>
-			<LI>t - Tunnel ID</LI>
-			<LI>s - Session ID</LI>
-			<LI>buf - The raw packet data</LI>
-			<LI>len - The length of buf</LI>
-		</UL>
+		<DL>
+			<DT>t<DD>Tunnel
+			<DT>s<DD>Session
+			<DT>buf<DD>The raw packet data
+			<DT>len<DD>The length of buf
+		</DL>
 		</TD>
 	</TR>
 	<TR VALIGN=TOP BGCOLOR=WHITE><TD><B>timer</B></TD>
@@ -885,9 +885,9 @@ supplied structure:
 		you do is reentrant.
 		</TD>
 		<TD>
-		<UL>
-			<LI>time_now - The current unix timestamp</LI>
-		</UL>
+		<DL>
+			<DT>time_now<DD>The current unix timestamp
+		</DL>
 		</TD>
 	</TR>
 	<TR VALIGN=TOP BGCOLOR=WHITE><TD><B>new_session</B></TD>
@@ -895,10 +895,10 @@ supplied structure:
 		session is now ready to handle traffic.
 		</TD>
 		<TD>
-		<UL>
-			<LI>t - Tunnel ID</LI>
-			<LI>s - Session ID</LI>
-		</UL>
+		<DL>
+			<DT>t<DD>Tunnel
+			<DT>s<DD>Session
+		</DL>
 		</TD>
 	</TR>
 	<TR VALIGN=TOP BGCOLOR=WHITE><TD><B>kill_session</B></TD>
@@ -906,10 +906,10 @@ supplied structure:
 		This may be called multiple times for the same session.
 		</TD>
 		<TD>
-		<UL>
-			<LI>t - Tunnel ID</LI>
-			<LI>s - Session ID</LI>
-		</UL>
+		<DL>
+			<DT>t<DD>Tunnel
+			<DT>s<DD>Session
+		</DL>
 		</TD>
 	</TR>
 	<TR VALIGN=TOP BGCOLOR=WHITE><TD><B>radius_response</B></TD>
@@ -919,12 +919,24 @@ supplied structure:
 		modules.
 		</TD>
 		<TD>
-		<UL>
-			<LI>t - Tunnel ID</LI>
-			<LI>s - Session ID</LI>
-			<LI>key</LI>
-			<LI>value</LI>
-		</UL>
+		<DL>
+			<DT>t<DD>Tunnel
+			<DT>s<DD>Session
+			<DT>key
+			<DT>value
+		</DL>
+		</TD>
+	</TR>
+	<TR VALIGN=TOP BGCOLOR=WHITE><TD><B>radius_reset</B></TD>
+		<TD>This is called whenever a RADIUS CoA request is
+		received to reset any options to default values before
+		the new values are applied.
+		</TD>
+		<TD>
+		<DL>
+			<DT>t<DD>Tunnel
+			<DT>s<DD>Session
+		</DL>
 		</TD>
 	</TR>
 	<TR VALIGN=TOP BGCOLOR=WHITE><TD><B>control</B></TD>
@@ -933,21 +945,13 @@ supplied structure:
 		required.
 		</TD>
 		<TD>
-		<UL>
-			<LI>buf - The raw packet data</LI>
-			<LI>l - The raw packet data length</LI>
-			<LI>source_ip - Where the request came from</LI>
-			<LI>source_port - Where the request came from</LI>
-			<LI>response - Allocate a buffer and put your response in here</LI>
-			<LI>response_length - Length of response</LI>
-			<LI>send_response - true or false whether a response
-			should be sent.  If you set this to true, you must
-			allocate a response buffer.</LI>
-			<LI>type - Type of request (see nsctl.c)</LI>
-			<LI>id - ID of request</LI>
-			<LI>data - I'm really not sure</LI>
-			<LI>data_length - Length of data</LI>
-		</UL>
+		<DL>
+			<DT>iam_master<DD>Cluster master status
+			<DT>argc<DD>The number of arguments
+			<DT>argv<DD>Arguments
+			<DT>response<DD>Return value: NSCTL_RES_OK or NSCTL_RES_ERR
+			<DT>additional<DD>Extended response text
+		</DL>
 		</TD>
 	</TR>
 </TABLE>
