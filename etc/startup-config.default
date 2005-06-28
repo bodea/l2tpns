@@ -1,21 +1,106 @@
+# Debugging level
 set debug 3
+
+# Log file: comment out to use stderr, use "syslog:facility" for syslog
 set log_file "/var/log/l2tpns"
+
+# Write pid to this file
 set pid_file "/var/run/l2tpns.pid"
+
+# Shared secret with LAC
 set l2tp_secret "secret"
-set primary_dns 1.2.3.4
-set secondary_dns 1.2.3.5
-set primary_radius 1.2.3.6
-set secondary_radius 1.2.3.7
-set radius_accounting yes
+
+# Only 2 DNS server entries are allowed
+set primary_dns 10.0.0.1
+set secondary_dns 10.0.0.2
+
+# Can have multiple radius server entries, but ony one radius secret
+set primary_radius 10.0.0.3
+#set primary_radius_port 1645
+#set secondary_radius 0.0.0.0
+#set secondary_radius_port 1645
 set radius_secret "secret"
-set bind_address 0.0.0.0
-set throttle_speed 64
+
+# Acceptable authentication types (pap, chap) in order of preference
+#set radius_authtypes "pap"
+
+# Turn on or off Radius Accounting
+#set radius_accounting no
+
+# Port for DAE RADIUS requests
+#set radius_dae_port 3799
+
+# Allow multiple logins for the same username
+#set allow_duplicate_users no
+
+# Write usage accounting files into specified directory
 set accounting_dir "/var/run/l2tpns/acct"
-set setuid 0
-set dump_speed no
-load plugin "sessionctl"
-load plugin "throttlectl"
-load plugin "autothrottle"
-load plugin "snoopctl"
-load plugin "autosnoop"
-load plugin "garden"
+
+# Listen address for L2TP
+#set bind_address 1.1.1.1
+
+# Send a gratiuitous ARP for bind address
+#set send_garp no
+
+# Gateway address given to clients
+#set peer_address 0.0.0.0
+
+# Default throttle rate in kb/s
+#set throttle_speed 0
+
+# Number of buckets to allocate for throttling
+#set throttle_buckets 3000
+
+# If set to anything other than 0, setuid when initialised.
+#set setuid 0
+
+# If set to true, dump current speed to stderr every second
+#set dump_speed no
+
+# Number of packets to read from tun/udp/cluster fd when select
+# returns readable
+#set multi_read_count 10
+
+# Set scheduling priority of process to SCHED_FIFO
+#set scheduler_fifo no
+
+# Lock pages into memory
+#set lock_pages no
+
+# Maximum number of host unreachable packets to send per second
+#set icmp_rate 0
+
+# Maximum number of downstream packets per 0.1s to handle for each
+# session (0 = ulimited)
+#set packet_limit 0
+
+# Cluster multicast address, interface
+#set cluster_address 239.192.13.13
+#set cluster_interface eth0
+
+# Cluster timers (1/10th second)
+#set cluster_hb_interval 5
+#set cluster_hb_timeout 150
+
+# Minimum number of slaves before master withdraws routes
+#set cluster_master_min_adv 1
+
+# Drop/kill sessions
+#load plugin "sessionctl"
+
+# Throttle/snoop based on RADIUS
+#load plugin "autothrottle"
+#load plugin "autosnoop"
+
+# Control throttle/snoop with nsctl
+#load plugin "throttlectl"
+#load plugin "snoopctl"
+
+# Punt RX speed if not supplied
+#load plugin "setrxspeed"
+
+# Remove domain from username
+#load plugin "stripdomain"
+
+# Walled garden
+#load plugin "garden"
