@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.79 2005-06-24 07:05:04 bodea Exp $
+// $Id: l2tpns.h,v 1.80 2005-06-28 14:48:27 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -76,6 +76,7 @@
 #define ACCT_SHUT_TIME	600		// 1 minute for counters of shutdown sessions
 #define	L2TPPORT	1701		// L2TP port
 #define RADPORT		1645		// old radius port...
+#define DAEPORT		3799		// DAE port
 #define	PKTARP		0x0806		// ARP packet type
 #define	PKTIP		0x0800		// IPv4 packet type
 #define	PKTIPV6		0x86DD		// IPv6 packet type
@@ -111,7 +112,13 @@ enum {
 	AccessReject,
 	AccountingRequest,
 	AccountingResponse,
-	AccessChallenge = 11
+	AccessChallenge = 11,
+	DisconnectRequest = 40,
+	DisconnectACK,
+	DisconnectNAK,
+	CoARequest,
+	CoAACK,
+	CoANAK
 };
 
 // Types
@@ -457,6 +464,8 @@ typedef struct
 	uint16_t	radiusport[MAXRADSERVER];	// radius base ports
 	uint8_t		numradiusservers;		// radius server count
 
+	uint16_t	radius_dae_port;		// local port for radius dae
+
 	char		radius_authtypes_s[32];		// list of valid authentication types (chap, pap) in order of preference
 	int		radius_authtypes;
 	int		radius_authprefer;
@@ -611,6 +620,7 @@ void processrad(uint8_t *buf, int len, char socket_index);
 void radiusretry(uint16_t r);
 uint16_t radiusnew(sessionidt s);
 void radiusclear(uint16_t r, sessionidt s);
+void processdae(uint8_t *buf, int len, struct sockaddr_in *addr, int alen);
 
 
 // l2tpns.c
@@ -624,11 +634,13 @@ void increment_counter(uint32_t *counter, uint32_t *wrap, uint32_t delta);
 void random_data(uint8_t *buf, int len);
 void sessionkill(sessionidt s, char *reason);
 void sessionshutdown(sessionidt s, char *reason, int result, int error);
+void filter_session(sessionidt s, int filter_in, int filter_out);
 void send_garp(in_addr_t ip);
 void tunnelsend(uint8_t *buf, uint16_t l, tunnelidt t);
 void sendipcp(tunnelidt t, sessionidt s);
 void processudp(uint8_t *buf, int len, struct sockaddr_in *addr);
 void snoop_send_packet(char *packet, uint16_t size, in_addr_t destination, uint16_t port);
+int find_filter(char const *name, size_t len);
 int ip_filter(uint8_t *buf, int len, uint8_t filter);
 int cmd_show_ipcache(struct cli_def *cli, char *command, char **argv, int argc);
 int cmd_show_hist_idle(struct cli_def *cli, char *command, char **argv, int argc);
@@ -696,11 +708,12 @@ extern int epollfd;
 
 struct event_data {
 	enum {
-	    	FD_TYPE_CONTROL,
 	    	FD_TYPE_CLI,
-	    	FD_TYPE_UDP,
-	    	FD_TYPE_TUN,
 	    	FD_TYPE_CLUSTER,
+	    	FD_TYPE_TUN,
+	    	FD_TYPE_UDP,
+	    	FD_TYPE_CONTROL,
+	    	FD_TYPE_DAE,
 		FD_TYPE_RADIUS,
 		FD_TYPE_BGP,
 	} type;

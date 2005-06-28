@@ -2,7 +2,7 @@
 .de Id
 .ds Dt \\$4 \\$5
 ..
-.Id $Id: startup-config.5,v 1.10 2005-06-02 11:32:33 bodea Exp $
+.Id $Id: startup-config.5,v 1.11 2005-06-28 14:48:31 bodea Exp $
 .TH STARTUP-CONFIG 5 "\*(Dt" L2TPNS "File Formats and Conventions"
 .SH NAME
 startup\-config \- configuration file for l2tpns
@@ -99,6 +99,10 @@ Secret to be used in RADIUS packets.
 .B radius_authtypes
 A comma separated list of supported RADIUS authentication methods
 ("pap" or "chap"), in order of preference (default "pap").
+.TP
+.B radius_dae_port
+Port for DAE RADIUS (Packet of Death/Disconnect, Change of Authorization)
+requests (default: 3799).
 .TP
 .B allow_duplicate_users
 Allow multiple logins with the same username.  If false (the default),

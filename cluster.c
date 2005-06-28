@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.43 2005-06-27 04:52:54 bodea Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.44 2005-06-28 14:48:19 bodea Exp $";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -270,13 +270,8 @@ static int peer_send_message(in_addr_t peer, int type, int more, char *data, int
 	return peer_send_data(peer, buf, (p-buf) );
 }
 
-//
-// Forward a state changing packet to the master.
-//
-// The master just processes the payload as if it had
-// received it off the tun device.
-//
-int master_forward_packet(char *data, int size, in_addr_t addr, int port)
+// send a packet to the master
+static int _forward_packet(char *data, int size, in_addr_t addr, int port, int type)
 {
 	char buf[65536];	// Vast overkill.
 	char *p = buf;
@@ -287,11 +282,28 @@ int master_forward_packet(char *data, int size, in_addr_t addr, int port)
 	LOG(4, 0, 0, "Forwarding packet from %s to master (size %d)\n", fmtaddr(addr, 0), size);
 
 	STAT(c_forwarded);
-	add_type(&p, C_FORWARD, addr, (char *) &port, sizeof(port)); // ick. should be uint16_t
+	add_type(&p, type, addr, (char *) &port, sizeof(port)); // ick. should be uint16_t
 	memcpy(p, data, size);
 	p += size;
 
 	return peer_send_data(config->cluster_master_address, buf, (p - buf));
+}
+
+// 
+// Forward a state changing packet to the master.
+//
+// The master just processes the payload as if it had
+// received it off the tun device.
+//
+int master_forward_packet(char *data, int size, in_addr_t addr, int port)
+{
+	return _forward_packet(data, size, addr, port, C_FORWARD);
+}
+
+// Forward a DAE RADIUS packet to the master.
+int master_forward_dae_packet(char *data, int size, in_addr_t addr, int port)
+{
+	return _forward_packet(data, size, addr, port, C_FORWARD_DAE);
 }
 
 //
@@ -1585,7 +1597,8 @@ int processcluster(char *data, int size, in_addr_t addr)
 	p += sizeof(uint32_t);
 	s -= sizeof(uint32_t);
 
-	switch (type) {
+	switch (type)
+	{
 	case C_PING: // Update the peers table.
 		return cluster_add_peer(addr, more, (pingt *) p, s);
 
@@ -1595,24 +1608,36 @@ int processcluster(char *data, int size, in_addr_t addr)
 	case C_LASTSEEN: // Catch up a slave (slave missed a packet).
 		return cluster_catchup_slave(more, addr);
 
-	case C_FORWARD: { // Forwarded control packet. pass off to processudp.
-		struct sockaddr_in a;
-		a.sin_addr.s_addr = more;
+	case C_FORWARD: // Forwarded control packet. pass off to processudp.
+	case C_FORWARD_DAE: // Forwarded DAE packet. pass off to processdae.
+		if (!config->cluster_iam_master)
+		{
+			LOG(0, 0, 0, "I'm not the master, but I got a C_FORWARD_%s from %s?\n",
+				type == C_FORWARD_DAE ? "_DAE" : "", fmtaddr(addr, 0));
 
-		a.sin_port = *(int *) p;
-		s -= sizeof(int);
-		p += sizeof(int);
-
-		if (!config->cluster_iam_master) { // huh?
-			LOG(0, 0, 0, "I'm not the master, but I got a C_FORWARD from %s?\n", fmtaddr(addr, 0));
 			return -1;
 		}
+		else
+		{
+			struct sockaddr_in a;
+			a.sin_addr.s_addr = more;
 
-		LOG(4, 0, 0, "Got a forwarded packet... (%s:%d)\n", fmtaddr(more, 0), a.sin_port);
-		STAT(recv_forward);
-		processudp(p, s, &a);
-		return 0;
-	}
+			a.sin_port = *(int *) p;
+			s -= sizeof(int);
+			p += sizeof(int);
+
+			LOG(4, 0, 0, "Got a forwarded %spacket... (%s:%d)\n",
+				type == C_FORWARD_DAE ? "DAE " : "", fmtaddr(more, 0), a.sin_port);
+
+			STAT(recv_forward);
+			if (type == C_FORWARD_DAE)
+				processdae(p, s, &a, sizeof(a));
+			else
+				processudp(p, s, &a);
+
+			return 0;
+		}
+
 	case C_THROTTLE: {	// Receive a forwarded packet from a slave.
 		if (!config->cluster_iam_master) {
 			LOG(0, 0, 0, "I'm not the master, but I got a C_THROTTLE from %s?\n", fmtaddr(addr, 0));

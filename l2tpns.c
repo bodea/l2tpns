@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.112 2005-06-24 07:05:04 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.113 2005-06-28 14:48:20 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -60,6 +60,7 @@ int tunfd = -1;			// tun interface file handle. (network device)
 int udpfd = -1;			// UDP file handle
 int controlfd = -1;		// Control signal handle
 int clifd = -1;			// Socket listening for CLI connections.
+int daefd = -1;			// Socket listening for DAE connections.
 int snoopfd = -1;		// UDP file handle for sending out intercept data
 int *radfds = NULL;		// RADIUS requests file handles
 int ifrfd = -1;			// File descriptor for routing, etc
@@ -114,6 +115,7 @@ config_descriptt config_values[] = {
 	CONFIG("radius_interim", radius_interim, INT),
 	CONFIG("radius_secret", radiussecret, STRING),
 	CONFIG("radius_authtypes", radius_authtypes_s, STRING),
+	CONFIG("radius_dae_port", radius_dae_port, SHORT),
 	CONFIG("allow_duplicate_users", allow_duplicate_users, BOOL),
 	CONFIG("bind_address", bind_address, IPv4),
 	CONFIG("peer_address", peer_address, IPv4),
@@ -148,6 +150,7 @@ static char *plugin_functions[] = {
 	"plugin_kill_session",
 	"plugin_control",
 	"plugin_radius_response",
+	"plugin_radius_reset",
 	"plugin_become_master",
 	"plugin_new_session_master",
 };
@@ -163,7 +166,7 @@ sessiont *session = NULL;		// Array of session structures.
 sessionlocalt *sess_local = NULL;	// Array of local per-session counters.
 radiust *radius = NULL;			// Array of radius structures.
 ippoolt *ip_address_pool = NULL;	// Array of dynamic IP addresses.
-ip_filtert *ip_filters = NULL;	// Array of named filters.
+ip_filtert *ip_filters = NULL;		// Array of named filters.
 static controlt *controlfree = 0;
 struct Tstats *_statistics = NULL;
 #ifdef RINGBUFFER
@@ -578,7 +581,7 @@ static void inittun(void)
 	}
 }
 
-// set up UDP port
+// set up UDP ports
 static void initudp(void)
 {
 	int on = 1;
@@ -600,7 +603,6 @@ static void initudp(void)
 		LOG(0, 0, 0, "Error in UDP bind: %s\n", strerror(errno));
 		exit(1);
 	}
-	snoopfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 
 	// Control
 	memset(&addr, 0, sizeof(addr));
@@ -613,6 +615,21 @@ static void initudp(void)
 		LOG(0, 0, 0, "Error in control bind: %s\n", strerror(errno));
 		exit(1);
 	}
+
+	// Dynamic Authorization Extensions to RADIUS
+	memset(&addr, 0, sizeof(addr));
+	addr.sin_family = AF_INET;
+	addr.sin_port = htons(config->radius_dae_port);
+	daefd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+	setsockopt(daefd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
+	if (bind(daefd, (void *) &addr, sizeof(addr)) < 0)
+	{
+		LOG(0, 0, 0, "Error in DAE bind: %s\n", strerror(errno));
+		exit(1);
+	}
+
+	// Intercept
+	snoopfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 }
 
 //
@@ -1415,7 +1432,7 @@ void throttle_session(sessionidt s, int rate_in, int rate_out)
 }
 
 // add/remove filters from session (-1 = no change)
-static void filter_session(sessionidt s, int filter_in, int filter_out)
+void filter_session(sessionidt s, int filter_in, int filter_out)
 {
 	if (!session[s].opened)
 		return; // No-one home.
@@ -2959,8 +2976,8 @@ static int still_busy(void)
 # include "fake_epoll.h"
 #endif
 
-// the base set of fds polled: control, cli, udp, tun, cluster
-#define BASE_FDS	5
+// the base set of fds polled: cli, cluster, tun, udp, control, dae
+#define BASE_FDS	6
 
 // additional polled fds
 #ifdef BGP
@@ -2984,8 +3001,8 @@ static void mainloop(void)
 		exit(1);
 	}
 
-	LOG(4, 0, 0, "Beginning of main loop.  udpfd=%d, tunfd=%d, cluster_sockfd=%d, controlfd=%d\n",
-		udpfd, tunfd, cluster_sockfd, controlfd);
+	LOG(4, 0, 0, "Beginning of main loop.  clifd=%d, cluster_sockfd=%d, tunfd=%d, udpfd=%d, controlfd=%d, daefd=%d\n",
+		clifd, cluster_sockfd, tunfd, udpfd, controlfd, daefd);
 
 	/* setup our fds to poll for input */
 	{
@@ -2995,25 +3012,29 @@ static void mainloop(void)
 		e.events = EPOLLIN;
 		i = 0;
 
-		d[i].type = FD_TYPE_CONTROL;
-		e.data.ptr = &d[i++];
-		epoll_ctl(epollfd, EPOLL_CTL_ADD, controlfd, &e);
-
 		d[i].type = FD_TYPE_CLI;
 		e.data.ptr = &d[i++];
 		epoll_ctl(epollfd, EPOLL_CTL_ADD, clifd, &e);
 
-		d[i].type = FD_TYPE_UDP;
+		d[i].type = FD_TYPE_CLUSTER;
 		e.data.ptr = &d[i++];
-		epoll_ctl(epollfd, EPOLL_CTL_ADD, udpfd, &e);
+		epoll_ctl(epollfd, EPOLL_CTL_ADD, cluster_sockfd, &e);
 
 		d[i].type = FD_TYPE_TUN;
 		e.data.ptr = &d[i++];
 		epoll_ctl(epollfd, EPOLL_CTL_ADD, tunfd, &e);
 
-		d[i].type = FD_TYPE_CLUSTER;
+		d[i].type = FD_TYPE_UDP;
 		e.data.ptr = &d[i++];
-		epoll_ctl(epollfd, EPOLL_CTL_ADD, cluster_sockfd, &e);
+		epoll_ctl(epollfd, EPOLL_CTL_ADD, udpfd, &e);
+
+		d[i].type = FD_TYPE_CONTROL;
+		e.data.ptr = &d[i++];
+		epoll_ctl(epollfd, EPOLL_CTL_ADD, controlfd, &e);
+
+		d[i].type = FD_TYPE_DAE;
+		e.data.ptr = &d[i++];
+		epoll_ctl(epollfd, EPOLL_CTL_ADD, daefd, &e);
 	}
 
 #ifdef BGP
@@ -3080,12 +3101,6 @@ static void mainloop(void)
 				struct event_data *d = events[i].data.ptr;
 				switch (d->type)
 				{
-				case FD_TYPE_CONTROL: // nsctl commands
-					alen = sizeof(addr);
-					processcontrol(buf, recvfrom(controlfd, buf, sizeof(buf), MSG_WAITALL, (void *) &addr, &alen), &addr, alen);
-					n--;
-					break;
-
 				case FD_TYPE_CLI: // CLI connections
 				{
 					int cli;
@@ -3104,9 +3119,21 @@ static void mainloop(void)
 				}
 
 				// these are handled below, with multiple interleaved reads
-				case FD_TYPE_UDP:	udp_ready++; break;
-				case FD_TYPE_TUN:	tun_ready++; break;
 				case FD_TYPE_CLUSTER:	cluster_ready++; break;
+				case FD_TYPE_TUN:	tun_ready++; break;
+				case FD_TYPE_UDP:	udp_ready++; break;
+
+				case FD_TYPE_CONTROL: // nsctl commands
+					alen = sizeof(addr);
+					processcontrol(buf, recvfrom(controlfd, buf, sizeof(buf), MSG_WAITALL, (void *) &addr, &alen), &addr, alen);
+					n--;
+					break;
+
+				case FD_TYPE_DAE: // DAE requests
+					alen = sizeof(addr);
+					processdae(buf, recvfrom(daefd, buf, sizeof(buf), MSG_WAITALL, (void *) &addr, &alen), &addr, alen);
+					n--;
+					break;
 
 				case FD_TYPE_RADIUS: // RADIUS response
 					s = recv(radfds[d->index], buf, sizeof(buf), 0);
@@ -4186,6 +4213,9 @@ static void update_config()
 			strcat(config->radius_authtypes_s, ", pap");
 	}
 
+	if (!config->radius_dae_port)
+		config->radius_dae_port = DAEPORT;
+
 	// re-initialise the random number source
 	initrandom(config->random_device);
 
@@ -5042,6 +5072,31 @@ static void unhide_value(uint8_t *value, size_t len, uint16_t type, uint8_t *vec
 		*value++ ^= digest[d++];
 		len--;
 	}
+}
+
+int find_filter(char const *name, size_t len)
+{
+	int free = -1;
+	int i;
+
+	for (i = 0; i < MAXFILTER; i++)
+	{
+	    	if (!*ip_filters[i].name)
+		{
+			if (free < 0)
+				free = i;
+
+			continue;
+		}
+
+		if (strlen(ip_filters[i].name) != len)
+			continue;
+
+		if (!strncmp(ip_filters[i].name, name, len))
+			return i;
+	}
+			
+	return free;
 }
 
 static int ip_filter_port(ip_filter_portt *p, uint16_t port)

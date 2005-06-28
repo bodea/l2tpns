@@ -5,7 +5,7 @@
 
 /* snoop control */
 
-char const *cvs_id = "$Id: snoopctl.c,v 1.4 2004-12-16 08:49:53 bodea Exp $";
+char const *cvs_id = "$Id: snoopctl.c,v 1.5 2005-06-28 14:48:28 bodea Exp $";
 
 int plugin_api_version = PLUGIN_API_VERSION;
 static struct pluginfuncs *p = 0;
@@ -15,15 +15,6 @@ char *plugin_control_help[] = {
 	"  unsnoop USER|SID                            Stop intercepting user",
 	0
 };
-
-int plugin_init(struct pluginfuncs *funcs)
-{
-	if (!funcs)
-		return 0;
-
-	p = funcs;
-	return 1;
-}
 
 int plugin_control(struct param_control *data)
 {
@@ -123,4 +114,16 @@ int plugin_control(struct param_control *data)
 	data->additional = 0;
 
 	return PLUGIN_RET_STOP;
+}
+
+int plugin_radius_reset(struct param_radius_reset *data)
+{
+	data->s->snoop_ip = 0;
+	data->s->snoop_port = 0;
+	return PLUGIN_RET_OK;
+}
+
+int plugin_init(struct pluginfuncs *funcs)
+{
+	return ((p = funcs)) ? 1 : 0;
 }

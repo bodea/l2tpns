@@ -1,5 +1,5 @@
 // L2TPNS Clustering Stuff
-// $Id: cluster.h,v 1.12 2005-06-02 11:32:30 bodea Exp $
+// $Id: cluster.h,v 1.13 2005-06-28 14:48:19 bodea Exp $
 
 #ifndef __CLUSTER_H__
 #define __CLUSTER_H__
@@ -20,6 +20,7 @@
 #define C_CTUNNEL		13	// Compressed tunnel structure.
 #define C_GARDEN		14	// Gardened packet
 #define C_MASTER		15	// Tell a slave the address of the master.
+#define C_FORWARD_DAE		16	// A DAE packet for the master to handle
 
 #define HB_VERSION		5	// Protocol version number..
 #define HB_MAX_SEQ		(1<<30)	// Maximum sequence number. (MUST BE A POWER OF 2!)
@@ -75,6 +76,7 @@ int processcluster(char *buf, int size, in_addr_t addr);
 int cluster_send_session(int sid);
 int cluster_send_tunnel(int tid);
 int master_forward_packet(char *data, int size, in_addr_t addr, int port);
+int master_forward_dae_packet(char *data, int size, in_addr_t addr, int port);
 int master_throttle_packet(int tid, char *data, int size);
 int master_garden_packet(sessionidt s, char *data, int size);
 void master_update_counts(void);

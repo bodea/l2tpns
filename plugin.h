@@ -1,7 +1,7 @@
 #ifndef __PLUGIN_H__
 #define __PLUGIN_H__
 
-#define PLUGIN_API_VERSION	5
+#define PLUGIN_API_VERSION	6
 #define MAX_PLUGIN_TYPES	30
 
 enum
@@ -15,6 +15,7 @@ enum
 	PLUGIN_KILL_SESSION,
 	PLUGIN_CONTROL,
 	PLUGIN_RADIUS_RESPONSE,
+	PLUGIN_RADIUS_RESET,
 	PLUGIN_BECOME_MASTER,
 	PLUGIN_NEW_SESSION_MASTER,
 };
@@ -109,6 +110,12 @@ struct param_radius_response
 	sessiont *s;
 	char *key;
 	char *value;
+};
+
+struct param_radius_reset
+{
+	tunnelt *t;
+	sessiont *s;
 };
 
 #endif /* __PLUGIN_H__ */

@@ -1,6 +1,6 @@
 // L2TPNS Radius Stuff
 
-char const *cvs_id_radius = "$Id: radius.c,v 1.33 2005-06-04 15:42:36 bodea Exp $";
+char const *cvs_id_radius = "$Id: radius.c,v 1.34 2005-06-28 14:48:28 bodea Exp $";
 
 #include <time.h>
 #include <stdio.h>
@@ -12,11 +12,13 @@ char const *cvs_id_radius = "$Id: radius.c,v 1.33 2005-06-04 15:42:36 bodea Exp 
 #include <arpa/inet.h>
 #include <ctype.h>
 #include <netinet/in.h>
+#include <errno.h>
 #include "md5.h"
 #include "constants.h"
 #include "l2tpns.h"
 #include "plugin.h"
 #include "util.h"
+#include "cluster.h"
 
 extern radiust *radius;
 extern sessiont *session;
@@ -51,7 +53,7 @@ static uint16_t get_free_radius()
 	int count;
 	static uint32_t next_radius_id = 0;
 
-	for (count = MAXRADIUS; count > 0 ; --count)
+	for (count = MAXRADIUS; count > 0; --count)
 	{
 		++next_radius_id;		// Find the next ID to check.
 		if (next_radius_id >= MAXRADIUS)
@@ -296,7 +298,7 @@ void radiussend(uint16_t r, uint8_t state)
 			{
 				*p = 26;				// vendor-specific
 				*(uint32_t *) (p + 2) = htonl(9);	// Cisco
-				p[6] = 1;				// Cisco-Avpair
+				p[6] = 1;				// Cisco-AVPair
 				p[7] = 2 + sprintf(p + 8, "intercept=%s:%d",
 					fmtaddr(session[s].snoop_ip, 0), session[s].snoop_port);
 
@@ -375,6 +377,47 @@ void radiussend(uint16_t r, uint8_t state)
 
 	LOG_HEX(5, "RADIUS Send", b, (p - b));
 	sendto(radfds[r & RADIUS_MASK], b, p - b, 0, (void *) &addr, sizeof(addr));
+}
+
+static void handle_avpair(sessionidt s, uint8_t *avp, int len)
+{
+	char *key = avp;
+	char *value = memchr(avp, '=', len);
+	char tmp[2048] = "";
+
+	if (value)
+	{
+		*value++ = 0;
+		len -= value - key;
+	}
+	else
+	{
+	    	value = tmp;
+		len = 0;
+	}
+
+	// strip quotes
+	if (len > 2 && (*value == '"' || *value == '\'') && value[len - 1] == *value)
+	{
+		value++;
+		len--;
+		value[len - 1] = 0;
+	}
+	// copy and null terminate
+	else if (len < sizeof(tmp) - 1)
+	{
+		memcpy(tmp, value, len);
+		tmp[len] = 0;
+		value = tmp;
+	}
+	else
+		return;
+	
+	// Run hooks
+	{
+		struct param_radius_response p = { &tunnel[session[s].tunnel], &session[s], key, value };
+		run_plugins(PLUGIN_RADIUS_RESPONSE, &p);
+	}
 }
 
 // process RADIUS response
@@ -577,37 +620,36 @@ void processrad(uint8_t *buf, int len, char socket_index)
 					    	char *filter = p + 2;
 						int l = p[1] - 2;
 						char *suffix;
-						uint8_t *f = 0;
-						int i;
+						int f;
+						uint8_t *fp = 0;
 
 						LOG(3, s, session[s].tunnel, "   Radius reply contains Filter-Id \"%.*s\"\n", l, filter);
 						if ((suffix = memchr(filter, '.', l)))
 						{
 							int b = suffix - filter;
 							if (l - b == 3 && !memcmp("in", suffix+1, 2))
-								f = &session[s].filter_in;
+								fp = &session[s].filter_in;
 							else if (l - b == 4 && !memcmp("out", suffix+1, 3))
-								f = &session[s].filter_out;
+								fp = &session[s].filter_out;
 
 							l = b;
 						}
 
-						if (!f)
+						if (!fp)
 						{
 							LOG(3, s, session[s].tunnel, "    Invalid filter\n");
 							continue;
 						}
 
-						for (*f = 0, i = 0; !*f && i < MAXFILTER; i++)
-							if (strlen(ip_filters[i].name) == l &&
-							    !strncmp(ip_filters[i].name, filter, l))
-								*f = i + 1;
-
-						if (*f)
-							ip_filters[*f - 1].used++;
-						else
+						if ((f = find_filter(filter, l)) < 0 || !*ip_filters[f].name)
+						{
 							LOG(3, s, session[s].tunnel, "    Unknown filter\n");
-
+						}
+						else
+						{
+							*fp = f + 1;
+							ip_filters[f].used++;
+						}
 					}
 					else if (*p == 26 && p[1] >= 7)
 					{
@@ -615,7 +657,6 @@ void processrad(uint8_t *buf, int len, char socket_index)
 						int vendor = ntohl(*(int *)(p + 2));
 						char attrib = *(p + 6);
 						int attrib_length = *(p + 7) - 2;
-						char *avpair, *value, *key, *newp;
 
 						LOG(3, s, session[s].tunnel, "   Radius reply contains Vendor-Specific.  Vendor=%d Attrib=%d Length=%d\n", vendor, attrib, attrib_length);
 						if (vendor != 9 || attrib != 1)
@@ -624,36 +665,13 @@ void processrad(uint8_t *buf, int len, char socket_index)
 							continue;
 						}
 
-						if (attrib_length < 0) continue;
+						if (attrib_length > 0)
+						{
+							LOG(3, s, session[s].tunnel, "      Cisco-AVPair value: %.*s\n",
+								attrib_length, p + 8);
 
-						avpair = key = calloc(attrib_length + 1, 1);
-						memcpy(avpair, p + 8, attrib_length);
-						LOG(3, s, session[s].tunnel, "      Cisco-Avpair value: %s\n", avpair);
-						do {
-							value = strchr(key, '=');
-							if (!value) break;
-							*value++ = 0;
-
-							// Trim quotes off reply string
-							if (*value == '\'' || *value == '\"')
-							{
-								char *x;
-								value++;
-								x = value + strlen(value) - 1;
-								if (*x == '\'' || *x == '\"')
-									*x = 0;
-							}
-
-							// Run hooks
-							newp = strchr(value, ',');
-							if (newp) *newp++ = 0;
-							{
-								struct param_radius_response p = { &tunnel[session[s].tunnel], &session[s], key, value };
-								run_plugins(PLUGIN_RADIUS_RESPONSE, &p);
-							}
-							key = newp;
-						} while (newp);
-						free(avpair);
+							handle_avpair(s, p + 8, attrib_length);
+						}
 					}
 					else if (*p == 99)
 					{
@@ -755,4 +773,320 @@ void radiusretry(uint16_t r)
 			LOG(3, s, session[s].tunnel, "Freeing up radius session %d\n", r);
 			break;
 	}
+}
+
+extern int daefd;
+
+void processdae(uint8_t *buf, int len, struct sockaddr_in *addr, int alen)
+{
+	int i, r_code, r_id, length, attribute_length;
+	uint8_t vector[16], hash[16], *packet, attribute;
+	MD5_CTX ctx;
+	char username[MAXUSER] = "";
+	in_addr_t nas = 0;
+	in_addr_t ip = 0;
+	uint32_t port = 0;
+	uint32_t error = 0;
+	sessionidt s = 0;
+	tunnelidt t;
+	int fin = -1;
+	int fout = -1;
+	uint8_t *avpair[64];
+	int avpair_len[sizeof(avpair)/sizeof(*avpair)];
+	int avp = 0;
+	int auth_only = 0;
+	uint8_t *p;
+
+	LOG(3, 0, 0, "DAE request from %s\n", fmtaddr(addr->sin_addr.s_addr, 0));
+
+	// check if DAE is from RADIUS server
+	for (i = 0; i < config->numradiusservers; i++)
+		if (config->radiusserver[i] == addr -> sin_addr.s_addr)
+			break;
+
+	if (i >= config->numradiusservers)
+	{
+		LOG(1, 0, 0, "Unknown DAE client %s\n", fmtaddr(addr->sin_addr.s_addr, 0));
+		return;
+	}
+
+	LOG_HEX(5, "DAE Request", buf, len);
+
+	if (len < 20 || len < ntohs(*(uint16_t *) (buf + 2)))
+	{
+		LOG(1, 0, 0, "Duff DAE request length %d\n", len);
+		return;
+	}
+
+	r_code = buf[0]; // request type
+	r_id = buf[1]; // radius indentifier.
+
+	if (r_code != DisconnectRequest && r_code != CoARequest)
+	{
+		LOG(1, 0, 0, "Unrecognised DAE request %s\n", radius_code(r_code));
+		return;
+	}
+
+	if (!config->cluster_iam_master)
+	{
+		master_forward_dae_packet(buf, len, addr->sin_addr.s_addr, addr->sin_port);
+		return;
+	}
+
+	len = ntohs(*(uint16_t *) (buf + 2));
+
+	LOG(3, 0, 0, "Received DAE %s, id %d\n", radius_code(r_code), r_id);
+
+	// check authenticator
+	memcpy(vector, buf + 4, 16);
+	memset(buf + 4, 0, 16);
+
+	i = strlen(config->radiussecret);
+	if (i > 16) i = 16;
+
+	MD5Init(&ctx);
+	MD5Update(&ctx, buf, len);
+	MD5Update(&ctx, buf, config->radiussecret, i);
+	MD5Final(hash, &ctx);
+	if (memcmp(hash, vector, 16) != 0)
+	{
+		LOG(1, 0, 0, "Incorrect vector in DAE request (wrong secret in radius config?)\n");
+		return;
+	}
+
+	// unpack attributes
+	packet = buf + 20;
+	length = len - 20;
+
+	while (length > 0)
+	{
+		attribute = *packet++;
+		attribute_length = *packet++;
+		if (attribute_length < 2)
+			break;
+
+		length -= attribute_length;
+		attribute_length -= 2;
+		switch (attribute)
+		{
+		case 1: /* username */
+			len = attribute_length < MAXUSER ? attribute_length : MAXUSER - 1;
+			memcpy(username, packet, len);
+			username[len] = 0;
+			LOG(4, 0, 0, "    Received DAE User-Name: %s\n", username);
+			break;
+
+		case 4: /* nas ip address */
+			nas = *(uint32_t *) packet; // net order
+			if (nas != config->bind_address)
+				error = 403; // NAS identification mismatch
+
+			LOG(4, 0, 0, "    Received DAE NAS-IP-Address: %s\n", fmtaddr(nas, 0));
+			break;
+
+		case 5: /* nas port */
+			port = ntohl(*(uint32_t *) packet);
+			if (port < 1 || port > MAXSESSION)
+				error = 404;
+
+			LOG(4, 0, 0, "    Received DAE NAS-Port: %u\n", port);
+			break;
+
+		case 6: /* service type */
+			{
+				uint32_t service_type = ntohl(*(uint32_t *) packet);
+				auth_only = service_type == 8; // Authenticate only
+
+				LOG(4, 0, 0, "    Received DAE Service-Type: %u\n", service_type);
+			}
+			break;
+
+		case 8: /* ip address */
+			ip = *(uint32_t *) packet; // net order
+			LOG(4, 0, 0, "    Received DAE Framed-IP-Address: %s\n", fmtaddr(ip, 0));
+			break;
+
+		case 11: /* filter id */
+			LOG(4, 0, 0, "    Received DAE Filter-Id: %.*s\n", attribute_length, packet);
+			if (!(p = memchr(packet, '.', attribute_length)))
+			{
+				error = 404; // invalid request
+				break;
+			}
+
+			len = p - packet;
+			i = find_filter(packet, len);
+			if (i < 0 || !*ip_filters[i].name)
+			{
+				error = 404;
+				break;
+			}
+
+			if (!memcmp(p, ".in", attribute_length - len))
+				fin = i + 1;
+			else if (!memcmp(p, ".out", attribute_length - len))
+				fout = i + 1;
+			else
+				error = 404;
+
+			break;
+
+		case 26: /* vendor specific */
+			if (attribute_length >= 6
+			    && ntohl(*(uint32_t *) packet) == 9	// Cisco
+			    && *(packet + 4) == 1		// Cisco-AVPair
+			    && *(packet + 5) >= 2)		// length
+			{
+				int len = *(packet + 5) - 2;
+				uint8_t *a = packet + 6;
+
+				LOG(4, 0, 0, "    Received DAE Cisco-AVPair: %.*s\n", len, a);
+				if (avp < sizeof(avpair)/sizeof(*avpair) - 1)
+				{
+					avpair[avp] = a;
+					avpair_len[avp++] = len;
+				}
+			}
+			break;
+		}
+
+		packet += attribute_length;
+	}
+
+	if (!error && auth_only)
+	{
+		if (fin != -1 || fout != -1 || avp)
+			error = 401; // unsupported attribute
+		else
+			error = 405; // unsupported service
+	}
+
+	if (!error && !(port || ip || *username))
+		error = 402; // missing attribute
+
+	// exact match for SID if given
+	if (!error && port)
+	{
+		s = port;
+		if (!session[s].opened)
+			error = 503; // not found
+	}
+
+	if (!error && ip)
+	{
+		// find/check session by IP
+		i = sessionbyip(ip);
+		if (!i || (s && s != i)) // not found or mismatching port
+			error = 503;
+		else
+			s = i;
+	}
+
+	if (!error && *username)
+	{
+		if (s)
+		{
+			if (strcmp(session[s].user, username))
+				error = 503;
+		}
+		else if (!(s = sessionbyuser(username)))
+			error = 503;
+	}
+
+	t = session[s].tunnel;
+
+	switch (r_code)
+	{
+	case DisconnectRequest: // Packet of Disconnect/Death
+		if (error)
+		{
+			r_code = DisconnectNAK;
+			break;
+		}
+
+		LOG(3, s, t, "    DAE Disconnect %d (%s)\n", s, session[s].user);
+		r_code = DisconnectACK;
+
+		sessionshutdown(s, "Requested by PoD", 3, 0); // disconnect session
+		break;
+
+	case CoARequest: // Change of Authorization
+		if (error)
+		{
+		    	r_code = CoANAK;
+			break;
+		}
+
+		LOG(3, s, t, "    DAE Change %d (%s)\n", s, session[s].user);
+		r_code = CoAACK;
+	
+		// reset
+		{
+			struct param_radius_reset p = { &tunnel[session[s].tunnel], &session[s] };
+			run_plugins(PLUGIN_RADIUS_RESET, &p);
+		}
+
+		// apply filters
+		if (fin != -1 || fout != -1)
+		{
+			if (fin == -1)
+				fin = 0;
+			else
+				LOG(3, s, t, "        Filter in %d (%s)\n", fin, ip_filters[fin - 1].name);
+
+			if (fout == -1)
+				fout = 0;
+			else
+				LOG(3, s, t, "        Filter out %d (%s)\n", fout, ip_filters[fout - 1].name);
+
+			filter_session(s, fin, fout);
+		}
+
+		// process cisco av-pair(s)
+		for (i = 0; i < avp; i++)
+		{
+			LOG(3, s, t, "        Cisco-AVPair: %.*s\n", avpair_len[i], avpair[i]);
+			handle_avpair(s, avpair[i], avpair_len[i]);
+		}
+
+		cluster_send_session(s);
+		break;
+	}
+
+	// send response
+	packet = buf;
+	*packet++ = r_code;
+	*packet++ = r_id;
+	packet += 2;
+	memset(packet, 0, 16);
+	packet += 16;
+	len = 20;
+
+	// add attributes
+	if (error)
+	{
+		// add error cause
+		*packet++ = 101;
+		*packet++ = 6;
+		*(uint32_t *) packet = htonl(error);
+		len += 6;
+	}
+
+	*((uint16_t *)(buf + 2)) = htons(len);
+
+	// make vector
+	i = strlen(config->radiussecret);
+	if (i > 16) i = 16;
+
+	MD5Init(&ctx);
+	MD5Update(&ctx, buf, len);
+	MD5Update(&ctx, config->radiussecret, i);
+	MD5Final(hash, &ctx);
+	memcpy(buf + 4, hash, 16);
+
+	LOG(3, 0, 0, "Sending DAE %s, id=%d\n", radius_code(r_code), r_id);
+
+	// send DAE response
+	if (sendto(daefd, buf, len, MSG_DONTWAIT | MSG_NOSIGNAL, (struct sockaddr *) addr, alen) < 0)
+		LOG(0, 0, 0, "Error sending DAE response packet: %s\n", strerror(errno));
 }

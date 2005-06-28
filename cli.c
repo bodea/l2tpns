@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.62 2005-06-07 05:31:43 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.63 2005-06-28 14:48:17 bodea Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -2316,17 +2316,6 @@ static int cmd_restart_bgp(struct cli_def *cli, char *command, char **argv, int 
 #endif /* BGP*/
 
 static int filt;
-static int find_access_list(char const *name)
-{
-	int i;
-
-	for (i = 0; i < MAXFILTER; i++)
-		if (!(*ip_filters[i].name && strcmp(ip_filters[i].name, name)))
-			return i;
-
-	return -1;
-}
-
 static int access_list(struct cli_def *cli, char **argv, int argc, int add)
 {
 	int extended;
@@ -2377,7 +2366,7 @@ static int access_list(struct cli_def *cli, char **argv, int argc, int add)
 		return CLI_OK;
 	}
 
-	filt = find_access_list(argv[1]);
+	filt = find_filter(argv[1], strlen(argv[1]));
 	if (add)
 	{
 		if (filt < 0)
@@ -2970,7 +2959,7 @@ static int cmd_filter(struct cli_def *cli, char *command, char **argv, int argc)
 			return CLI_OK;
 		}
 
-		v = find_access_list(argv[i+1]);
+		v = find_filter(argv[i+1], strlen(argv[i+1]));
 		if (v < 0 || !*ip_filters[v].name)
 		{
 			cli_error(cli, "Access-list %s not defined", argv[i+1]);
@@ -3046,7 +3035,7 @@ static int cmd_show_access_list(struct cli_def *cli, char *command, char **argv,
 
 	for (i = 0; i < argc; i++)
 	{
-		int f = find_access_list(argv[i]);
+		int f = find_filter(argv[i], strlen(argv[i]));
 		ip_filter_rulet *rules;
 
 		if (f < 0 || !*ip_filters[f].name)

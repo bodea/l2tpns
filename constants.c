@@ -1,6 +1,6 @@
 // L2TPNS: constants
 
-char const *cvs_id_constants = "$Id: constants.c,v 1.5 2005-05-05 10:02:07 bodea Exp $";
+char const *cvs_id_constants = "$Id: constants.c,v 1.6 2005-06-28 14:48:20 bodea Exp $";
 
 #include <stdio.h>
 #include "constants.h"
@@ -173,8 +173,17 @@ CONSTANT(radius_code,
     0,							// 9
     0,							// 10
     "Access-Challenge",					// 11
-    "Status-Server (experimental)",			// 12
-    "Status-Client (experimental)"			// 13
+    "Status-Server",					// 12
+    "Status-Client",					// 13
+    0, 0, 0, 0, 0, 0,					// 14-19
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0,			// 20-29
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0,			// 30-39
+    "Disconnect-Request",				// 40
+    "Disconnect-ACK",					// 41
+    "Disconnect-NAK",					// 42
+    "CoA-Request",					// 43
+    "CoA-ACK",						// 44
+    "CoA-NAK"						// 45
 )
 
 CONSTANT(l2tp_message_type,

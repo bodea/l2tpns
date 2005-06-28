@@ -229,6 +229,11 @@ A comma separated list of supported RADIUS authentication methods
 (<B>pap</B> or <B>chap</B>), in order of preference (default <B>pap</B>).
 </LI>
 
+<LI><B>radius_dae_port</B> (short)<BR>
+Port for DAE RADIUS (Packet of Death/Disconnect, Change of Authorization)
+requests (default: <B>3799</B>).
+</LI>
+
 <LI><B>allow_duplicate_users</B> (boolean)</BR>
 Allow multiple logins with the same username.  If false (the default),
 any prior session with the same username will be dropped when a new

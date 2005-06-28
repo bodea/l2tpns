@@ -5,7 +5,7 @@
 
 /* session control */
 
-char const *cvs_id = "$Id: sessionctl.c,v 1.2 2005-05-10 06:48:16 bodea Exp $";
+char const *cvs_id = "$Id: sessionctl.c,v 1.3 2005-06-28 14:48:28 bodea Exp $";
 
 int plugin_api_version = PLUGIN_API_VERSION;
 static struct pluginfuncs *p = 0;
@@ -15,15 +15,6 @@ char *plugin_control_help[] = {
     "  kill USER|SID [REASON]                      Kill user session",
     0
 };
-
-int plugin_init(struct pluginfuncs *funcs)
-{
-    if (!funcs)
-	return 0;
-
-    p = funcs;
-    return 1;
-}
 
 int plugin_control(struct param_control *data)
 {
@@ -75,4 +66,9 @@ int plugin_control(struct param_control *data)
     data->additional = 0;
 
     return PLUGIN_RET_STOP;
+}
+
+int plugin_init(struct pluginfuncs *funcs)
+{
+	return ((p = funcs)) ? 1 : 0;
 }

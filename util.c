@@ -1,6 +1,6 @@
 /* Misc util functions */
 
-char const *cvs_id_util = "$Id: util.c,v 1.11 2005-06-04 15:42:36 bodea Exp $";
+char const *cvs_id_util = "$Id: util.c,v 1.12 2005-06-28 14:48:28 bodea Exp $";
 
 #include <unistd.h>
 #include <errno.h>
@@ -40,7 +40,7 @@ void *shared_malloc(unsigned int size)
 }
 
 extern int forked;
-extern int udpfd, controlfd, tunfd, snoopfd, ifrfd, ifr6fd, rand_fd, cluster_sockfd;
+extern int cluster_sockfd, tunfd, udpfd, controlfd, daefd, snoopfd, ifrfd, ifr6fd, rand_fd;
 extern int *radfds;
 
 pid_t fork_and_close()
@@ -73,15 +73,16 @@ pid_t fork_and_close()
 	signal(SIGTERM, SIG_DFL);
 
 	// Close sockets
+	if (clifd != -1)          close(clifd);
+	if (cluster_sockfd != -1) close(cluster_sockfd);
 	if (tunfd != -1)          close(tunfd);
 	if (udpfd != -1)          close(udpfd);
 	if (controlfd != -1)      close(controlfd);
+	if (daefd != -1)          close(daefd);
 	if (snoopfd != -1)        close(snoopfd);
 	if (ifrfd != -1)          close(ifrfd);
 	if (ifr6fd != -1)         close(ifr6fd);
 	if (rand_fd != -1)        close(rand_fd);
-	if (cluster_sockfd != -1) close(cluster_sockfd);
-	if (clifd != -1)          close(clifd);
 	if (epollfd != -1)        close(epollfd);
 
 	for (i = 0; radfds && i < RADIUS_FDS; i++)
