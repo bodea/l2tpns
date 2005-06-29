@@ -2,7 +2,7 @@ Brief Installation guide for L2TPNS
 
 1. Requirements
 
-  * libcli 1.8.0 or greater
+  * libcli 1.8.5 or greater
     You can get it from http://sourceforge.net/projects/libcli.
 
   * A kernel with iptables support.
@@ -29,6 +29,7 @@ Brief Installation guide for L2TPNS
 	23/tcp		command line interface
 	1701/udp	l2tp (on bind_address)
 	1702/udp	control port (nsctl)
+	3799/udp	RADIUS DAE port
 	32792/udp	clustering messages
 
   * If you are using the garden plugin, setup the walled garden firewall
