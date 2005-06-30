@@ -1,6 +1,6 @@
 // L2TPNS Radius Stuff
 
-char const *cvs_id_radius = "$Id: radius.c,v 1.35 2005-06-30 06:13:40 bodea Exp $";
+char const *cvs_id_radius = "$Id: radius.c,v 1.36 2005-06-30 14:31:26 bodea Exp $";
 
 #include <time.h>
 #include <stdio.h>
@@ -1015,20 +1015,17 @@ void processdae(uint8_t *buf, int len, struct sockaddr_in *addr, int alen)
 		}
 
 		// apply filters
-		if (fin != -1 || fout != -1)
-		{
-			if (fin == -1)
-				fin = 0;
-			else
-				LOG(3, s, t, "        Filter in %d (%s)\n", fin, ip_filters[fin - 1].name);
+		if (fin == -1)
+			fin = 0;
+		else
+			LOG(3, s, t, "        Filter in %d (%s)\n", fin, ip_filters[fin - 1].name);
 
-			if (fout == -1)
-				fout = 0;
-			else
-				LOG(3, s, t, "        Filter out %d (%s)\n", fout, ip_filters[fout - 1].name);
+		if (fout == -1)
+			fout = 0;
+		else
+			LOG(3, s, t, "        Filter out %d (%s)\n", fout, ip_filters[fout - 1].name);
 
-			filter_session(s, fin, fout);
-		}
+		filter_session(s, fin, fout);
 
 		// process cisco av-pair(s)
 		for (i = 0; i < avp; i++)
