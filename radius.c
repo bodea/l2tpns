@@ -1,6 +1,6 @@
 // L2TPNS Radius Stuff
 
-char const *cvs_id_radius = "$Id: radius.c,v 1.34 2005-06-28 14:48:28 bodea Exp $";
+char const *cvs_id_radius = "$Id: radius.c,v 1.35 2005-06-30 06:13:40 bodea Exp $";
 
 #include <time.h>
 #include <stdio.h>
@@ -798,18 +798,6 @@ void processdae(uint8_t *buf, int len, struct sockaddr_in *addr, int alen)
 	uint8_t *p;
 
 	LOG(3, 0, 0, "DAE request from %s\n", fmtaddr(addr->sin_addr.s_addr, 0));
-
-	// check if DAE is from RADIUS server
-	for (i = 0; i < config->numradiusservers; i++)
-		if (config->radiusserver[i] == addr -> sin_addr.s_addr)
-			break;
-
-	if (i >= config->numradiusservers)
-	{
-		LOG(1, 0, 0, "Unknown DAE client %s\n", fmtaddr(addr->sin_addr.s_addr, 0));
-		return;
-	}
-
 	LOG_HEX(5, "DAE Request", buf, len);
 
 	if (len < 20 || len < ntohs(*(uint16_t *) (buf + 2)))
