@@ -1,5 +1,6 @@
 * Sun Jul 3 2005 Brendan O'Dea <bod@optus.net> 2.0.23
 - Backout regular_cleanup changes.
+- Clear cluster_master on election so that slaves will accept a new master.
 
 * Tue May 31 2005 Brendan O'Dea <bod@optusnet.com.au> 2.0.22
 - Show session open time in "show session"/"show user" detailed output.
