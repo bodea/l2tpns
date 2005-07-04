@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.113 2005-06-28 14:48:20 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.114 2005-07-04 05:49:46 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -4530,12 +4530,6 @@ int load_session(sessionidt s, sessiont *new)
 	if (new->tunnel && s > config->cluster_highest_sessionid)	// Maintain this in the slave. It's used
 					// for walking the sessions to forward byte counts to the master.
 		config->cluster_highest_sessionid = s;
-
-	// TEMP: old session struct used a uint32_t to define the throttle
-	// speed for both up/down, new uses a uint16_t for each.  Deal with
-	// sessions from an old master for migration.
-	if (new->throttle_out == 0 && new->tbf_out)
-		new->throttle_out = new->throttle_in;
 
 	memcpy(&session[s], new, sizeof(session[s]));	// Copy over..
 
