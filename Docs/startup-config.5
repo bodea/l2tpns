@@ -2,7 +2,7 @@
 .de Id
 .ds Dt \\$4 \\$5
 ..
-.Id $Id: startup-config.5,v 1.11 2005-06-28 14:48:31 bodea Exp $
+.Id $Id: startup-config.5,v 1.12 2005-07-31 10:04:14 bodea Exp $
 .TH STARTUP-CONFIG 5 "\*(Dt" L2TPNS "File Formats and Conventions"
 .SH NAME
 startup\-config \- configuration file for l2tpns
@@ -62,6 +62,16 @@ The secret used by
 for authenticating tunnel request.  Must be the same as the LAC, or
 authentication will fail.  Only actually be used if the LAC requests
 authentication.
+.TP
+.B ppp_restart_time
+Restart timer for PPP protocol negotiation in seconds (default: 3).
+.TP
+.B ppp_max_configure
+Number of configure requests to send before giving up (default: 10).
+.TP
+.B ppp_max_failure
+Number of Configure-Nak requests to send before sending a
+Configure-Reject (default: 5).
 .TP
 .BR primary_dns , " secondary_dns"
 Whenever a PPP connection is established, DNS servers will be sent to the

@@ -1,6 +1,6 @@
 // L2TPNS Radius Stuff
 
-char const *cvs_id_radius = "$Id: radius.c,v 1.36 2005-06-30 14:31:26 bodea Exp $";
+char const *cvs_id_radius = "$Id: radius.c,v 1.37 2005-07-31 10:04:10 bodea Exp $";
 
 #include <time.h>
 #include <stdio.h>
@@ -13,7 +13,7 @@ char const *cvs_id_radius = "$Id: radius.c,v 1.36 2005-06-30 14:31:26 bodea Exp 
 #include <ctype.h>
 #include <netinet/in.h>
 #include <errno.h>
-#include "md5.h"
+#include <openssl/md5.h>
 #include "constants.h"
 #include "l2tpns.h"
 #include "plugin.h"
@@ -182,7 +182,7 @@ void radiussend(uint16_t r, uint8_t state)
 	{
 		*p = 1;                 // user name
 		p[1] = strlen(session[s].user) + 2;
-		strcpy(p + 2, session[s].user);
+		strcpy((char *) p + 2, session[s].user);
 		p += p[1];
 	}
 	if (state == RADIUSAUTH)
@@ -212,13 +212,13 @@ void radiussend(uint16_t r, uint8_t state)
 				while (p < pl)
 				{
 					MD5_CTX ctx;
-					MD5Init(&ctx);
-					MD5Update(&ctx, config->radiussecret, strlen(config->radiussecret));
+					MD5_Init(&ctx);
+					MD5_Update(&ctx, config->radiussecret, strlen(config->radiussecret));
 					if (p)
-						MD5Update(&ctx, pass + p - 16, 16);
+						MD5_Update(&ctx, pass + p - 16, 16);
 					else
-						MD5Update(&ctx, radius[r].auth, 16);
-					MD5Final(hash, &ctx);
+						MD5_Update(&ctx, radius[r].auth, 16);
+					MD5_Final(hash, &ctx);
 					do
 					{
 						pass[p] ^= hash[p & 15];
@@ -244,7 +244,7 @@ void radiussend(uint16_t r, uint8_t state)
 		{
 			*p = 44;	// session ID
 			p[1] = 18;
-			sprintf(p + 2, "%08X%08X", session[s].unique_id, session[s].opened);
+			sprintf((char *) p + 2, "%08X%08X", session[s].unique_id, session[s].opened);
 			p += p[1];
 			if (state == RADIUSSTART)
 			{			// start
@@ -299,7 +299,7 @@ void radiussend(uint16_t r, uint8_t state)
 				*p = 26;				// vendor-specific
 				*(uint32_t *) (p + 2) = htonl(9);	// Cisco
 				p[6] = 1;				// Cisco-AVPair
-				p[7] = 2 + sprintf(p + 8, "intercept=%s:%d",
+				p[7] = 2 + sprintf((char *) p + 8, "intercept=%s:%d",
 					fmtaddr(session[s].snoop_ip, 0), session[s].snoop_port);
 
 				p[1] = p[7] + 6;
@@ -325,21 +325,14 @@ void radiussend(uint16_t r, uint8_t state)
 	{
 		*p = 30;                // called
 		p[1] = strlen(session[s].called) + 2;
-		strcpy(p + 2, session[s].called);
-		p += p[1];
-	}
-	if (*radius[r].calling)
-	{
-		*p = 31;                // calling
-		p[1] = strlen(radius[r].calling) + 2;
-		strcpy(p + 2, radius[r].calling);
+		strcpy((char *) p + 2, session[s].called);
 		p += p[1];
 	}
 	else if (*session[s].calling)
 	{
 		*p = 31;                // calling
 		p[1] = strlen(session[s].calling) + 2;
-		strcpy(p + 2, session[s].calling);
+		strcpy((char *) p + 2, session[s].calling);
 		p += p[1];
 	}
 	// NAS-IP-Address
@@ -353,15 +346,15 @@ void radiussend(uint16_t r, uint8_t state)
 	if (state != RADIUSAUTH)
 	{
 	    // Build auth for accounting packet
-	    char z[16] = {0};
-	    char hash[16] = {0};
+	    uint8_t z[16] = {0};
+	    uint8_t hash[16] = {0};
 	    MD5_CTX ctx;
-	    MD5Init(&ctx);
-	    MD5Update(&ctx, b, 4);
-	    MD5Update(&ctx, z, 16);
-	    MD5Update(&ctx, b + 20, (p - b) - 20);
-	    MD5Update(&ctx, config->radiussecret, strlen(config->radiussecret));
-	    MD5Final(hash, &ctx);
+	    MD5_Init(&ctx);
+	    MD5_Update(&ctx, b, 4);
+	    MD5_Update(&ctx, z, 16);
+	    MD5_Update(&ctx, b + 20, (p - b) - 20);
+	    MD5_Update(&ctx, config->radiussecret, strlen(config->radiussecret));
+	    MD5_Final(hash, &ctx);
 	    memcpy(b + 4, hash, 16);
 	    memcpy(radius[r].auth, hash, 16);
 	}
@@ -381,9 +374,9 @@ void radiussend(uint16_t r, uint8_t state)
 
 static void handle_avpair(sessionidt s, uint8_t *avp, int len)
 {
-	char *key = avp;
-	char *value = memchr(avp, '=', len);
-	char tmp[2048] = "";
+	uint8_t *key = avp;
+	uint8_t *value = memchr(avp, '=', len);
+	uint8_t tmp[2048] = "";
 
 	if (value)
 	{
@@ -415,7 +408,7 @@ static void handle_avpair(sessionidt s, uint8_t *avp, int len)
 	
 	// Run hooks
 	{
-		struct param_radius_response p = { &tunnel[session[s].tunnel], &session[s], key, value };
+		struct param_radius_response p = { &tunnel[session[s].tunnel], &session[s], (char *) key, (char *) value };
 		run_plugins(PLUGIN_RADIUS_RESPONSE, &p);
 	}
 }
@@ -463,12 +456,12 @@ void processrad(uint8_t *buf, int len, char socket_index)
 		return;
 	}
 	t = session[s].tunnel;
-	MD5Init(&ctx);
-	MD5Update(&ctx, buf, 4);
-	MD5Update(&ctx, radius[r].auth, 16);
-	MD5Update(&ctx, buf + 20, len - 20);
-	MD5Update(&ctx, config->radiussecret, strlen(config->radiussecret));
-	MD5Final(hash, &ctx);
+	MD5_Init(&ctx);
+	MD5_Update(&ctx, buf, 4);
+	MD5_Update(&ctx, radius[r].auth, 16);
+	MD5_Update(&ctx, buf + 20, len - 20);
+	MD5_Update(&ctx, config->radiussecret, strlen(config->radiussecret));
+	MD5_Final(hash, &ctx);
 	do {
 		if (memcmp(hash, buf + 4, 16))
 		{
@@ -617,7 +610,7 @@ void processrad(uint8_t *buf, int len, char socket_index)
 					else if (*p == 11)
 					{
 					    	// Filter-Id
-					    	char *filter = p + 2;
+					    	char *filter = (char *) p + 2;
 						int l = p[1] - 2;
 						char *suffix;
 						int f;
@@ -680,10 +673,10 @@ void processrad(uint8_t *buf, int len, char socket_index)
 						int prefixlen;
 						uint8_t *n = p + 2;
 						uint8_t *e = p + p[1];
-						uint8_t *m = strchr(n, '/');
+						uint8_t *m = memchr(n, '/', e - p);
 
 						*m++ = 0;
-						inet_pton(AF_INET6, n, &r6);
+						inet_pton(AF_INET6, (char *) n, &r6);
 
 						prefixlen = 0;
 						while (m < e && isdigit(*m)) {
@@ -710,12 +703,12 @@ void processrad(uint8_t *buf, int len, char socket_index)
 
 			if (!session[s].dns1 && config->default_dns1)
 			{
-				session[s].dns1 = htonl(config->default_dns1);
+				session[s].dns1 = ntohl(config->default_dns1);
 				LOG(3, s, t, "   Sending dns1 = %s\n", fmtaddr(config->default_dns1, 0));
 			}
 			if (!session[s].dns2 && config->default_dns2)
 			{
-				session[s].dns2 = htonl(config->default_dns2);
+				session[s].dns2 = ntohl(config->default_dns2);
 				LOG(3, s, t, "   Sending dns2 = %s\n", fmtaddr(config->default_dns2, 0));
 			}
 
@@ -750,20 +743,11 @@ void radiusretry(uint16_t r)
 		case RADIUSCHAP:	// sending CHAP down PPP
 			sendchap(t, s);
 			break;
-		case RADIUSIPCP:
-			sendipcp(t, s);	// send IPCP
-			break;
 		case RADIUSAUTH:	// sending auth to RADIUS server
-			radiussend(r, RADIUSAUTH);
-			break;
 		case RADIUSSTART:	// sending start accounting to RADIUS server
-			radiussend(r, RADIUSSTART);
-			break;
 		case RADIUSSTOP:	// sending stop accounting to RADIUS server
-			radiussend(r, RADIUSSTOP);
-			break;
 		case RADIUSINTERIM:	// sending interim accounting to RADIUS server
-			radiussend(r, RADIUSINTERIM);
+			radiussend(r, radius[r].state);
 			break;
 		default:
 		case RADIUSNULL:	// Not in use
@@ -832,10 +816,10 @@ void processdae(uint8_t *buf, int len, struct sockaddr_in *addr, int alen)
 	i = strlen(config->radiussecret);
 	if (i > 16) i = 16;
 
-	MD5Init(&ctx);
-	MD5Update(&ctx, buf, len);
-	MD5Update(&ctx, buf, config->radiussecret, i);
-	MD5Final(hash, &ctx);
+	MD5_Init(&ctx);
+	MD5_Update(&ctx, buf, len);
+	MD5_Update(&ctx, config->radiussecret, i);
+	MD5_Final(hash, &ctx);
 	if (memcmp(hash, vector, 16) != 0)
 	{
 		LOG(1, 0, 0, "Incorrect vector in DAE request (wrong secret in radius config?)\n");
@@ -903,7 +887,7 @@ void processdae(uint8_t *buf, int len, struct sockaddr_in *addr, int alen)
 			}
 
 			len = p - packet;
-			i = find_filter(packet, len);
+			i = find_filter((char *) packet, len);
 			if (i < 0 || !*ip_filters[i].name)
 			{
 				error = 404;
@@ -1063,10 +1047,10 @@ void processdae(uint8_t *buf, int len, struct sockaddr_in *addr, int alen)
 	i = strlen(config->radiussecret);
 	if (i > 16) i = 16;
 
-	MD5Init(&ctx);
-	MD5Update(&ctx, buf, len);
-	MD5Update(&ctx, config->radiussecret, i);
-	MD5Final(hash, &ctx);
+	MD5_Init(&ctx);
+	MD5_Update(&ctx, buf, len);
+	MD5_Update(&ctx, config->radiussecret, i);
+	MD5_Final(hash, &ctx);
 	memcpy(buf + 4, hash, 16);
 
 	LOG(3, 0, 0, "Sending DAE %s, id=%d\n", radius_code(r_code), r_id);

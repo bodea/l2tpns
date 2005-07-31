@@ -30,12 +30,12 @@ typedef struct {
 	uint32_t	p_delayed;	// Total packets not sent immediately.
 
 	int		sizes[TBF_MAX_QUEUE];
-	char		packets[TBF_MAX_QUEUE][TBF_MAX_SIZE];
+	uint8_t		packets[TBF_MAX_QUEUE][TBF_MAX_SIZE];
 } tbft;
 
 void init_tbf(int num_tbfs);
 int tbf_run_timer(void);
-int tbf_queue_packet(int tbf_id, char * data, int size);
+int tbf_queue_packet(int tbf_id, uint8_t * data, int size);
 int new_tbf(int sid, int max_credit, int rate, void (*f)(sessionidt, uint8_t *, int));
 int free_tbf(int tid);
 void fsck_tbfs(void);

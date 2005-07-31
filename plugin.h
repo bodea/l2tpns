@@ -28,7 +28,7 @@ enum
 struct pluginfuncs
 {
 	void (*log)(int level, sessionidt s, tunnelidt t, const char *format, ...);
-	void (*log_hex)(int level, const char *title, const char *data, int maxsize);
+	void (*log_hex)(int level, const char *title, const uint8_t *data, int maxsize);
 	char *(*fmtaddr)(in_addr_t addr, int n);
 	sessionidt (*get_session_by_username)(char *username);
 	sessiont *(*get_session_by_id)(sessionidt s);

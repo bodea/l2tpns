@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.80 2005-06-28 14:48:27 bodea Exp $
+// $Id: l2tpns.h,v 1.81 2005-07-31 10:04:10 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -72,14 +72,14 @@
 #define CONFIGFILE	FLASHDIR "/startup-config"	// Configuration file
 #define CLIUSERS	FLASHDIR "/users"		// CLI Users file
 #define IPPOOLFILE	FLASHDIR "/ip_pool"		// Address pool configuration
-#define ACCT_TIME	3000		// 5 minute accounting interval
-#define ACCT_SHUT_TIME	600		// 1 minute for counters of shutdown sessions
-#define	L2TPPORT	1701		// L2TP port
-#define RADPORT		1645		// old radius port...
-#define DAEPORT		3799		// DAE port
-#define	PKTARP		0x0806		// ARP packet type
-#define	PKTIP		0x0800		// IPv4 packet type
-#define	PKTIPV6		0x86DD		// IPv6 packet type
+#define ACCT_TIME	3000				// 5 minute accounting interval
+#define ACCT_SHUT_TIME	600				// 1 minute for counters of shutdown sessions
+#define	L2TPPORT	1701				// L2TP port
+#define RADPORT		1645				// old radius port...
+#define DAEPORT		3799				// DAE port
+#define	PKTARP		0x0806				// ARP packet type
+#define	PKTIP		0x0800				// IPv4 packet type
+#define	PKTIPV6		0x86DD				// IPv6 packet type
 #define	PPPPAP		0xC023
 #define	PPPCHAP		0xC223
 #define	PPPLCP		0xC021
@@ -120,6 +120,52 @@ enum {
 	CoAACK,
 	CoANAK
 };
+
+// PPP phases
+enum {
+    	Dead,
+	Establish,
+	Authenticate,
+	Network,
+	Terminate
+};
+
+// PPP states
+enum {
+	Initial,
+	Starting,
+	Closed,
+	Stopped,
+	Closing,
+	Stopping,
+	RequestSent,
+	AckReceived,
+	AckSent,
+	Opened
+};
+
+// reset state machine counters
+#define initialise_restart_count(_s, _fsm)			\
+	sess_local[_s]._fsm.conf_sent = sess_local[_s]._fsm.nak_sent
+
+// stop timer on change to state where timer does not run
+#define change_state(_s, _fsm, _new) ({				\
+	if (_new != session[_s].ppp._fsm)			\
+	{ 							\
+		switch (_new)					\
+		{						\
+		case Initial:					\
+		case Starting:					\
+		case Closed:					\
+		case Stopped:					\
+		case Opened:					\
+			sess_local[_s]._fsm.restart = 0;	\
+			initialise_restart_count(_s, _fsm);	\
+		}						\
+		session[_s].ppp._fsm = _new;			\
+		cluster_send_session(_s);			\
+	}							\
+})
 
 // Types
 typedef uint16_t sessionidt;
@@ -174,7 +220,14 @@ typedef struct
 	sessionidt far;			// far end session ID
 	tunnelidt tunnel;		// near end tunnel ID
 	uint8_t l2tp_flags;		// various bit flags from the ICCN on the l2tp tunnel.
-	uint8_t flags;			// Various session flags.
+	struct {
+		uint8_t phase;		// PPP phase
+		uint8_t lcp:4;		//   LCP    state
+		uint8_t ipcp:4;		//   IPCP   state
+		uint8_t ipv6cp:4;	//   IPV6CP state
+		uint8_t ccp:4;		//   CCP    state
+		uint8_t pad;		// unused
+	} ppp;
 	in_addr_t ip;			// IP of session set by RADIUS response (host byte order).
 	int ip_pool_index;		// index to IP pool
 	uint32_t unique_id;		// unique session id
@@ -198,7 +251,7 @@ typedef struct
 	uint16_t tbf_in;		// filter bucket for throttling in from the user.
 	uint16_t tbf_out;		// filter bucket for throttling out to the user.
 	int random_vector_length;
-	char random_vector[MAXTEL];
+	uint8_t random_vector[MAXTEL];
 	char user[MAXUSER];		// user (needed in seesion for radius stop messages)
 	char called[MAXTEL];		// called number
 	char calling[MAXTEL];		// calling number
@@ -209,16 +262,9 @@ typedef struct
 	uint8_t walled_garden;		// is this session gardened?
 	uint8_t ipv6prefixlen;		// IPv6 route prefix length
 	struct in6_addr ipv6route;	// Static IPv6 route
-	char reserved[16];		// Space to expand structure without changing HB_VERSION
+	char reserved[11];		// Space to expand structure without changing HB_VERSION
 }
 sessiont;
-
-#define SF_IPCP_ACKED	1	// Has this session seen an IPCP Ack?
-#define SF_LCP_ACKED	2	// LCP negotiated
-#define SF_CCP_ACKED	4	// CCP negotiated
-#define SF_IPV6CP_ACKED	8	// IPv6 negotiated
-#define SF_IPV6_NACKED	16	// IPv6 rejected
-#define SF_IPV6_ROUTED	32	// advertised v6 route
 
 #define AUTHPAP		1	// allow PAP
 #define AUTHCHAP	2	// allow CHAP
@@ -232,6 +278,16 @@ typedef struct
 	// byte counters
 	uint32_t cin;
 	uint32_t cout;
+
+	// PPP restart timer/counters
+	struct {
+		time_t restart;
+		int conf_sent;
+		int nak_sent;
+	} lcp, ipcp, ipv6cp, ccp;
+
+	// authentication to use
+	int lcp_authtype;
 
 	// DoS prevention
 	clockt last_packet_out;
@@ -271,13 +327,12 @@ typedef struct
 }
 tunnelt;
 
-// 180 bytes per radius session
+// 160 bytes per radius session
 typedef struct			// outstanding RADIUS requests
 {
 	sessionidt session;	// which session this applies to
 	hasht auth;		// request authenticator
 	clockt retry;		// when to try next
-	char calling[MAXTEL];	// calling number
 	char pass[129];		// password
 	uint8_t id;		// ID for PPP response
 	uint8_t try;		// which try we are on
@@ -328,7 +383,6 @@ enum
 	RADIUSNULL,             // Not in use
 	RADIUSCHAP,             // sending CHAP down PPP
 	RADIUSAUTH,             // sending auth to RADIUS server
-	RADIUSIPCP,             // sending IPCP to end user
 	RADIUSSTART,            // sending start accounting to RADIUS server
 	RADIUSSTOP,             // sending stop accounting to RADIUS server
 	RADIUSINTERIM,		// sending interim accounting to RADIUS server
@@ -391,6 +445,7 @@ struct Tstats
     uint32_t	call_sessionbyuser;
     uint32_t	call_sendarp;
     uint32_t	call_sendipcp;
+    uint32_t	call_sendipv6cp;
     uint32_t	call_processipv6cp;
     uint32_t	call_tunnelsend;
     uint32_t	call_sessionkill;
@@ -456,6 +511,10 @@ typedef struct
 	char		l2tpsecret[64];
 
 	char		random_device[256];		// random device path, defaults to RANDOMDEVICE
+
+	int		ppp_restart_time;		// timeout for PPP restart
+	int		ppp_max_configure;		// max lcp configure requests to send
+	int		ppp_max_failure;		// max lcp configure naks to send
 
 	char		radiussecret[64];
 	int		radius_accounting;
@@ -601,6 +660,7 @@ void sendarp(int ifr_idx, const unsigned char* mac, in_addr_t ip);
 // ppp.c
 void processpap(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l);
 void processchap(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l);
+void lcp_open(tunnelidt t, sessionidt s);
 void processlcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l);
 void processipcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l);
 void processipv6cp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l);
@@ -611,6 +671,7 @@ void sendchap(tunnelidt t, sessionidt s);
 uint8_t *makeppp(uint8_t *b, int size, uint8_t *p, int l, tunnelidt t, sessionidt s, uint16_t mtype);
 void sendlcp(tunnelidt t, sessionidt s, int authtype);
 void send_ipin(sessionidt s, uint8_t *buf, int len);
+void sendccp(tunnelidt t, sessionidt s);
 
 
 // radius.c
@@ -638,8 +699,9 @@ void filter_session(sessionidt s, int filter_in, int filter_out);
 void send_garp(in_addr_t ip);
 void tunnelsend(uint8_t *buf, uint16_t l, tunnelidt t);
 void sendipcp(tunnelidt t, sessionidt s);
+void sendipv6cp(tunnelidt t, sessionidt s);
 void processudp(uint8_t *buf, int len, struct sockaddr_in *addr);
-void snoop_send_packet(char *packet, uint16_t size, in_addr_t destination, uint16_t port);
+void snoop_send_packet(uint8_t *packet, uint16_t size, in_addr_t destination, uint16_t port);
 int find_filter(char const *name, size_t len);
 int ip_filter(uint8_t *buf, int len, uint8_t filter);
 int cmd_show_ipcache(struct cli_def *cli, char *command, char **argv, int argc);
@@ -652,7 +714,7 @@ int cmd_show_hist_open(struct cli_def *cli, char *command, char **argv, int argc
 #define LOG_HEX(D, t, d, s)	({ if (D <= config->debug) _log_hex(D, t, d, s); })
 
 void _log(int level, sessionidt s, tunnelidt t, const char *format, ...) __attribute__((format (printf, 4, 5)));
-void _log_hex(int level, const char *title, const char *data, int maxsize);
+void _log_hex(int level, const char *title, const uint8_t *data, int maxsize);
 
 int sessionsetup(tunnelidt t, sessionidt s);
 int run_plugins(int plugin_type, void *data);
@@ -670,7 +732,7 @@ int cli_arg_help(struct cli_def *cli, int cr_ok, char *entry, ...);
 
 
 // icmp.c
-void host_unreachable(in_addr_t destination, uint16_t id, in_addr_t source, char *packet, int packet_len);
+void host_unreachable(in_addr_t destination, uint16_t id, in_addr_t source, uint8_t *packet, int packet_len);
 
 
 extern tunnelt *tunnel;

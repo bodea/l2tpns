@@ -1,12 +1,12 @@
 // L2TPNS: control
 
-char const *cvs_id_control = "$Id: control.c,v 1.4 2004-12-16 08:49:53 bodea Exp $";
+char const *cvs_id_control = "$Id: control.c,v 1.5 2005-07-31 10:04:10 bodea Exp $";
 
 #include <string.h>
 #include "l2tpns.h"
 #include "control.h"
 
-int pack_control(char *data, int len, uint8_t type, int argc, char *argv[])
+int pack_control(uint8_t *data, int len, uint8_t type, int argc, char *argv[])
 {
     struct nsctl_packet pkt;
     struct nsctl_args arg;
@@ -62,7 +62,7 @@ int pack_control(char *data, int len, uint8_t type, int argc, char *argv[])
     return sz;
 }
 
-int unpack_control(struct nsctl *control, char *data, int len)
+int unpack_control(struct nsctl *control, uint8_t *data, int len)
 {
     struct nsctl_packet pkt;
     char *p = pkt.argv;

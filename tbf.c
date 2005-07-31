@@ -1,6 +1,6 @@
 // L2TPNS: token bucket filters
 
-char const *cvs_id_tbf = "$Id: tbf.c,v 1.12 2005-05-02 09:55:04 bodea Exp $";
+char const *cvs_id_tbf = "$Id: tbf.c,v 1.13 2005-07-31 10:04:10 bodea Exp $";
 
 #include <string.h>
 #include "l2tpns.h"
@@ -159,10 +159,10 @@ void fsck_tbfs(void)
 // If we can send it right away, we do. Else we
 // try and queue it to send later. Else we drop it.
 //
-int tbf_queue_packet(int tbf_id, char * data, int size)
+int tbf_queue_packet(int tbf_id, uint8_t *data, int size)
 {
 	int i;
-	tbft * f;
+	tbft *f;
 
 	if (!filter_list)
 		return -1;

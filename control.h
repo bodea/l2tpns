@@ -47,8 +47,8 @@ struct nsctl {
     char *argv[0xff];
 };
 
-int pack_control(char *data, int len, uint8_t type, int argc, char *argv[]);
-int unpack_control(struct nsctl *packet, char *data, int len);
+int pack_control(uint8_t *data, int len, uint8_t type, int argc, char *argv[]);
+int unpack_control(struct nsctl *packet, uint8_t *data, int len);
 void dump_control(struct nsctl *control, FILE *stream);
 
 #endif /* __CONTROL_H__ */

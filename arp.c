@@ -1,6 +1,6 @@
 // L2TPNS: arp
 
-char const *cvs_id_arp = "$Id: arp.c,v 1.6 2005-01-07 07:14:14 bodea Exp $";
+char const *cvs_id_arp = "$Id: arp.c,v 1.7 2005-07-31 10:04:09 bodea Exp $";
 
 #include <string.h>
 #include <unistd.h>
@@ -55,7 +55,7 @@ void sendarp(int ifr_idx, const unsigned char* mac, in_addr_t ip)
 
 	memset(&sll, 0, sizeof(sll));
 	sll.sll_family = AF_PACKET;
-	strncpy(sll.sll_addr, mac, sizeof(sll.sll_addr) - 1);
+	memcpy(sll.sll_addr, mac, sizeof(sll.sll_addr) - 1);
 	sll.sll_halen = ETH_ALEN;
 	sll.sll_ifindex = ifr_idx;
 

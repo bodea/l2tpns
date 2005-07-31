@@ -141,7 +141,7 @@ static struct nsctl *request(char *host, int port, int type, int argc, char *arg
     socklen_t len = sizeof(peer);
     struct hostent *h = gethostbyname(host);
     int fd;
-    char buf[NSCTL_MAX_PKT_SZ];
+    uint8_t buf[NSCTL_MAX_PKT_SZ];
     int sz;
     char *err;
 

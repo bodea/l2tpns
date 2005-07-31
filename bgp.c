@@ -10,7 +10,7 @@
  *   nor RFC2385 (which requires a kernel patch on 2.4 kernels).
  */
 
-char const *cvs_id_bgp = "$Id: bgp.c,v 1.10 2005-06-04 15:42:35 bodea Exp $";
+char const *cvs_id_bgp = "$Id: bgp.c,v 1.11 2005-07-31 10:04:09 bodea Exp $";
 
 #include <stdlib.h>
 #include <unistd.h>
@@ -767,7 +767,7 @@ static int bgp_connect(struct bgp_peer *peer)
 static int bgp_handle_connect(struct bgp_peer *peer)
 {
     int err = 0;
-    int len = sizeof(int);
+    socklen_t len = sizeof(int);
     getsockopt(peer->sock, SOL_SOCKET, SO_ERROR, &err, &len);
     if (err)
     {

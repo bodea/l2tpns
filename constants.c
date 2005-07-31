@@ -1,6 +1,6 @@
 // L2TPNS: constants
 
-char const *cvs_id_constants = "$Id: constants.c,v 1.6 2005-06-28 14:48:20 bodea Exp $";
+char const *cvs_id_constants = "$Id: constants.c,v 1.7 2005-07-31 10:04:10 bodea Exp $";
 
 #include <stdio.h>
 #include "constants.h"
@@ -19,19 +19,27 @@ char const *cvs_id_constants = "$Id: constants.c,v 1.6 2005-06-28 14:48:20 bodea
 	return n; \
     }
 
-CONSTANT(lcp_type,
+CONSTANT(l2tp_code,
     0,							// 0
-    "Maximum-Receive-Unit",				// 1
-    "Async-Control-Map",				// 2
-    "Authentication-Protocol",				// 3
-    "Quality-Protocol",					// 4
-    "Magic-Number",					// 5
-    0,							// 6
-    "Protocol-Field-Compression",			// 7
-    "Address-and-Control-Field-Compression"		// 8
+    "SCCRQ",						// 1
+    "SCCRP",						// 2
+    "SCCCN",						// 3
+    "StopCCN",						// 4
+    0,							// 5
+    "HELLO",						// 6
+    "OCRQ",						// 7
+    "OCRP",						// 8
+    "OCCN",						// 9
+    "ICRQ",						// 10
+    "ICRP",						// 11
+    "ICCN",						// 12
+    0,							// 13
+    "CDN",						// 14
+    "WEN",						// 15
+    "SLI"						// 16
 )
 
-CONSTANT(avp_name,
+CONSTANT(l2tp_avp_name,
     "Message Type",					// 0
     "Result Code",					// 1
     "Protocol Version",					// 2
@@ -74,7 +82,7 @@ CONSTANT(avp_name,
     "Sequencing Required"				// 39
 )
 
-CONSTANT(stopccn_result_code,
+CONSTANT(l2tp_stopccn_result_code,
     0,							// 0
     "General request to clear control connection",	// 1
     "General error--Error Code indicates the problem",	// 2
@@ -87,7 +95,7 @@ CONSTANT(stopccn_result_code,
     "Finite State Machine error"			// 7
 )
 
-CONSTANT(cdn_result_code,
+CONSTANT(l2tp_cdn_result_code,
     0,							// 0
     "Call disconnected due to loss of carrier",		// 1
     "Call disconnected for the reason indicated in"
@@ -107,7 +115,7 @@ CONSTANT(cdn_result_code,
 	" detected"					// 11
 )
 
-CONSTANT(error_code,
+CONSTANT(l2tp_error_code,
     "No general error",					// 0
     "No control connection exists yet for this LAC-LNS"
 	" pair",					// 1
@@ -124,7 +132,28 @@ CONSTANT(error_code,
 	" an unknown AVP with the M-bit set"		// 8
 )
 
-CONSTANT(auth_type,
+CONSTANT(ppp_phase,
+    "Dead",						// 0
+    "Establish",					// 1
+    "Authenticate",					// 2
+    "Network",						// 3
+    "Terminate",					// 4
+)
+
+CONSTANT(ppp_state,
+    "Initial",						// 0
+    "Starting",						// 1
+    "Closed",						// 2
+    "Stopped",						// 3
+    "Closing",						// 4
+    "Stopping",						// 5
+    "Request-Sent",					// 6
+    "Ack-Received",					// 7
+    "Ack-Sent",						// 8
+    "Opened"						// 9
+)
+
+CONSTANT(ppp_auth_type,
     0,							// 0
     "Textual username/password exchange",		// 1
     "PPP CHAP",						// 2
@@ -133,7 +162,7 @@ CONSTANT(auth_type,
     "Microsoft CHAP Version 1 (MSCHAPv1)"		// 5
 )
 
-CONSTANT(ppp_lcp_type,
+CONSTANT(ppp_code,
     0,							// 0
     "ConfigReq",					// 1
     "ConfigAck",					// 2
@@ -149,15 +178,26 @@ CONSTANT(ppp_lcp_type,
     "IdentRequest"					// 12
 )
 
+CONSTANT(ppp_lcp_option,
+    0,							// 0
+    "Maximum-Receive-Unit",				// 1
+    "Async-Control-Map",				// 2
+    "Authentication-Protocol",				// 3
+    "Quality-Protocol",					// 4
+    "Magic-Number",					// 5
+    0,							// 6
+    "Protocol-Field-Compression",			// 7
+    "Address-and-Control-Field-Compression"		// 8
+)
+
 CONSTANT(radius_state,
     "RADIUSNULL",					// 0
     "RADIUSCHAP",					// 1
     "RADIUSAUTH",					// 2
-    "RADIUSIPCP",					// 3
-    "RADIUSSTART",					// 4
-    "RADIUSSTOP",					// 5
-    "RADIUSINTERIM",					// 6
-    "RADIUSWAIT"					// 7
+    "RADIUSSTART",					// 3
+    "RADIUSSTOP",					// 4
+    "RADIUSINTERIM",					// 5
+    "RADIUSWAIT"					// 6
 )
 
 CONSTANT(radius_code,
@@ -184,24 +224,4 @@ CONSTANT(radius_code,
     "CoA-Request",					// 43
     "CoA-ACK",						// 44
     "CoA-NAK"						// 45
-)
-
-CONSTANT(l2tp_message_type,
-    0,							// 0
-    "SCCRQ",						// 1
-    "SCCRP",						// 2
-    "SCCCN",						// 3
-    "StopCCN",						// 4
-    0,							// 5
-    "HELLO",						// 6
-    "OCRQ",						// 7
-    "OCRP",						// 8
-    "OCCN",						// 9
-    "ICRQ",						// 10
-    "ICRP",						// 11
-    "ICCN",						// 12
-    0,							// 13
-    "CDN",						// 14
-    "WEN",						// 15
-    "SLI"						// 16
 )

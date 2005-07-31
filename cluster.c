@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.44 2005-06-28 14:48:19 bodea Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.45 2005-07-31 10:04:09 bodea Exp $";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -56,7 +56,7 @@ static struct {
 static struct {
 	int seq;
 	int size;
-	char data[MAX_HEART_SIZE];
+	uint8_t data[MAX_HEART_SIZE];
 } past_hearts[HB_HISTORY_SIZE];	// Ring buffer of heartbeats that we've recently sent out. Needed so
 				// we can re-transmit if needed.
 
@@ -178,7 +178,7 @@ static int cluster_send_data(void *data, int datalen)
 // Maintains the format. Assumes that the caller
 // has passed in a big enough buffer!
 //
-static void add_type(char **p, int type, int more, char *data, int size)
+static void add_type(uint8_t **p, int type, int more, uint8_t *data, int size)
 {
 	*((uint32_t *) (*p)) = type;
 	*p += sizeof(uint32_t);
@@ -231,7 +231,7 @@ static void cluster_uptodate(void)
 // Send a unicast UDP packet to a peer with 'data' as the
 // contents.
 //
-static int peer_send_data(in_addr_t peer, char *data, int size)
+static int peer_send_data(in_addr_t peer, uint8_t *data, int size)
 {
 	struct sockaddr_in addr = {0};
 
@@ -259,10 +259,10 @@ static int peer_send_data(in_addr_t peer, char *data, int size)
 //
 // Send a structured message to a peer with a single element of type 'type'.
 //
-static int peer_send_message(in_addr_t peer, int type, int more, char *data, int size)
+static int peer_send_message(in_addr_t peer, int type, int more, uint8_t *data, int size)
 {
-	char buf[65536];	// Vast overkill.
-	char *p = buf;
+	uint8_t buf[65536];	// Vast overkill.
+	uint8_t *p = buf;
 
 	LOG(4, 0, 0, "Sending message to peer (type %d, more %d, size %d)\n", type, more, size);
 	add_type(&p, type, more, data, size);
@@ -271,10 +271,10 @@ static int peer_send_message(in_addr_t peer, int type, int more, char *data, int
 }
 
 // send a packet to the master
-static int _forward_packet(char *data, int size, in_addr_t addr, int port, int type)
+static int _forward_packet(uint8_t *data, int size, in_addr_t addr, int port, int type)
 {
-	char buf[65536];	// Vast overkill.
-	char *p = buf;
+	uint8_t buf[65536];	// Vast overkill.
+	uint8_t *p = buf;
 
 	if (!config->cluster_master_address) // No election has been held yet. Just skip it.
 		return -1;
@@ -282,7 +282,7 @@ static int _forward_packet(char *data, int size, in_addr_t addr, int port, int t
 	LOG(4, 0, 0, "Forwarding packet from %s to master (size %d)\n", fmtaddr(addr, 0), size);
 
 	STAT(c_forwarded);
-	add_type(&p, type, addr, (char *) &port, sizeof(port)); // ick. should be uint16_t
+	add_type(&p, type, addr, (uint8_t *) &port, sizeof(port)); // ick. should be uint16_t
 	memcpy(p, data, size);
 	p += size;
 
@@ -295,13 +295,13 @@ static int _forward_packet(char *data, int size, in_addr_t addr, int port, int t
 // The master just processes the payload as if it had
 // received it off the tun device.
 //
-int master_forward_packet(char *data, int size, in_addr_t addr, int port)
+int master_forward_packet(uint8_t *data, int size, in_addr_t addr, int port)
 {
 	return _forward_packet(data, size, addr, port, C_FORWARD);
 }
 
 // Forward a DAE RADIUS packet to the master.
-int master_forward_dae_packet(char *data, int size, in_addr_t addr, int port)
+int master_forward_dae_packet(uint8_t *data, int size, in_addr_t addr, int port)
 {
 	return _forward_packet(data, size, addr, port, C_FORWARD_DAE);
 }
@@ -313,10 +313,10 @@ int master_forward_dae_packet(char *data, int size, in_addr_t addr, int port)
 // token bucket queue, and lets normal processing take care
 // of it.
 //
-int master_throttle_packet(int tbfid, char *data, int size)
+int master_throttle_packet(int tbfid, uint8_t *data, int size)
 {
-	char buf[65536];	// Vast overkill.
-	char *p = buf;
+	uint8_t buf[65536];	// Vast overkill.
+	uint8_t *p = buf;
 
 	if (!config->cluster_master_address) // No election has been held yet. Just skip it.
 		return -1;
@@ -338,10 +338,10 @@ int master_throttle_packet(int tbfid, char *data, int size)
 //
 // (Note that this must be called with the tun header
 // as the start of the data).
-int master_garden_packet(sessionidt s, char *data, int size)
+int master_garden_packet(sessionidt s, uint8_t *data, int size)
 {
-	char buf[65536];	// Vast overkill.
-	char *p = buf;
+	uint8_t buf[65536];	// Vast overkill.
+	uint8_t *p = buf;
 
 	if (!config->cluster_master_address) // No election has been held yet. Just skip it.
 		return -1;
@@ -358,7 +358,7 @@ int master_garden_packet(sessionidt s, char *data, int size)
 // Send a chunk of data as a heartbeat..
 // We save it in the history buffer as we do so.
 //
-static void send_heartbeat(int seq, char *data, int size)
+static void send_heartbeat(int seq, uint8_t *data, int size)
 {
 	int i;
 
@@ -380,8 +380,8 @@ static void send_heartbeat(int seq, char *data, int size)
 //
 void cluster_send_ping(time_t basetime)
 {
-	char buff[100 + sizeof(pingt)];
-	char *p = buff;
+	uint8_t buff[100 + sizeof(pingt)];
+	uint8_t *p = buff;
 	pingt x;
 
 	if (config->cluster_iam_master && basetime)		// We're heartbeating so no need to ping.
@@ -394,7 +394,7 @@ void cluster_send_ping(time_t basetime)
 	x.undef = config->cluster_undefined_sessions + config->cluster_undefined_tunnels;
 	x.basetime = basetime;
 
-	add_type(&p, C_PING, basetime, (char *) &x, sizeof(x));
+	add_type(&p, C_PING, basetime, (uint8_t *) &x, sizeof(x));
 	cluster_send_data(buff, (p-buff) );
 }
 
@@ -456,7 +456,7 @@ void master_update_counts(void)
 
 			// Forward the data to the master.
 	LOG(4, 0, 0, "Sending byte counters to master (%d elements)\n", c);
-	peer_send_message(config->cluster_master_address, C_BYTES, c, (char *) &b, sizeof(b[0]) * c);
+	peer_send_message(config->cluster_master_address, C_BYTES, c, (uint8_t *) &b, sizeof(b[0]) * c);
 	return;
 }
 
@@ -738,7 +738,7 @@ static void cluster_check_sessions(int highsession, int freesession_ptr, int hig
 		cluster_uptodate();
 }
 
-static int hb_add_type(char **p, int type, int id)
+static int hb_add_type(uint8_t **p, int type, int id)
 {
 	switch (type) {
 		case C_CSESSION: { // Compressed C_SESSION.
@@ -752,13 +752,13 @@ static int hb_add_type(char **p, int type, int id)
 				// Did we compress the full structure, and is the size actually
 				// reduced??
 			if ( (d - orig) == sizeof(sessiont) && size < sizeof(sessiont) ) {
-				add_type(p, C_CSESSION, id, (char *) c, size);
+				add_type(p, C_CSESSION, id, c, size);
 				break;
 			}
 			// Failed to compress : Fall through.
 		}
-		case C_SESSION: add_type(p, C_SESSION, id,
-			(char *) &session[id], sizeof(sessiont));
+		case C_SESSION:
+		    	add_type(p, C_SESSION, id, (uint8_t *) &session[id], sizeof(sessiont));
 			break;
 
 		case C_CTUNNEL: { // Compressed C_TUNNEL
@@ -777,8 +777,8 @@ static int hb_add_type(char **p, int type, int id)
 			}
 			// Failed to compress : Fall through.
 		}
-		case C_TUNNEL: add_type(p, C_TUNNEL, id,
-			(char *) &tunnel[id], sizeof(tunnelt));
+		case C_TUNNEL:
+		    	add_type(p, C_TUNNEL, id, (uint8_t *) &tunnel[id], sizeof(tunnelt));
 			break;
 		default:
 			LOG(0, 0, 0, "Found an invalid type in heart queue! (%d)\n", type);
@@ -794,9 +794,9 @@ static int hb_add_type(char **p, int type, int id)
 void cluster_heartbeat()
 {
 	int i, count = 0, tcount = 0;
-	char buff[MAX_HEART_SIZE + sizeof(heartt) + sizeof(int) ];
+	uint8_t buff[MAX_HEART_SIZE + sizeof(heartt) + sizeof(int) ];
 	heartt h;
-	char *p = buff;
+	uint8_t *p = buff;
 
 	if (!config->cluster_iam_master)	// Only the master does this.
 		return;
@@ -820,7 +820,7 @@ void cluster_heartbeat()
 	h.timeout  = config->cluster_hb_timeout;
 	h.table_version = config->cluster_table_version;
 
-	add_type(&p, C_HEARTBEAT, HB_VERSION, (char *) &h, sizeof(h));
+	add_type(&p, C_HEARTBEAT, HB_VERSION, (uint8_t *) &h, sizeof(h));
 
 	for (i = 0; i < config->cluster_num_changes; ++i) {
 		hb_add_type(&p, cluster_changes[i].type, cluster_changes[i].id);
@@ -1099,7 +1099,7 @@ static int cluster_set_master(in_addr_t peer, in_addr_t master)
 // Note that we don't mark the session as dirty; We rely on
 // the slow table walk to propogate this back out to the slaves.
 //
-static int cluster_handle_bytes(char *data, int size)
+static int cluster_handle_bytes(uint8_t *data, int size)
 {
 	bytest *b;
 
@@ -1238,6 +1238,9 @@ struct oldsession {
 	uint32_t tx_connect_speed;
 	uint32_t rx_connect_speed;
 	uint32_t flags;
+#define SF_IPCP_ACKED	1	// Has this session seen an IPCP Ack?
+#define SF_LCP_ACKED	2	// LCP negotiated
+#define SF_CCP_ACKED	4	// CCP negotiated
 	in_addr_t snoop_ip;
 	uint16_t snoop_port;
 	uint16_t sid;
@@ -1257,7 +1260,6 @@ static uint8_t *convert_session(struct oldsession *old)
 	new.far = old->far;
 	new.tunnel = old->tunnel;
 	new.l2tp_flags = old->l2tp_flags;
-	new.flags = old->flags;
 	new.ip = old->ip;
 	new.ip_pool_index = old->ip_pool_index;
 	new.unique_id = old->unique_id;
@@ -1296,6 +1298,21 @@ static uint8_t *convert_session(struct oldsession *old)
 
 	for (i = 0; i < MAXROUTE; i++)
 		memcpy(&new.route[i], &old->route[i], sizeof(new.route[i]));
+
+	if (new.opened)
+	{
+		new.ppp.phase = Establish;
+		if (old->flags & (SF_IPCP_ACKED|SF_LCP_ACKED))
+		{
+			new.ppp.phase = Network;
+			new.ppp.lcp   = Opened;
+			new.ppp.ipcp  = (old->flags & SF_IPCP_ACKED) ? Opened : Starting;
+			new.ppp.ccp   = (old->flags & SF_CCP_ACKED)  ? Opened : Stopped;
+		}
+
+		// no PPPv6 in old session
+		new.ppp.ipv6cp = Stopped;
+	}
 
 	return (uint8_t *) &new;
 }
@@ -1572,10 +1589,10 @@ shortpacket:
 // We got a packet on the cluster port!
 // Handle pings, lastseens, and heartbeats!
 //
-int processcluster(char *data, int size, in_addr_t addr)
+int processcluster(uint8_t *data, int size, in_addr_t addr)
 {
 	int type, more;
-	char *p = data;
+	uint8_t *p = data;
 	int s = size;
 
 	if (addr == my_address)
@@ -1814,7 +1831,7 @@ static int rle_decompress(uint8_t **src_p, int ssize, uint8_t *dst, int dsize)
 {
 	int count;
 	int orig_dsize = dsize;
-	char *src = *src_p;
+	uint8_t *src = *src_p;
 
 	while (ssize >0 && dsize > 0) {	// While there's more to decompress, and there's room in the decompress buffer...
 		count = *src++; --ssize;  // get the count byte from the source.

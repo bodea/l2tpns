@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.63 2005-06-28 14:48:17 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.64 2005-07-31 10:04:09 bodea Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -25,6 +25,7 @@ char const *cvs_id_cli = "$Id: cli.c,v 1.63 2005-06-28 14:48:17 bodea Exp $";
 #include <libcli.h>
 
 #include "l2tpns.h"
+#include "constants.h"
 #include "util.h"
 #include "cluster.h"
 #include "tbf.h"
@@ -289,10 +290,10 @@ void cli_do(int sockfd)
 {
 	int require_auth = 1;
 	struct sockaddr_in addr;
-	int l = sizeof(addr);
+	socklen_t l = sizeof(addr);
 
 	if (fork_and_close()) return;
-	if (getpeername(sockfd, (struct sockaddr *)&addr, &l) == 0)
+	if (getpeername(sockfd, (struct sockaddr *) &addr, &l) == 0)
 	{
 		require_auth = addr.sin_addr.s_addr != inet_addr("127.0.0.1");
 		LOG(require_auth ? 3 : 4, 0, 0, "Accepted connection to CLI from %s\n",
@@ -407,6 +408,19 @@ static int cmd_show_session(struct cli_def *cli, char *command, char **argv, int
 			cli_print(cli, "\tCalling Num:\t%s", session[s].calling);
 			cli_print(cli, "\tCalled Num:\t%s", session[s].called);
 			cli_print(cli, "\tTunnel ID:\t%d", session[s].tunnel);
+			cli_print(cli, "\tPPP Phase:\t%s", ppp_phase(session[s].ppp.phase));
+			switch (session[s].ppp.phase)
+			{
+			case Establish:
+				cli_print(cli, "\tLCP state:\t%s", ppp_state(session[s].ppp.lcp));
+				break;
+
+			case Authenticate:
+			case Network:
+				cli_print(cli, "\t IPCP state:\t%s", ppp_state(session[s].ppp.ipcp));
+				cli_print(cli, "\t IPV6CP state:\t%s", ppp_state(session[s].ppp.ipv6cp));
+				cli_print(cli, "\t CCP state:\t%s", ppp_state(session[s].ppp.ccp));
+			}
 			cli_print(cli, "\tIP address:\t%s", fmtaddr(htonl(session[s].ip), 0));
 			cli_print(cli, "\tUnique SID:\t%u", session[s].unique_id);
 			cli_print(cli, "\tOpened:\t\t%u seconds", session[s].opened ? abs(time_now - session[s].opened) : 0);
@@ -507,7 +521,7 @@ static int cmd_show_session(struct cli_def *cli, char *command, char **argv, int
 				(session[i].snoop_ip && session[i].snoop_port) ? "Y" : "N",
 				(session[i].throttle_in || session[i].throttle_out) ? "Y" : "N",
 				(session[i].walled_garden) ? "Y" : "N",
-				(session[i].flags & SF_IPV6CP_ACKED) ? "Y" : "N",
+				(session[i].ppp.ipv6cp == Opened) ? "Y" : "N",
 				abs(time_now - (unsigned long)session[i].opened),
 				(unsigned long)session[i].cout,
 				(unsigned long)session[i].cin,
@@ -816,7 +830,6 @@ static int cmd_show_version(struct cli_def *cli, char *command, char **argv, int
 		cli_print(cli, "  %s", cvs_id_icmp);
 		cli_print(cli, "  %s", cvs_id_l2tpns);
 		cli_print(cli, "  %s", cvs_id_ll);
-		cli_print(cli, "  %s", cvs_id_md5);
 		cli_print(cli, "  %s", cvs_id_ppp);
 		cli_print(cli, "  %s", cvs_id_radius);
 		cli_print(cli, "  %s", cvs_id_tbf);

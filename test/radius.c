@@ -19,7 +19,7 @@
 #include <fcntl.h>
 #include <sys/select.h>
 #include <signal.h>
-#include "../md5.h"
+#include <openssl/md5.h>
 
 extern char *optarg;
 extern int optind;
@@ -394,16 +394,16 @@ int main(int argc, char *argv[])
 	    for (int j = 0; j < pw_len; j += 16)
 	    {
 		MD5_CTX ctx;
-		MD5Init(&ctx);
-		MD5Update(&ctx, secret, strlen(secret));
+		MD5_Init(&ctx);
+		MD5_Update(&ctx, secret, strlen(secret));
 		if (j)
-		    MD5Update(&ctx, pass + j - 16, 16);
+		    MD5_Update(&ctx, pass + j - 16, 16);
 		else
 		    /* authenticator */
-		    MD5Update(&ctx, u->request + 4, 16);
+		    MD5_Update(&ctx, u->request + 4, 16);
 
-		char digest[16];
-		MD5Final(digest, &ctx);
+		uint8_t digest[16];
+		MD5_Final(digest, &ctx);
 
 		for (int k = 0; k < 16; k++)
 		    pass[j + k] ^= digest[k];

@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.114 2005-07-04 05:49:46 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.115 2005-07-31 10:04:10 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -38,9 +38,9 @@ char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.114 2005-07-04 05:49:46 bodea Exp
 #include <unistd.h>
 #include <sched.h>
 #include <sys/sysinfo.h>
+#include <openssl/md5.h>
 #include <libcli.h>
 
-#include "md5.h"
 #include "l2tpns.h"
 #include "cluster.h"
 #include "plugin.h"
@@ -105,6 +105,9 @@ config_descriptt config_values[] = {
 	CONFIG("pid_file", pid_file, STRING),
 	CONFIG("random_device", random_device, STRING),
 	CONFIG("l2tp_secret", l2tpsecret, STRING),
+	CONFIG("ppp_restart_time", ppp_restart_time, INT),
+	CONFIG("ppp_max_configure", ppp_max_configure, INT),
+	CONFIG("ppp_max_failure", ppp_max_failure, INT),
 	CONFIG("primary_dns", default_dns1, IPv4),
 	CONFIG("secondary_dns", default_dns2, IPv4),
 	CONFIG("primary_radius", radiusserver[0], IPv4),
@@ -182,7 +185,7 @@ static void sighup_handler(int sig);
 static void sigalrm_handler(int sig);
 static void shutdown_handler(int sig);
 static void sigchild_handler(int sig);
-static void build_chap_response(char *challenge, uint8_t id, uint16_t challenge_length, char **challenge_response);
+static void build_chap_response(uint8_t *challenge, uint8_t id, uint16_t challenge_length, uint8_t **challenge_response);
 static void update_config(void);
 static void read_config_file(void);
 static void initplugins(void);
@@ -258,10 +261,10 @@ void _log(int level, sessionidt s, tunnelidt t, const char *format, ...)
 	va_end(ap);
 }
 
-void _log_hex(int level, const char *title, const char *data, int maxsize)
+void _log_hex(int level, const char *title, const uint8_t *data, int maxsize)
 {
 	int i, j;
-	const uint8_t *d = (const uint8_t *) data;
+	const uint8_t *d = data;
 
 	if (config->debug < level) return;
 
@@ -551,7 +554,7 @@ static void inittun(void)
 	tunidx = ifr.ifr_ifindex;
 
 	// Only setup IPv6 on the tun device if we have a configured prefix
-	if (config->ipv6_prefix.s6_addr[0] > 0) {
+	if (config->ipv6_prefix.s6_addr[0]) {
 		ifr6fd = socket(PF_INET6, SOCK_DGRAM, 0);
 
 		// Link local address is FE80::1
@@ -702,8 +705,11 @@ sessionidt sessionbyipv6(struct in6_addr ip)
 	CSTAT(sessionbyipv6);
 
 	if (!memcmp(&config->ipv6_prefix, &ip, 8) ||
-		(ip.s6_addr[0] == 0xFE && ip.s6_addr[1] == 0x80 &&
-		 (ip.s6_addr16[1] == ip.s6_addr16[2] == ip.s6_addr16[3] == 0))) {
+		(ip.s6_addr[0] == 0xFE &&
+		 ip.s6_addr[1] == 0x80 &&
+		 ip.s6_addr16[1] == 0 &&
+		 ip.s6_addr16[2] == 0 &&
+		 ip.s6_addr16[3] == 0)) {
 		s = lookup_ipmap(*(in_addr_t *) &ip.s6_addr[8]);
 	} else {
 		s = lookup_ipv6map(ip);
@@ -973,14 +979,14 @@ int tun_write(uint8_t * data, int size)
 
 // process outgoing (to tunnel) IP
 //
-static void processipout(uint8_t * buf, int len)
+static void processipout(uint8_t *buf, int len)
 {
 	sessionidt s;
 	sessiont *sp;
 	tunnelidt t;
 	in_addr_t ip;
 
-	char *data = buf;	// Keep a copy of the originals.
+	uint8_t *data = buf;	// Keep a copy of the originals.
 	int size = len;
 
 	uint8_t b[MAXETHER + 20];
@@ -1126,7 +1132,7 @@ static void processipv6out(uint8_t * buf, int len)
 	in_addr_t ip;
 	struct in6_addr ip6;
 
-	char *data = buf;	// Keep a copy of the originals.
+	uint8_t *data = buf;	// Keep a copy of the originals.
 	int size = len;
 
 	uint8_t b[MAXETHER + 20];
@@ -1313,7 +1319,7 @@ static void controls(controlt * c, uint16_t avp, char *val, uint8_t m)
 }
 
 // add a binary AVP
-static void controlb(controlt * c, uint16_t avp, char *val, unsigned int len, uint8_t m)
+static void controlb(controlt * c, uint16_t avp, uint8_t *val, unsigned int len, uint8_t m)
 {
 	uint16_t l = ((m ? 0x8000 : 0) + len + 6);
 	*(uint16_t *) (c->buf + c->length + 0) = htons(l);
@@ -1493,10 +1499,7 @@ void sessionshutdown(sessionidt s, char *reason, int result, int error)
 	if (session[s].ip && !walled_garden && !session[s].die)
 	{
 		// RADIUS Stop message
-		uint16_t r = sess_local[s].radius;
-		if (!r)
-			r = radiusnew(s);
-
+		uint16_t r = radiusnew(s);
 		if (r)
 		{
 			// stop, if not already trying
@@ -1534,7 +1537,7 @@ void sessionshutdown(sessionidt s, char *reason, int result, int error)
 			free_ip_address(s);
 
 		// unroute IPv6, if setup
-		if (session[s].flags & SF_IPV6_ROUTED)
+		if (session[s].ppp.ipv6cp == Opened && session[s].ipv6prefixlen)
 			route6set(s, session[s].ipv6route, session[s].ipv6prefixlen, 0);
 	}
 
@@ -1546,7 +1549,7 @@ void sessionshutdown(sessionidt s, char *reason, int result, int error)
 		controlt *c = controlnew(14); // sending CDN
 		if (error)
 		{
-			char buf[4];
+			uint8_t buf[4];
 			*(uint16_t *) buf     = htons(result);
 			*(uint16_t *) (buf+2) = htons(error);
 			controlb(c, 1, buf, 4, 1);
@@ -1565,78 +1568,66 @@ void sessionshutdown(sessionidt s, char *reason, int result, int error)
 	if (session[s].filter_in) ip_filters[session[s].filter_in - 1].used--;
 	if (session[s].filter_out) ip_filters[session[s].filter_out - 1].used--;
 
+	// clear PPP state
+	memset(&session[s].ppp, 0, sizeof(session[s].ppp));
+	sess_local[s].lcp.restart = 0;
+	sess_local[s].ipcp.restart = 0;
+	sess_local[s].ipv6cp.restart = 0;
+	sess_local[s].ccp.restart = 0;
+
 	cluster_send_session(s);
 }
 
 void sendipcp(tunnelidt t, sessionidt s)
 {
 	uint8_t buf[MAXCONTROL];
-	uint16_t r = sess_local[s].radius;
 	uint8_t *q;
 
 	CSTAT(sendipcp);
 
-	if (!r)
-		r = radiusnew(s);
-
-	if (!r)
+	if (!session[s].unique_id)
 	{
-		sessionshutdown(s, "No free RADIUS sessions for IPCP", 3, 0);
-		return;
-	}
-
-	if (radius[r].state != RADIUSIPCP)
-	{
-		radius[r].state = RADIUSIPCP;
-		radius[r].try = 0;
-	}
-
-	radius[r].retry = backoff(radius[r].try++);
-	if (radius[r].try > 10)
-	{
-		radiusclear(r, s);	// Clear radius session.
-		sessionshutdown(s, "No reply to IPCP.", 3, 0);
-		return;
+		if (!++last_id) ++last_id; // skip zero
+		session[s].unique_id = last_id;
 	}
 
 	q = makeppp(buf,sizeof(buf), 0, 0, t, s, PPPIPCP);
 	if (!q) return;
 
 	*q = ConfigReq;
-	q[1] = r >> RADIUS_SHIFT;                    // ID, dont care, we only send one type of request
-	*(uint16_t *) (q + 2) = htons(10);
-	q[4] = 3;
-	q[5] = 6;
+	q[1] = session[s].unique_id & 0xf;	// ID, dont care, we only send one type of request
+	*(uint16_t *) (q + 2) = htons(10);	// packet length
+	q[4] = 3;				// ip address option
+	q[5] = 6;				// option length
 	*(in_addr_t *) (q + 6) = config->peer_address ? config->peer_address :
 				 config->bind_address ? config->bind_address :
 				 my_address; // send my IP
 
 	tunnelsend(buf, 10 + (q - buf), t); // send it
-	session[s].flags &= ~SF_IPCP_ACKED;	// Clear flag.
+}
 
-	// If we have an IPv6 prefix length configured, assume we should
-	// try to negotiate an IPv6 session as well. Unless we've had a
-	// (N)ACK for IPV6CP.
-	if (config->ipv6_prefix.s6_addr[0] > 0 && 
-			!(session[s].flags & SF_IPV6CP_ACKED) &&
-			!(session[s].flags & SF_IPV6_NACKED))
-	{
-		q = makeppp(buf,sizeof(buf), 0, 0, t, s, PPPIPV6CP);
-		if (!q) return;
+void sendipv6cp(tunnelidt t, sessionidt s)
+{
+	uint8_t buf[MAXCONTROL];
+	uint8_t *q;
 
-		*q = ConfigReq;
-		q[1] = r >> RADIUS_SHIFT;		// ID, don't care, we
-							// only send one type
-							// of request
-		*(uint16_t *) (q + 2) = htons(14);
-		q[4] = 1;
-		q[5] = 10;
-		*(uint32_t *) (q + 6) = 0;		// We'll be prefix::1
-		*(uint32_t *) (q + 10) = 0;
-		q[13] = 1;
+	CSTAT(sendipv6cp);
 
-		tunnelsend(buf, 14 + (q - buf), t);	// send it
-	}
+	q = makeppp(buf,sizeof(buf), 0, 0, t, s, PPPIPV6CP);
+	if (!q) return;
+
+	*q = ConfigReq;
+	q[1] = session[s].unique_id & 0xf;	// ID, don't care, we
+						// only send one type
+						// of request
+	*(uint16_t *) (q + 2) = htons(14);
+	q[4] = 1;				// interface identifier option
+	q[5] = 10;				// option length
+	*(uint32_t *) (q + 6) = 0;		// We'll be prefix::1
+	*(uint32_t *) (q + 10) = 0;
+	q[13] = 1;
+
+	tunnelsend(buf, 14 + (q - buf), t);	// send it
 }
 
 static void sessionclear(sessionidt s)
@@ -1742,7 +1733,7 @@ static void tunnelshutdown(tunnelidt t, char *reason, int result, int error, cha
 		controlt *c = controlnew(4);	// sending StopCCN
 		if (error)
 		{
-			char buf[64];
+			uint8_t buf[64];
 			int l = 4;
 			*(uint16_t *) buf     = htons(result);
 			*(uint16_t *) (buf+2) = htons(error);
@@ -1767,9 +1758,9 @@ static void tunnelshutdown(tunnelidt t, char *reason, int result, int error, cha
 }
 
 // read and process packet on tunnel (UDP)
-void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
+void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 {
-	char *chapresponse = NULL;
+	uint8_t *chapresponse = NULL;
 	uint16_t l = len, t = 0, s = 0, ns = 0, nr = 0;
 	uint8_t *p = buf + 2;
 
@@ -2061,7 +2052,7 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 					n = orig_len;
 				}
 
-				LOG(4, s, t, "   AVP %d (%s) len %d%s%s\n", mtype, avp_name(mtype), n,
+				LOG(4, s, t, "   AVP %d (%s) len %d%s%s\n", mtype, l2tp_avp_name(mtype), n,
 					flags & 0x40 ? ", hidden" : "", flags & 0x80 ? ", mandatory" : "");
 
 				switch (mtype)
@@ -2069,7 +2060,7 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 				case 0:     // message type
 					message = ntohs(*(uint16_t *) b);
 					mandatory = flags & 0x80;
-					LOG(4, s, t, "   Message type = %d (%s)\n", *b, l2tp_message_type(message));
+					LOG(4, s, t, "   Message type = %d (%s)\n", *b, l2tp_code(message));
 					break;
 				case 1:     // result code
 					{
@@ -2077,18 +2068,18 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 						const char* resdesc = "(unknown)";
 						if (message == 4)
 						{ /* StopCCN */
-							resdesc = stopccn_result_code(rescode);
+							resdesc = l2tp_stopccn_result_code(rescode);
 						}
 						else if (message == 14)
 						{ /* CDN */
-							resdesc = cdn_result_code(rescode);
+							resdesc = l2tp_cdn_result_code(rescode);
 						}
 
 						LOG(4, s, t, "   Result Code %d: %s\n", rescode, resdesc);
 						if (n >= 4)
 						{
 							uint16_t errcode = ntohs(*(uint16_t *)(b + 2));
-							LOG(4, s, t, "   Error Code %d: %s\n", errcode, error_code(errcode));
+							LOG(4, s, t, "   Error Code %d: %s\n", errcode, l2tp_error_code(errcode));
 						}
 						if (n > 4)
 							LOG(4, s, t, "   Error String: %.*s\n", n-4, b+4);
@@ -2222,7 +2213,7 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 				case 29:    // Proxy Authentication Type
 					{
 						uint16_t atype = ntohs(*(uint16_t *)b);
-						LOG(4, s, t, "   Proxy Auth Type %d (%s)\n", atype, auth_type(atype));
+						LOG(4, s, t, "   Proxy Auth Type %d (%s)\n", atype, ppp_auth_type(atype));
 						if (atype == 2)
 							authtype = AUTHCHAP;
 						else if (atype == 3)
@@ -2351,7 +2342,7 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 				case 10:      // ICRQ
 					if (sessionfree && main_quit != QUIT_SHUTDOWN)
 					{
-						uint16_t r;
+						controlt *c = controlnew(11); // ICRP
 
 						s = sessionfree;
 						sessionfree = session[s].next;
@@ -2360,41 +2351,34 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 						if (s > config->cluster_highest_sessionid)
 							config->cluster_highest_sessionid = s;
 
-						// make a RADIUS session
-						if ((r = radiusnew(s)))
-						{
-							controlt *c = controlnew(11); // sending ICRP
-							session[s].opened = time_now;
-							session[s].tunnel = t;
-							session[s].far = asession;
-							session[s].last_packet = time_now;
-							LOG(3, s, t, "New session (%d/%d)\n", tunnel[t].far, session[s].far);
-							control16(c, 14, s, 1); // assigned session
-							controladd(c, t, asession); // send the reply
+						session[s].opened = time_now;
+						session[s].tunnel = t;
+						session[s].far = asession;
+						session[s].last_packet = time_now;
+						LOG(3, s, t, "New session (%d/%d)\n", tunnel[t].far, session[s].far);
+						control16(c, 14, s, 1); // assigned session
+						controladd(c, t, asession); // send the reply
 
-							strncpy(radius[r].calling, calling, sizeof(radius[r].calling) - 1);
-							strncpy(session[s].called, called, sizeof(session[s].called) - 1);
-							strncpy(session[s].calling, calling, sizeof(session[s].calling) - 1);
-							STAT(session_created);
-							break;
-						}
+						strncpy(session[s].called, called, sizeof(session[s].called) - 1);
+						strncpy(session[s].calling, calling, sizeof(session[s].calling) - 1);
 
+						session[s].ppp.phase = Establish;
+						session[s].ppp.lcp = Starting;
 
-						LOG(1, s, t, "No free RADIUS sessions for ICRQ\n");
-						sessionclear(s);
-					}
-					else
-					{
-						STAT(session_overflow);
-						LOG(1, 0, t, "No free sessions\n");
+						STAT(session_created);
+						break;
 					}
 
 					{
 						controlt *c = controlnew(14); // CDN
-						if (main_quit == QUIT_SHUTDOWN)
-							control16(c, 1, 2, 7); // try another
-						else
+						if (!sessionfree)
+						{
+							STAT(session_overflow);
+							LOG(1, 0, t, "No free sessions\n");
 							control16(c, 1, 4, 0); // temporary lack of resources
+						}
+						else
+							control16(c, 1, 2, 7); // shutting down, try another
 
 						controladd(c, t, asession); // send the message
 					}
@@ -2408,12 +2392,19 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 					session[s].l2tp_flags = aflags; // set flags received
 					LOG(3, s, t, "Magic %X Flags %X\n", amagic, aflags);
 					controlnull(t); // ack
+
 					// proxy authentication type is not supported
 					if (!(config->radius_authtypes & authtype))
 						authtype = config->radius_authprefer;
 
 					// start LCP
 					sendlcp(t, s, authtype);
+					sess_local[s].lcp.restart = time_now + config->ppp_restart_time;
+					sess_local[s].lcp.conf_sent = 1;
+					sess_local[s].lcp.nak_sent = 0;
+					sess_local[s].lcp_authtype = authtype;
+					session[s].ppp.lcp = RequestSent;
+
 					break;
 				case 14:      // CDN
 					controlnull(t); // ack
@@ -2507,16 +2498,9 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 		}
 		else if (prot == PPPIPV6CP)
 		{
-			if (config->ipv6_prefix.s6_addr[0] > 0)
-			{
-				session[s].last_packet = time_now;
-				if (!config->cluster_iam_master) { master_forward_packet(buf, len, addr->sin_addr.s_addr, addr->sin_port); return; }
-				processipv6cp(t, s, p, l);
-			}
-			else
-			{
-				LOG(1, s, t, "IPv6 not configured; ignoring IPv6CP\n");
-			}
+			session[s].last_packet = time_now;
+			if (!config->cluster_iam_master) { master_forward_packet(buf, len, addr->sin_addr.s_addr, addr->sin_port); return; }
+			processipv6cp(t, s, p, l);
 		}
 		else if (prot == PPPCCP)
 		{
@@ -2543,7 +2527,7 @@ void processudp(uint8_t * buf, int len, struct sockaddr_in *addr)
 		}
 		else if (prot == PPPIPV6)
 		{
-			if (!config->ipv6_prefix.s6_addr[0] > 0)
+			if (!config->ipv6_prefix.s6_addr[0])
 			{
 				LOG(1, s, t, "IPv6 not configured; yet received IPv6 packet. Ignoring.\n");
 				return;
@@ -2592,7 +2576,7 @@ static void processtun(uint8_t * buf, int len)
 	if (*(uint16_t *) (buf + 2) == htons(PKTIP)) // IPv4
 		processipout(buf, len);
 	else if (*(uint16_t *) (buf + 2) == htons(PKTIPV6) // IPV6
-	    && config->ipv6_prefix.s6_addr[0] > 0)
+	    && config->ipv6_prefix.s6_addr[0])
 		processipv6out(buf, len);
 
 	// Else discard.
@@ -2734,13 +2718,123 @@ static void regular_cleanups(double period)
 			continue;
 		}
 
-		if (session[s].ip && !(session[s].flags & SF_IPCP_ACKED)
-		    && !(sess_local[s].radius && radius[sess_local[s].radius].state == RADIUSIPCP))
+		// PPP timeouts
+		if (sess_local[s].lcp.restart >= time_now)
 		{
-			// IPCP has not completed yet. Resend
-			LOG(3, s, session[s].tunnel, "No ACK for initial IPCP ConfigReq... resending\n");
-			sendipcp(session[s].tunnel, s);
-			s_actions++;
+			int next_state = session[s].ppp.lcp;
+			switch (session[s].ppp.lcp)
+			{
+			case RequestSent:
+			case AckReceived:
+			    	next_state = RequestSent;
+
+			case AckSent:
+				if (sess_local[s].lcp.conf_sent < config->ppp_max_configure)
+				{
+					LOG(3, s, session[s].tunnel, "No ACK for LCP ConfigReq... resending\n");
+					sess_local[s].lcp.restart = time_now + config->ppp_restart_time;
+					sess_local[s].lcp.conf_sent++;
+					sendlcp(t, s, sess_local[s].lcp_authtype);
+					change_state(s, lcp, next_state);
+				}
+				else
+				{
+					sessionshutdown(s, "No response to LCP ConfigReq.", 3, 0);
+					STAT(session_timeout);
+				}
+
+				s_actions++;
+			}
+
+			if (session[s].die)
+				continue;
+		}
+
+		if (sess_local[s].ipcp.restart >= time_now)
+		{
+			int next_state = session[s].ppp.ipcp;
+			switch (session[s].ppp.ipcp)
+			{
+			case RequestSent:
+			case AckReceived:
+			    	next_state = RequestSent;
+
+			case AckSent:
+				if (sess_local[s].ipcp.conf_sent < config->ppp_max_configure)
+				{
+					LOG(3, s, session[s].tunnel, "No ACK for IPCP ConfigReq... resending\n");
+					sess_local[s].ipcp.restart = time_now + config->ppp_restart_time;
+					sess_local[s].ipcp.conf_sent++;
+					sendipcp(t, s);
+					change_state(s, ipcp, next_state);
+				}
+				else
+				{
+					sessionshutdown(s, "No response to IPCP ConfigReq.", 3, 0);
+					STAT(session_timeout);
+				}
+
+				s_actions++;
+			}
+
+			if (session[s].die)
+				continue;
+		}
+
+		if (sess_local[s].ipv6cp.restart >= time_now)
+		{
+			int next_state = session[s].ppp.ipv6cp;
+			switch (session[s].ppp.ipv6cp)
+			{
+			case RequestSent:
+			case AckReceived:
+			    	next_state = RequestSent;
+
+			case AckSent:
+				if (sess_local[s].ipv6cp.conf_sent < config->ppp_max_configure)
+				{
+					LOG(3, s, session[s].tunnel, "No ACK for IPV6CP ConfigReq... resending\n");
+					sess_local[s].ipv6cp.restart = time_now + config->ppp_restart_time;
+					sess_local[s].ipv6cp.conf_sent++;
+					sendipv6cp(t, s);
+					change_state(s, ipv6cp, next_state);
+				}
+				else
+				{
+					LOG(3, s, session[s].tunnel, "No ACK for IPV6CP ConfigReq\n");
+					change_state(s, ipv6cp, Stopped);
+				}
+
+				s_actions++;
+			}
+		}
+
+		if (sess_local[s].ccp.restart >= time_now)
+		{
+			int next_state = session[s].ppp.ccp;
+			switch (session[s].ppp.ccp)
+			{
+			case RequestSent:
+			case AckReceived:
+			    	next_state = RequestSent;
+
+			case AckSent:
+				if (sess_local[s].ccp.conf_sent < config->ppp_max_configure)
+				{
+					LOG(3, s, session[s].tunnel, "No ACK for CCP ConfigReq... resending\n");
+					sess_local[s].ccp.restart = time_now + config->ppp_restart_time;
+					sess_local[s].ccp.conf_sent++;
+					sendccp(t, s);
+					change_state(s, ccp, next_state);
+				}
+				else
+				{
+					LOG(3, s, session[s].tunnel, "No ACK for CCP ConfigReq\n");
+					change_state(s, ccp, Stopped);
+				}
+
+				s_actions++;
+			}
 		}
 
 		// Drop sessions who have not responded within IDLE_TIMEOUT seconds
@@ -2753,7 +2847,7 @@ static void regular_cleanups(double period)
 		}
 
 		// No data in ECHO_TIMEOUT seconds, send LCP ECHO
-		if (session[s].user[0] && (time_now - session[s].last_packet >= ECHO_TIMEOUT))
+		if (session[s].ppp.phase >= Establish && (time_now - session[s].last_packet >= ECHO_TIMEOUT))
 		{
 			uint8_t b[MAXCONTROL] = {0};
 
@@ -3084,7 +3178,8 @@ static void mainloop(void)
 		if (n)
 		{
 			struct sockaddr_in addr;
-			int alen, c, s;
+			socklen_t alen;
+			int c, s;
 			int udp_ready = 0;
 			int tun_ready = 0;
 			int cluster_ready = 0;
@@ -3391,6 +3486,9 @@ static void initdata(int optdebug, char *optconfig)
 	config->num_tbfs = MAXTBFS;
 	config->rl_rate = 28; // 28kbps
  	config->cluster_master_min_adv = 1;
+	config->ppp_restart_time = 3;
+	config->ppp_max_configure = 10;
+	config->ppp_max_failure = 5;
 	strcpy(config->random_device, RANDOMDEVICE);
 
 	log_stream = stderr;
@@ -3758,7 +3856,7 @@ static void initippool()
 	LOG(1, 0, 0, "IP address pool is %d addresses\n", ip_pool_size - 1);
 }
 
-void snoop_send_packet(char *packet, uint16_t size, in_addr_t destination, uint16_t port)
+void snoop_send_packet(uint8_t *packet, uint16_t size, in_addr_t destination, uint16_t port)
 {
 	struct sockaddr_in snoop_addr = {0};
 	if (!destination || !port || snoopfd <= 0 || size <= 0 || !packet)
@@ -4055,7 +4153,7 @@ static void sigchild_handler(int sig)
 	    ;
 }
 
-static void build_chap_response(char *challenge, uint8_t id, uint16_t challenge_length, char **challenge_response)
+static void build_chap_response(uint8_t *challenge, uint8_t id, uint16_t challenge_length, uint8_t **challenge_response)
 {
 	MD5_CTX ctx;
 	*challenge_response = NULL;
@@ -4068,13 +4166,13 @@ static void build_chap_response(char *challenge, uint8_t id, uint16_t challenge_
 
 	LOG(4, 0, 0, "   Building challenge response for CHAP request\n");
 
-	*challenge_response = (char *)calloc(17, 1);
+	*challenge_response = calloc(17, 1);
 
-	MD5Init(&ctx);
-	MD5Update(&ctx, &id, 1);
-	MD5Update(&ctx, config->l2tpsecret, strlen(config->l2tpsecret));
-	MD5Update(&ctx, challenge, challenge_length);
-	MD5Final(*challenge_response, &ctx);
+	MD5_Init(&ctx);
+	MD5_Update(&ctx, &id, 1);
+	MD5_Update(&ctx, config->l2tpsecret, strlen(config->l2tpsecret));
+	MD5_Update(&ctx, challenge, challenge_length);
+	MD5_Final(*challenge_response, &ctx);
 
 	return;
 }
@@ -4384,13 +4482,8 @@ int sessionsetup(tunnelidt t, sessionidt s)
 			cache_ipmap(session[s].ip, s);
 	}
 
-	if (!session[s].unique_id)
-	{
-		// did this session just finish radius?
-		LOG(3, s, t, "Sending initial IPCP to client\n");
-		sendipcp(t, s);
-		session[s].unique_id = ++last_id;
-	}
+	sess_local[s].lcp_authtype = 0; // RADIUS authentication complete
+	lcp_open(t, s); // transition to Network phase and send initial IPCP
 
 	// Run the plugin's against this new session.
 	{
@@ -4499,7 +4592,7 @@ int load_session(sessionidt s, sessiont *new)
 	}
 
 	// check v6 routing
-	if (new->flags & SF_IPV6_ROUTED && !(session[s].flags & SF_IPV6_ROUTED))
+	if (new->ipv6prefixlen && new->ppp.ipv6cp == Opened && session[s].ppp.ipv6cp != Opened)
 		    route6set(s, new->ipv6route, new->ipv6prefixlen, 1);
 
 	// check filters
@@ -4716,7 +4809,7 @@ static void plugins_done()
 		run_plugin_done(p);
 }
 
-static void processcontrol(uint8_t * buf, int len, struct sockaddr_in *addr, int alen)
+static void processcontrol(uint8_t *buf, int len, struct sockaddr_in *addr, int alen)
 {
 	struct nsctl request;
 	struct nsctl response;
@@ -5040,11 +5133,11 @@ static void unhide_value(uint8_t *value, size_t len, uint16_t type, uint8_t *vec
 	uint16_t m = htons(type);
 
 	// Compute initial pad
-	MD5Init(&ctx);
-	MD5Update(&ctx, (unsigned char *) &m, 2);
-	MD5Update(&ctx, config->l2tpsecret, strlen(config->l2tpsecret));
-	MD5Update(&ctx, vector, vec_len);
-	MD5Final(digest, &ctx);
+	MD5_Init(&ctx);
+	MD5_Update(&ctx, (unsigned char *) &m, 2);
+	MD5_Update(&ctx, config->l2tpsecret, strlen(config->l2tpsecret));
+	MD5_Update(&ctx, vector, vec_len);
+	MD5_Final(digest, &ctx);
 
 	// pointer to last decoded 16 octets
 	last = value;
@@ -5054,10 +5147,10 @@ static void unhide_value(uint8_t *value, size_t len, uint16_t type, uint8_t *vec
 		// calculate a new pad based on the last decoded block
 		if (d >= sizeof(digest))
 		{
-			MD5Init(&ctx);
-			MD5Update(&ctx, config->l2tpsecret, strlen(config->l2tpsecret));
-			MD5Update(&ctx, last, sizeof(digest));
-			MD5Final(digest, &ctx);
+			MD5_Init(&ctx);
+			MD5_Update(&ctx, config->l2tpsecret, strlen(config->l2tpsecret));
+			MD5_Update(&ctx, last, sizeof(digest));
+			MD5_Final(digest, &ctx);
 
 			d = 0;
 			last = value;
