@@ -1,4 +1,4 @@
-* Sun Jul 31 2005 Brendan O'Dea <bod@> 2.1.2
+* Tue Aug 2 2005 Brendan O'Dea <bod@optus.net> 2.1.2
 - Clear cluster_master on election so that slaves will accept a new master.
 - Provide more comments/defaults in etc/startup-config.default.
 - Add DAE support (PoD/CoA) from Vladislav Bjelic.
@@ -6,6 +6,7 @@
 - Replace flags used for LCP/IPCP with state machine.
 - Use openssl MD5, fix DAE vector (Alex Kiernan).
 - Include Acct-Session-Time in interim records.
+- Fix generateload (Alex Kiernan).
 
 * Tue Jun 14 2005 Brendan O'Dea <bod@optusnet.com.au> 2.1.1
 - Add missing newline to backtrace macro.

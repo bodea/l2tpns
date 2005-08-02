@@ -284,7 +284,7 @@ int main(int argc, char *argv[])
 				break;
 			case 'm' :
 				max_packets = atoi(optarg);
-				if (packet_length < 64)
+				if (max_packets < 50)
 				{
 					printf("You must send at least 50 packets.\n");
 					return -1;
@@ -1023,9 +1023,9 @@ void reader_thread(int updfd)/*{{{*/
 						controlfree(r);
 						break;
 					case CONFNAK :
-						// Ack whatever address we are given - it's ours
-						r = ppp_ipcp(s, CONFACK, time(NULL) % 255);
-						ppp_lcp_add_option(r, 3, 4, address); // Request 0.0.0.0
+						// Request whatever address we are given - it's ours
+						r = ppp_ipcp(s, CONFREQ, time(NULL) % 255);
+						ppp_lcp_add_option(r, 3, 4, address);
 						ppp_send(r);
 						controlfree(r);
 						printf("Session %d: %s\n", s, inet_toa(address));
