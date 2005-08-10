@@ -19,7 +19,7 @@
 #include <fcntl.h>
 #include <sys/select.h>
 #include <signal.h>
-#include <openssl/md5.h>
+#include "../md5.h"
 
 extern char *optarg;
 extern int optind;

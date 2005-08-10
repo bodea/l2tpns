@@ -26,7 +26,7 @@ INSTALL = install -c -D -o root -g root
 l2tpns.LIBS = -lcrypto -lm -lcli -ldl
 
 OBJS = arp.o cli.o cluster.o constants.o control.o icmp.o l2tpns.o \
-    ll.o ppp.o radius.o tbf.o util.o
+    ll.o md5.o ppp.o radius.o tbf.o util.o
 
 PROGRAMS = l2tpns nsctl
 PLUGINS = autosnoop.so autothrottle.so garden.so sessionctl.so \
@@ -114,14 +114,15 @@ cluster.o: cluster.c l2tpns.h cluster.h util.h tbf.h bgp.h
 constants.o: constants.c constants.h
 control.o: control.c l2tpns.h control.h
 icmp.o: icmp.c l2tpns.h
-l2tpns.o: l2tpns.c l2tpns.h cluster.h plugin.h ll.h constants.h control.h \
-  util.h tbf.h bgp.h fake_epoll.h
+l2tpns.o: l2tpns.c md5.h l2tpns.h cluster.h plugin.h ll.h constants.h \
+  control.h util.h tbf.h bgp.h
 ll.o: ll.c ll.h
+md5.o: md5.c md5.h
 ppp.o: ppp.c l2tpns.h constants.h plugin.h util.h tbf.h cluster.h
 radius.o: radius.c constants.h l2tpns.h plugin.h util.h cluster.h
 tbf.o: tbf.c l2tpns.h util.h tbf.h
 util.o: util.c l2tpns.h bgp.h
-bgp.o: bgp.c l2tpns.h bgp.h util.h fake_epoll.h
+bgp.o: bgp.c l2tpns.h bgp.h util.h
 autosnoop.so: autosnoop.c l2tpns.h plugin.h
 autothrottle.so: autothrottle.c l2tpns.h plugin.h
 garden.so: garden.c l2tpns.h plugin.h control.h

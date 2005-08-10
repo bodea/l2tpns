@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.115 2005-07-31 10:04:10 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.116 2005-08-10 07:25:24 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -38,9 +38,9 @@ char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.115 2005-07-31 10:04:10 bodea Exp
 #include <unistd.h>
 #include <sched.h>
 #include <sys/sysinfo.h>
-#include <openssl/md5.h>
 #include <libcli.h>
 
+#include "md5.h"
 #include "l2tpns.h"
 #include "cluster.h"
 #include "plugin.h"
