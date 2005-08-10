@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.117 2005-08-10 08:04:26 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.118 2005-08-10 08:36:48 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -2715,7 +2715,7 @@ static void regular_cleanups(double period)
 		}
 
 		// PPP timeouts
-		if (sess_local[s].lcp.restart >= time_now)
+		if (sess_local[s].lcp.restart <= time_now)
 		{
 			int next_state = session[s].ppp.lcp;
 			switch (session[s].ppp.lcp)
@@ -2746,7 +2746,7 @@ static void regular_cleanups(double period)
 				continue;
 		}
 
-		if (sess_local[s].ipcp.restart >= time_now)
+		if (sess_local[s].ipcp.restart <= time_now)
 		{
 			int next_state = session[s].ppp.ipcp;
 			switch (session[s].ppp.ipcp)
@@ -2777,7 +2777,7 @@ static void regular_cleanups(double period)
 				continue;
 		}
 
-		if (sess_local[s].ipv6cp.restart >= time_now)
+		if (sess_local[s].ipv6cp.restart <= time_now)
 		{
 			int next_state = session[s].ppp.ipv6cp;
 			switch (session[s].ppp.ipv6cp)
@@ -2805,7 +2805,7 @@ static void regular_cleanups(double period)
 			}
 		}
 
-		if (sess_local[s].ccp.restart >= time_now)
+		if (sess_local[s].ccp.restart <= time_now)
 		{
 			int next_state = session[s].ppp.ccp;
 			switch (session[s].ppp.ccp)
