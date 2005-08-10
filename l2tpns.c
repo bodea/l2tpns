@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.116 2005-08-10 07:25:24 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.117 2005-08-10 08:04:26 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -2233,16 +2233,12 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 				case 31:    // Proxy Authentication Challenge
 					{
 						LOG(4, s, t, "   Proxy Auth Challenge\n");
-						if (sess_local[s].radius)
-							memcpy(radius[sess_local[s].radius].auth, b, 16);
 						break;
 					}
 				case 32:    // Proxy Authentication ID
 					{
 						uint16_t authid = ntohs(*(uint16_t *)(b));
 						LOG(4, s, t, "   Proxy Auth ID (%d)\n", authid);
-						if (sess_local[s].radius)
-							radius[sess_local[s].radius].id = authid;
 						break;
 					}
 				case 33:    // Proxy Authentication Response
