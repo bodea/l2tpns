@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.81 2005-07-31 10:04:10 bodea Exp $
+// $Id: l2tpns.h,v 1.82 2005-08-10 11:25:56 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -658,20 +658,20 @@ void sendarp(int ifr_idx, const unsigned char* mac, in_addr_t ip);
 
 
 // ppp.c
-void processpap(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l);
-void processchap(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l);
-void lcp_open(tunnelidt t, sessionidt s);
-void processlcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l);
-void processipcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l);
-void processipv6cp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l);
-void processipin(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l);
-void processipv6in(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l);
-void processccp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l);
-void sendchap(tunnelidt t, sessionidt s);
-uint8_t *makeppp(uint8_t *b, int size, uint8_t *p, int l, tunnelidt t, sessionidt s, uint16_t mtype);
-void sendlcp(tunnelidt t, sessionidt s, int authtype);
+void processpap(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l);
+void processchap(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l);
+void lcp_open(sessionidt s, tunnelidt t);
+void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l);
+void processipcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l);
+void processipv6cp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l);
+void processipin(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l);
+void processipv6in(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l);
+void processccp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l);
+void sendchap(sessionidt s, tunnelidt t);
+uint8_t *makeppp(uint8_t *b, int size, uint8_t *p, int l, sessionidt s, tunnelidt t, uint16_t mtype);
+void sendlcp(sessionidt s, tunnelidt t, int authtype);
 void send_ipin(sessionidt s, uint8_t *buf, int len);
-void sendccp(tunnelidt t, sessionidt s);
+void sendccp(sessionidt s, tunnelidt t);
 
 
 // radius.c
@@ -686,7 +686,7 @@ void processdae(uint8_t *buf, int len, struct sockaddr_in *addr, int alen);
 
 // l2tpns.c
 clockt backoff(uint8_t try);
-void send_ipv6_ra(tunnelidt t, sessionidt s, struct in6_addr *ip);
+void send_ipv6_ra(sessionidt s, tunnelidt t, struct in6_addr *ip);
 void route6set(sessionidt s, struct in6_addr ip, int prefixlen, int add);
 sessionidt sessionbyip(in_addr_t ip);
 sessionidt sessionbyipv6(struct in6_addr ip);
@@ -698,8 +698,8 @@ void sessionshutdown(sessionidt s, char *reason, int result, int error);
 void filter_session(sessionidt s, int filter_in, int filter_out);
 void send_garp(in_addr_t ip);
 void tunnelsend(uint8_t *buf, uint16_t l, tunnelidt t);
-void sendipcp(tunnelidt t, sessionidt s);
-void sendipv6cp(tunnelidt t, sessionidt s);
+void sendipcp(sessionidt s, tunnelidt t);
+void sendipv6cp(sessionidt s, tunnelidt t);
 void processudp(uint8_t *buf, int len, struct sockaddr_in *addr);
 void snoop_send_packet(uint8_t *packet, uint16_t size, in_addr_t destination, uint16_t port);
 int find_filter(char const *name, size_t len);
@@ -716,7 +716,7 @@ int cmd_show_hist_open(struct cli_def *cli, char *command, char **argv, int argc
 void _log(int level, sessionidt s, tunnelidt t, const char *format, ...) __attribute__((format (printf, 4, 5)));
 void _log_hex(int level, const char *title, const uint8_t *data, int maxsize);
 
-int sessionsetup(tunnelidt t, sessionidt s);
+int sessionsetup(sessionidt s, tunnelidt t);
 int run_plugins(int plugin_type, void *data);
 void rebuild_address_pool(void);
 void throttle_session(sessionidt s, int rate_in, int rate_out);

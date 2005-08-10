@@ -1,6 +1,6 @@
 // L2TPNS Radius Stuff
 
-char const *cvs_id_radius = "$Id: radius.c,v 1.38 2005-07-31 10:35:39 bodea Exp $";
+char const *cvs_id_radius = "$Id: radius.c,v 1.39 2005-08-10 11:25:56 bodea Exp $";
 
 #include <time.h>
 #include <stdio.h>
@@ -493,7 +493,7 @@ void processrad(uint8_t *buf, int len, char socket_index)
 			if (radius[r].chap)
 			{
 				// CHAP
-				uint8_t *p = makeppp(b, sizeof(b), 0, 0, t, s, PPPCHAP);
+				uint8_t *p = makeppp(b, sizeof(b), 0, 0, s, t, PPPCHAP);
 				if (!p) return;	// Abort!
 
 				*p = (r_code == AccessAccept) ? 3 : 4;     // ack/nak
@@ -507,7 +507,7 @@ void processrad(uint8_t *buf, int len, char socket_index)
 			else
 			{
 				// PAP
-				uint8_t *p = makeppp(b, sizeof(b), 0, 0, t, s, PPPPAP);
+				uint8_t *p = makeppp(b, sizeof(b), 0, 0, s, t, PPPPAP);
 				if (!p) return;		// Abort!
 
 				// ack/nak
@@ -712,7 +712,7 @@ void processrad(uint8_t *buf, int len, char socket_index)
 
 			// Valid Session, set it up
 			session[s].unique_id = 0;
-			sessionsetup(t, s);
+			sessionsetup(s, t);
 		}
 		else
 		{
@@ -739,7 +739,7 @@ void radiusretry(uint16_t r)
 	switch (radius[r].state)
 	{
 		case RADIUSCHAP:	// sending CHAP down PPP
-			sendchap(t, s);
+			sendchap(s, t);
 			break;
 		case RADIUSAUTH:	// sending auth to RADIUS server
 		case RADIUSSTART:	// sending start accounting to RADIUS server

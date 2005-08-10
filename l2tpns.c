@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.118 2005-08-10 08:36:48 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.119 2005-08-10 11:25:56 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -1104,7 +1104,7 @@ static void processipout(uint8_t *buf, int len)
 
 	// Add on L2TP header
 	{
-		uint8_t *p = makeppp(b, sizeof(b), buf, len, t, s, PPPIP);
+		uint8_t *p = makeppp(b, sizeof(b), buf, len, s, t, PPPIP);
 		if (!p) return;
 		tunnelsend(b, len + (p-b), t); // send it...
 	}
@@ -1215,7 +1215,7 @@ static void processipv6out(uint8_t * buf, int len)
 
 	// Add on L2TP header
 	{
-		uint8_t *p = makeppp(b, sizeof(b), buf, len, t, s, PPPIPV6);
+		uint8_t *p = makeppp(b, sizeof(b), buf, len, s, t, PPPIPV6);
 		if (!p) return;
 		tunnelsend(b, len + (p-b), t); // send it...
 	}
@@ -1267,7 +1267,7 @@ static void send_ipout(sessionidt s, uint8_t *buf, int len)
 
 	// Add on L2TP header
 	{
-		uint8_t *p = makeppp(b, sizeof(b),  buf, len, t, s, PPPIP);
+		uint8_t *p = makeppp(b, sizeof(b), buf, len, s, t, PPPIP);
 		if (!p) return;
 		tunnelsend(b, len + (p-b), t); // send it...
 	}
@@ -1366,7 +1366,7 @@ static void controlnull(tunnelidt t)
 }
 
 // add a control message to a tunnel, and send if within window
-static void controladd(controlt * c, tunnelidt t, sessionidt far)
+static void controladd(controlt *c, sessionidt far, tunnelidt t)
 {
 	*(uint16_t *) (c->buf + 2) = htons(c->length); // length
 	*(uint16_t *) (c->buf + 4) = htons(tunnel[t].far); // tunnel
@@ -1558,7 +1558,7 @@ void sessionshutdown(sessionidt s, char *reason, int result, int error)
 			control16(c, 1, result, 1);
 
 		control16(c, 14, s, 1);   // assigned session (our end)
-		controladd(c, session[s].tunnel, session[s].far); // send the message
+		controladd(c, session[s].far, session[s].tunnel); // send the message
 	}
 
 	if (!session[s].die)
@@ -1578,7 +1578,7 @@ void sessionshutdown(sessionidt s, char *reason, int result, int error)
 	cluster_send_session(s);
 }
 
-void sendipcp(tunnelidt t, sessionidt s)
+void sendipcp(sessionidt s, tunnelidt t)
 {
 	uint8_t buf[MAXCONTROL];
 	uint8_t *q;
@@ -1591,7 +1591,7 @@ void sendipcp(tunnelidt t, sessionidt s)
 		session[s].unique_id = last_id;
 	}
 
-	q = makeppp(buf,sizeof(buf), 0, 0, t, s, PPPIPCP);
+	q = makeppp(buf,sizeof(buf), 0, 0, s, t, PPPIPCP);
 	if (!q) return;
 
 	*q = ConfigReq;
@@ -1606,14 +1606,14 @@ void sendipcp(tunnelidt t, sessionidt s)
 	tunnelsend(buf, 10 + (q - buf), t); // send it
 }
 
-void sendipv6cp(tunnelidt t, sessionidt s)
+void sendipv6cp(sessionidt s, tunnelidt t)
 {
 	uint8_t buf[MAXCONTROL];
 	uint8_t *q;
 
 	CSTAT(sendipv6cp);
 
-	q = makeppp(buf,sizeof(buf), 0, 0, t, s, PPPIPV6CP);
+	q = makeppp(buf,sizeof(buf), 0, 0, s, t, PPPIPV6CP);
 	if (!q) return;
 
 	*q = ConfigReq;
@@ -1753,7 +1753,7 @@ static void tunnelshutdown(tunnelidt t, char *reason, int result, int error, cha
 			control16(c, 1, result, 1);
 
 		control16(c, 9, t, 1);		// assigned tunnel (our end)
-		controladd(c, t, 0);		// send the message
+		controladd(c, 0, t);		// send the message
 	}
 }
 
@@ -2305,7 +2305,7 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 						controls(c, 7, tunnel[t].hostname, 1); // host name (TBA)
 						if (chapresponse) controlb(c, 13, chapresponse, 16, 1); // Challenge response
 						control16(c, 9, t, 1); // assigned tunnel
-						controladd(c, t, 0); // send the resply
+						controladd(c, 0, t); // send the resply
 					}
 					else
 					{
@@ -2353,7 +2353,7 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 						session[s].last_packet = time_now;
 						LOG(3, s, t, "New session (%d/%d)\n", tunnel[t].far, session[s].far);
 						control16(c, 14, s, 1); // assigned session
-						controladd(c, t, asession); // send the reply
+						controladd(c, asession, t); // send the reply
 
 						strncpy(session[s].called, called, sizeof(session[s].called) - 1);
 						strncpy(session[s].calling, calling, sizeof(session[s].calling) - 1);
@@ -2376,7 +2376,7 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 						else
 							control16(c, 1, 2, 7); // shutting down, try another
 
-						controladd(c, t, asession); // send the message
+						controladd(c, asession, t); // send the message
 					}
 					return;
 				case 11:      // ICRP
@@ -2394,7 +2394,7 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 						authtype = config->radius_authprefer;
 
 					// start LCP
-					sendlcp(t, s, authtype);
+					sendlcp(s, t, authtype);
 					sess_local[s].lcp.restart = time_now + config->ppp_restart_time;
 					sess_local[s].lcp.conf_sent = 1;
 					sess_local[s].lcp.nak_sent = 0;
@@ -2472,37 +2472,37 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 		{
 			session[s].last_packet = time_now;
 			if (!config->cluster_iam_master) { master_forward_packet(buf, len, addr->sin_addr.s_addr, addr->sin_port); return; }
-			processpap(t, s, p, l);
+			processpap(s, t, p, l);
 		}
 		else if (prot == PPPCHAP)
 		{
 			session[s].last_packet = time_now;
 			if (!config->cluster_iam_master) { master_forward_packet(buf, len, addr->sin_addr.s_addr, addr->sin_port); return; }
-			processchap(t, s, p, l);
+			processchap(s, t, p, l);
 		}
 		else if (prot == PPPLCP)
 		{
 			session[s].last_packet = time_now;
 			if (!config->cluster_iam_master) { master_forward_packet(buf, len, addr->sin_addr.s_addr, addr->sin_port); return; }
-			processlcp(t, s, p, l);
+			processlcp(s, t, p, l);
 		}
 		else if (prot == PPPIPCP)
 		{
 			session[s].last_packet = time_now;
 			if (!config->cluster_iam_master) { master_forward_packet(buf, len, addr->sin_addr.s_addr, addr->sin_port); return; }
-			processipcp(t, s, p, l);
+			processipcp(s, t, p, l);
 		}
 		else if (prot == PPPIPV6CP)
 		{
 			session[s].last_packet = time_now;
 			if (!config->cluster_iam_master) { master_forward_packet(buf, len, addr->sin_addr.s_addr, addr->sin_port); return; }
-			processipv6cp(t, s, p, l);
+			processipv6cp(s, t, p, l);
 		}
 		else if (prot == PPPCCP)
 		{
 			session[s].last_packet = time_now;
 			if (!config->cluster_iam_master) { master_forward_packet(buf, len, addr->sin_addr.s_addr, addr->sin_port); return; }
-			processccp(t, s, p, l);
+			processccp(s, t, p, l);
 		}
 		else if (prot == PPPIP)
 		{
@@ -2519,7 +2519,7 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 				return;
 			}
 
-			processipin(t, s, p, l);
+			processipin(s, t, p, l);
 		}
 		else if (prot == PPPIPV6)
 		{
@@ -2541,7 +2541,7 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 				return;
 			}
 
-			processipv6in(t, s, p, l);
+			processipv6in(s, t, p, l);
 		}
 		else
 		{
@@ -2660,7 +2660,7 @@ static void regular_cleanups(double period)
 		if (tunnel[t].state == TUNNELOPEN && tunnel[t].lastrec < TIME + 600)
 		{
 			controlt *c = controlnew(6); // sending HELLO
-			controladd(c, t, 0); // send the message
+			controladd(c, 0, t); // send the message
 			LOG(3, 0, t, "Sending HELLO message\n");
 			t_actions++;
 		}
@@ -2730,7 +2730,7 @@ static void regular_cleanups(double period)
 					LOG(3, s, session[s].tunnel, "No ACK for LCP ConfigReq... resending\n");
 					sess_local[s].lcp.restart = time_now + config->ppp_restart_time;
 					sess_local[s].lcp.conf_sent++;
-					sendlcp(t, s, sess_local[s].lcp_authtype);
+					sendlcp(s, t, sess_local[s].lcp_authtype);
 					change_state(s, lcp, next_state);
 				}
 				else
@@ -2761,7 +2761,7 @@ static void regular_cleanups(double period)
 					LOG(3, s, session[s].tunnel, "No ACK for IPCP ConfigReq... resending\n");
 					sess_local[s].ipcp.restart = time_now + config->ppp_restart_time;
 					sess_local[s].ipcp.conf_sent++;
-					sendipcp(t, s);
+					sendipcp(s, t);
 					change_state(s, ipcp, next_state);
 				}
 				else
@@ -2792,7 +2792,7 @@ static void regular_cleanups(double period)
 					LOG(3, s, session[s].tunnel, "No ACK for IPV6CP ConfigReq... resending\n");
 					sess_local[s].ipv6cp.restart = time_now + config->ppp_restart_time;
 					sess_local[s].ipv6cp.conf_sent++;
-					sendipv6cp(t, s);
+					sendipv6cp(s, t);
 					change_state(s, ipv6cp, next_state);
 				}
 				else
@@ -2820,7 +2820,7 @@ static void regular_cleanups(double period)
 					LOG(3, s, session[s].tunnel, "No ACK for CCP ConfigReq... resending\n");
 					sess_local[s].ccp.restart = time_now + config->ppp_restart_time;
 					sess_local[s].ccp.conf_sent++;
-					sendccp(t, s);
+					sendccp(s, t);
 					change_state(s, ccp, next_state);
 				}
 				else
@@ -2847,7 +2847,7 @@ static void regular_cleanups(double period)
 		{
 			uint8_t b[MAXCONTROL] = {0};
 
-			uint8_t *q = makeppp(b, sizeof(b), 0, 0, session[s].tunnel, s, PPPLCP);
+			uint8_t *q = makeppp(b, sizeof(b), 0, 0, s, session[s].tunnel, PPPLCP);
 			if (!q) continue;
 
 			*q = EchoReq;
@@ -4400,7 +4400,7 @@ static void read_config_file()
 	update_config();
 }
 
-int sessionsetup(tunnelidt t, sessionidt s)
+int sessionsetup(sessionidt s, tunnelidt t)
 {
 	// A session now exists, set it up
 	in_addr_t ip;
@@ -4479,7 +4479,7 @@ int sessionsetup(tunnelidt t, sessionidt s)
 	}
 
 	sess_local[s].lcp_authtype = 0; // RADIUS authentication complete
-	lcp_open(t, s); // transition to Network phase and send initial IPCP
+	lcp_open(s, t); // transition to Network phase and send initial IPCP
 
 	// Run the plugin's against this new session.
 	{

@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.67 2005-08-10 08:59:23 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.68 2005-08-10 11:25:56 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -26,7 +26,7 @@ extern configt *config;
 static int add_lcp_auth(uint8_t *b, int size, int authtype);
 
 // Process PAP messages
-void processpap(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
+void processpap(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 {
 	char user[MAXUSER];
 	char pass[MAXPASS];
@@ -91,7 +91,7 @@ void processpap(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 		// respond now, either no RADIUS available or already authenticated
 		uint8_t b[MAXCONTROL];
 		uint8_t id = p[1];
-		uint8_t *p = makeppp(b, sizeof(b), 0, 0, t, s, PPPPAP);
+		uint8_t *p = makeppp(b, sizeof(b), 0, 0, s, t, PPPPAP);
 		if (!p) return;
 
 		if (session[s].ip)
@@ -140,7 +140,7 @@ void processpap(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 }
 
 // Process CHAP messages
-void processchap(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
+void processchap(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 {
 	uint16_t r;
 	uint16_t hl;
@@ -336,7 +336,7 @@ static void dumplcp(uint8_t *p, int l)
 	}
 }
 
-void lcp_open(tunnelidt t, sessionidt s)
+void lcp_open(sessionidt s, tunnelidt t)
 {
 	// transition to Authentication or Network phase: 
 	session[s].ppp.phase = sess_local[s].lcp_authtype ? Authenticate : Network;
@@ -347,12 +347,12 @@ void lcp_open(tunnelidt t, sessionidt s)
 	if (session[s].ppp.phase == Authenticate)
 	{
 		if (sess_local[s].lcp_authtype == AUTHCHAP)
-			sendchap(t, s);
+			sendchap(s, t);
 	}
 	else
 	{
 		// This-Layer-Up
-		sendipcp(t, s);
+		sendipcp(s, t);
 		change_state(s, ipcp, RequestSent);
 		// move to passive state for IPv6 (if configured), CCP
 		if (config->ipv6_prefix.s6_addr[0])
@@ -378,7 +378,7 @@ static uint8_t *ppp_rej(sessionidt s, uint8_t *buf, size_t blen, uint16_t mtype,
 {
 	if (!*response || **response != ConfigRej)
 	{
-		queued = *response = makeppp(buf, blen, packet, 2, session[s].tunnel, s, mtype);
+		queued = *response = makeppp(buf, blen, packet, 2, s, session[s].tunnel, mtype);
 		if (!queued)
 			return 0;
 
@@ -422,7 +422,7 @@ static uint8_t *ppp_nak(sessionidt s, uint8_t *buf, size_t blen, uint16_t mtype,
 	    	if (*nak_sent >= config->ppp_max_failure)
 			return ppp_rej(s, buf, blen, mtype, response, 0, packet, option);
 
-		queued = *response = makeppp(buf, blen, packet, 2, session[s].tunnel, s, mtype);
+		queued = *response = makeppp(buf, blen, packet, 2, s, session[s].tunnel, mtype);
 		if (!queued)
 			return 0;
 
@@ -444,7 +444,7 @@ static uint8_t *ppp_nak(sessionidt s, uint8_t *buf, size_t blen, uint16_t mtype,
 }
 
 // Process LCP messages
-void processlcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
+void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 {
 	uint8_t b[MAXCONTROL];
 	uint8_t *q = NULL;
@@ -525,7 +525,7 @@ void processlcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 			break;
 
 		case AckSent:
-			lcp_open(t, s);
+			lcp_open(s, t);
 			break;
 
 		default:
@@ -637,7 +637,7 @@ void processlcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 		else
 		{
 			// Send packet back as ConfigAck
-			response = makeppp(b, sizeof(b), p, l, t, s, PPPLCP);
+			response = makeppp(b, sizeof(b), p, l, s, t, PPPLCP);
 			if (!response) return;
 			*response = ConfigAck;
 		}
@@ -645,7 +645,7 @@ void processlcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 		switch (session[s].ppp.lcp)
 		{
 		case Closed:
-			response = makeppp(b, sizeof(b), p, 2, t, s, PPPLCP);
+			response = makeppp(b, sizeof(b), p, 2, s, t, PPPLCP);
 			if (!response) return;
 			*response = TerminateAck;
 			*((uint16_t *) (response + 2)) = htons(l = 4);
@@ -669,7 +669,7 @@ void processlcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 
 		case AckReceived:
 			if (*response == ConfigAck)
-				lcp_open(t, s);
+				lcp_open(s, t);
 
 			break;
 
@@ -765,7 +765,7 @@ void processlcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 		case Closed:
 		case Stopped:
 		    	{
-				uint8_t *response = makeppp(b, sizeof(b), p, 2, t, s, PPPLCP);
+				uint8_t *response = makeppp(b, sizeof(b), p, 2, s, t, PPPLCP);
 				if (!response) return;
 				*response = TerminateAck;
 				*((uint16_t *) (response + 2)) = htons(l = 4);
@@ -798,7 +798,7 @@ void processlcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 	{
 		LOG(3, s, t, "LCP: Received TerminateReq.  Sending TerminateAck\n");
 		*p = TerminateAck;	// close
-		q = makeppp(b, sizeof(b),  p, l, t, s, PPPLCP);
+		q = makeppp(b, sizeof(b),  p, l, s, t, PPPLCP);
 		if (!q) return;
 		tunnelsend(b, l + (q - b), t); // send it
 		sessionshutdown(s, "Remote end closed connection.", 3, 0);
@@ -826,7 +826,7 @@ void processlcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 		LOG(5, s, t, "LCP: Received EchoReq.  Sending EchoReply\n");
 		*p = EchoReply;		// reply
 		*(uint32_t *) (p + 4) = htonl(session[s].magic); // our magic number
-		q = makeppp(b, sizeof(b), p, l, t, s, PPPLCP);
+		q = makeppp(b, sizeof(b), p, l, s, t, PPPLCP);
 		if (!q) return;
 		tunnelsend(b, l + (q - b), t); // send it
 	}
@@ -844,7 +844,7 @@ void processlcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 		if (l > mru) l = mru;
 
 		*p = CodeRej;
-		q = makeppp(b, sizeof(b), p, l, t, s, PPPLCP);
+		q = makeppp(b, sizeof(b), p, l, s, t, PPPLCP);
 		if (!q) return;
 
 		LOG(3, s, t, "Unexpected LCP code %s\n", ppp_code(code));
@@ -852,7 +852,7 @@ void processlcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 	}
 }
 
-static void ipcp_open(tunnelidt t, sessionidt s)
+static void ipcp_open(sessionidt s, tunnelidt t)
 {
 	LOG(3, s, t, "IPCP: Opened, session is now active\n");
 
@@ -868,13 +868,13 @@ static void ipcp_open(tunnelidt t, sessionidt s)
 	// start IPv6 if configured and still in passive state
 	if (session[s].ppp.ipv6cp == Stopped)
 	{
-		sendipv6cp(t, s);
+		sendipv6cp(s, t);
 		change_state(s, ipv6cp, RequestSent);
 	}
 }
 
 // Process IPCP messages
-void processipcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
+void processipcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 {
 	uint8_t b[MAXCONTROL];
 	uint8_t *q = 0;
@@ -921,7 +921,7 @@ void processipcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 			break;
 
 		case AckSent:
-			ipcp_open(t, s);
+			ipcp_open(s, t);
 			break;
 
 		default:
@@ -1001,7 +1001,7 @@ void processipcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 		else if (gotip)
 		{
 			// Send packet back as ConfigAck
-			response = makeppp(b, sizeof(b), p, l, t, s, PPPIPCP);
+			response = makeppp(b, sizeof(b), p, l, s, t, PPPIPCP);
 			if (!response) return;
 			*response = ConfigAck;
 		}
@@ -1015,7 +1015,7 @@ void processipcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 		switch (session[s].ppp.ipcp)
 		{
 		case Closed:
-			response = makeppp(b, sizeof(b), p, 2, t, s, PPPIPCP);
+			response = makeppp(b, sizeof(b), p, 2, s, t, PPPIPCP);
 			if (!response) return;
 			*response = TerminateAck;
 			*((uint16_t *) (response + 2)) = htons(l = 4);
@@ -1039,7 +1039,7 @@ void processipcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 
 		case AckReceived:
 			if (*response == ConfigAck)
-				ipcp_open(t, s);
+				ipcp_open(s, t);
 
 			break;
 
@@ -1068,7 +1068,7 @@ void processipcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 	{
 		LOG(3, s, t, "IPCP: Received TerminateReq.  Sending TerminateAck\n");
 		*p = TerminateAck;
-		q = makeppp(b, sizeof(b),  p, l, t, s, PPPIPCP);
+		q = makeppp(b, sizeof(b), p, l, s, t, PPPIPCP);
 		if (!q) return;
 		tunnelsend(b, l + (q - b), t);
 		change_state(s, ipcp, Stopped);
@@ -1083,7 +1083,7 @@ void processipcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 		if (l > mru) l = mru;
 
 		*p = CodeRej;
-		q = makeppp(b, sizeof(b), p, l, t, s, PPPIPCP);
+		q = makeppp(b, sizeof(b), p, l, s, t, PPPIPCP);
 		if (!q) return;
 
 		LOG(3, s, t, "Unexpected IPCP code %s\n", ppp_code(code));
@@ -1091,7 +1091,7 @@ void processipcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 	}
 }
 
-static void ipv6cp_open(tunnelidt t, sessionidt s)
+static void ipv6cp_open(sessionidt s, tunnelidt t)
 {
 	LOG(3, s, t, "IPV6CP: Opened\n");
 
@@ -1100,11 +1100,11 @@ static void ipv6cp_open(tunnelidt t, sessionidt s)
 		route6set(s, session[s].ipv6route, session[s].ipv6prefixlen, 1);
 
 	// Send an initial RA (TODO: Should we send these regularly?)
-	send_ipv6_ra(t, s, NULL);
+	send_ipv6_ra(s, t, NULL);
 }
 
 // Process IPV6CP messages
-void processipv6cp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
+void processipv6cp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 {
 	uint8_t b[MAXCONTROL];
 	uint8_t *q = 0;
@@ -1138,7 +1138,7 @@ void processipv6cp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 	{
 	    	LOG(2, s, t, "IPV6CP: %s rejected (not configured)\n", ppp_code(*p));
 		*p = ProtocolRej;
-		q = makeppp(b, sizeof(b),  p, l, t, s, PPPIPV6CP);
+		q = makeppp(b, sizeof(b),  p, l, s, t, PPPIPV6CP);
 		if (!q) return;
 		tunnelsend(b, l + (q - b), t);
 		return;
@@ -1167,7 +1167,7 @@ void processipv6cp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 			break;
 
 		case AckSent:
-			ipv6cp_open(t, s);
+			ipv6cp_open(s, t);
 			break;
 
 		default:
@@ -1221,7 +1221,7 @@ void processipv6cp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 		else if (gotip)
 		{
 			// Send packet back as ConfigAck
-			response = makeppp(b, sizeof(b), p, l, t, s, PPPIPV6CP);
+			response = makeppp(b, sizeof(b), p, l, s, t, PPPIPV6CP);
 			if (!response) return;
 			*response = ConfigAck;
 		}
@@ -1235,7 +1235,7 @@ void processipv6cp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 		switch (session[s].ppp.ipv6cp)
 		{
 		case Closed:
-			response = makeppp(b, sizeof(b), p, 2, t, s, PPPIPV6CP);
+			response = makeppp(b, sizeof(b), p, 2, s, t, PPPIPV6CP);
 			if (!response) return;
 			*response = TerminateAck;
 			*((uint16_t *) (response + 2)) = htons(l = 4);
@@ -1259,7 +1259,7 @@ void processipv6cp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 
 		case AckReceived:
 			if (*response == ConfigAck)
-				ipv6cp_open(t, s);
+				ipv6cp_open(s, t);
 
 			break;
 
@@ -1288,7 +1288,7 @@ void processipv6cp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 	{
 		LOG(3, s, t, "IPV6CP: Received TerminateReq.  Sending TerminateAck\n");
 		*p = TerminateAck;
-		q = makeppp(b, sizeof(b),  p, l, t, s, PPPIPV6CP);
+		q = makeppp(b, sizeof(b),  p, l, s, t, PPPIPV6CP);
 		if (!q) return;
 		tunnelsend(b, l + (q - b), t);
 		change_state(s, ipv6cp, Stopped);
@@ -1303,7 +1303,7 @@ void processipv6cp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 		if (l > mru) l = mru;
 
 		*p = CodeRej;
-		q = makeppp(b, sizeof(b), p, l, t, s, PPPIPV6CP);
+		q = makeppp(b, sizeof(b), p, l, s, t, PPPIPV6CP);
 		if (!q) return;
 
 		LOG(3, s, t, "Unexpected IPV6CP code %s\n", ppp_code(code));
@@ -1315,7 +1315,7 @@ void processipv6cp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 //
 // This MUST be called with at least 4 byte behind 'p'.
 // (i.e. this routine writes to p[-4]).
-void processipin(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
+void processipin(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 {
 	in_addr_t ip;
 
@@ -1401,7 +1401,7 @@ void processipin(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 //
 // This MUST be called with at least 4 byte behind 'p'.
 // (i.e. this routine writes to p[-4]).
-void processipv6in(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
+void processipv6in(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 {
 	struct in6_addr ip;
 	in_addr_t ipv4;
@@ -1438,7 +1438,7 @@ void processipv6in(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 			*(uint32_t *)(p + 34) == 0 &&
 			*(p + 38) == 0 && *(p + 39) == 2 && *(p + 40) == 133) {
 		LOG(3, s, t, "Got IPv6 RS\n");
-		send_ipv6_ra(t, s, &ip);
+		send_ipv6_ra(s, t, &ip);
 		return;
 	}
 
@@ -1535,7 +1535,7 @@ void send_ipin(sessionidt s, uint8_t *buf, int len)
 
 
 // Process CCP messages
-void processccp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
+void processccp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 {
 	uint8_t b[MAXCONTROL];
 	uint8_t *q;
@@ -1588,13 +1588,13 @@ void processccp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 		else // compression requested--reject
 			*p = ConfigRej;
 
-		q = makeppp(b, sizeof(b), p, l, t, s, PPPCCP);
+		q = makeppp(b, sizeof(b), p, l, s, t, PPPCCP);
 		if (!q) return;
 
 		switch (session[s].ppp.ccp)
 		{
 		case Closed:
-			q = makeppp(b, sizeof(b), p, 2, t, s, PPPCCP);
+			q = makeppp(b, sizeof(b), p, 2, s, t, PPPCCP);
 			if (!q) return;
 			*q = TerminateAck;
 			*((uint16_t *) (q + 2)) = htons(l = 4);
@@ -1647,7 +1647,7 @@ void processccp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 	{
 		LOG(3, s, t, "CCP: Received TerminateReq.  Sending TerminateAck\n");
 		*p = TerminateAck;
-		q = makeppp(b, sizeof(b),  p, l, t, s, PPPCCP);
+		q = makeppp(b, sizeof(b),  p, l, s, t, PPPCCP);
 		if (!q) return;
 		tunnelsend(b, l + (q - b), t);
 		change_state(s, ccp, Stopped);
@@ -1662,7 +1662,7 @@ void processccp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 		if (l > mru) l = mru;
 
 		*p = CodeRej;
-		q = makeppp(b, sizeof(b), p, l, t, s, PPPCCP);
+		q = makeppp(b, sizeof(b), p, l, s, t, PPPCCP);
 		if (!q) return;
 
 		LOG(3, s, t, "Unexpected CCP code %s\n", ppp_code(code));
@@ -1671,7 +1671,7 @@ void processccp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 }
 
 // send a CHAP challenge
-void sendchap(tunnelidt t, sessionidt s)
+void sendchap(sessionidt s, tunnelidt t)
 {
 	uint8_t b[MAXCONTROL];
 	uint16_t r;
@@ -1702,7 +1702,7 @@ void sendchap(tunnelidt t, sessionidt s)
 		STAT(tunnel_tx_errors);
 		return ;
 	}
-	q = makeppp(b, sizeof(b), 0, 0, t, s, PPPCHAP);
+	q = makeppp(b, sizeof(b), 0, 0, s, t, PPPCHAP);
 	if (!q) return;
 
 	*q = 1;					// challenge
@@ -1717,7 +1717,7 @@ void sendchap(tunnelidt t, sessionidt s)
 // fill in a L2TP message with a PPP frame,
 // copies existing PPP message and changes magic number if seen
 // returns start of PPP frame
-uint8_t *makeppp(uint8_t *b, int size, uint8_t *p, int l, tunnelidt t, sessionidt s, uint16_t mtype)
+uint8_t *makeppp(uint8_t *b, int size, uint8_t *p, int l, sessionidt s, tunnelidt t, uint16_t mtype)
 {
 	if (size < 12) // Need more space than this!!
 	{
@@ -1785,11 +1785,11 @@ static int add_lcp_auth(uint8_t *b, int size, int authtype)
 }
 
 // Send initial LCP ConfigReq for MRU, authentication type and magic no
-void sendlcp(tunnelidt t, sessionidt s, int authtype)
+void sendlcp(sessionidt s, tunnelidt t, int authtype)
 {
 	uint8_t b[500], *q, *l;
 
-	if (!(q = makeppp(b, sizeof(b), NULL, 0, t, s, PPPLCP)))
+	if (!(q = makeppp(b, sizeof(b), NULL, 0, s, t, PPPLCP)))
 		return;
 
 	LOG(4, s, t, "Sending LCP ConfigReq%s%s\n",
@@ -1822,11 +1822,11 @@ void sendlcp(tunnelidt t, sessionidt s, int authtype)
 }
 
 // Send CCP request for no compression
-void sendccp(tunnelidt t, sessionidt s)
+void sendccp(sessionidt s, tunnelidt t)
 {
 	uint8_t b[500], *q;
 
-	if (!(q = makeppp(b, sizeof(b), NULL, 0, t, s, PPPCCP)))
+	if (!(q = makeppp(b, sizeof(b), NULL, 0, s, t, PPPCCP)))
 		return;
 
 	LOG(4, s, t, "Sending CCP ConfigReq for no compression\n");
