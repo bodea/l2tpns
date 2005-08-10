@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.66 2005-08-10 08:04:26 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.67 2005-08-10 08:59:23 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -854,7 +854,7 @@ void processlcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 
 static void ipcp_open(tunnelidt t, sessionidt s)
 {
-	LOG(3, s, t, "IPCP Acked, session is now active\n");
+	LOG(3, s, t, "IPCP: Opened, session is now active\n");
 
 	change_state(s, ipcp, Opened);
 
@@ -936,7 +936,7 @@ void processipcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 		int gotip = 0;
 		in_addr_t addr;
 
-		LOG(3, s, t, "IPCP ConfigReq received\n");
+		LOG(3, s, t, "IPCP: ConfigReq received\n");
 
 		while (length > 2)
 		{
@@ -1093,7 +1093,7 @@ void processipcp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 
 static void ipv6cp_open(tunnelidt t, sessionidt s)
 {
-	LOG(3, s, t, "IPV6CP Acked\n");
+	LOG(3, s, t, "IPV6CP: Opened\n");
 
 	change_state(s, ipv6cp, Opened);
 	if (session[s].ipv6prefixlen)
@@ -1136,7 +1136,7 @@ void processipv6cp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 
 	if (!config->ipv6_prefix.s6_addr[0])
 	{
-	    	LOG(2, s, t, "IPV6CP %s rejected (not configured)\n", ppp_code(*p));
+	    	LOG(2, s, t, "IPV6CP: %s rejected (not configured)\n", ppp_code(*p));
 		*p = ProtocolRej;
 		q = makeppp(b, sizeof(b),  p, l, t, s, PPPIPV6CP);
 		if (!q) return;
@@ -1182,7 +1182,7 @@ void processipv6cp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 		int gotip = 0;
 		uint8_t ident[8];
 
-		LOG(3, s, t, "IPV6CP ConfigReq received\n");
+		LOG(3, s, t, "IPV6CP: ConfigReq received\n");
 
 		while (length > 2)
 		{
@@ -1573,7 +1573,7 @@ void processccp(tunnelidt t, sessionidt s, uint8_t *p, uint16_t l)
 			break;
 
 		case AckSent:
-			LOG(3, s, t, "CCP Acked\n");
+			LOG(3, s, t, "CCP: Opened\n");
 			change_state(s, ccp, Opened);
 			break;
 
