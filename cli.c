@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.64 2005-07-31 10:04:09 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.65 2005-08-10 07:53:56 bodea Exp $";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -412,7 +412,7 @@ static int cmd_show_session(struct cli_def *cli, char *command, char **argv, int
 			switch (session[s].ppp.phase)
 			{
 			case Establish:
-				cli_print(cli, "\tLCP state:\t%s", ppp_state(session[s].ppp.lcp));
+				cli_print(cli, "\t LCP state:\t%s", ppp_state(session[s].ppp.lcp));
 				break;
 
 			case Authenticate:
