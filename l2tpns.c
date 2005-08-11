@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.121 2005-08-11 05:50:24 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.122 2005-08-11 06:18:56 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -1584,6 +1584,7 @@ void sendipcp(sessionidt s, tunnelidt t)
 	uint8_t *q;
 
 	CSTAT(sendipcp);
+	LOG(3, s, t, "IPCP: send ConfigReq\n");
 
 	if (!session[s].unique_id)
 	{
@@ -1612,6 +1613,7 @@ void sendipv6cp(sessionidt s, tunnelidt t)
 	uint8_t *q;
 
 	CSTAT(sendipv6cp);
+	LOG(3, s, t, "IPV6CP: send ConfigReq\n");
 
 	q = makeppp(buf,sizeof(buf), 0, 0, s, t, PPPIPV6CP);
 	if (!q) return;

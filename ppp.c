@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.69 2005-08-11 05:50:49 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.70 2005-08-11 06:18:56 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -340,6 +340,8 @@ void lcp_open(sessionidt s, tunnelidt t)
 {
 	// transition to Authentication or Network phase: 
 	session[s].ppp.phase = sess_local[s].lcp_authtype ? Authenticate : Network;
+
+	LOG(3, s, t, "LCP: Opened, phase %s\n", ppp_phase(session[s].ppp.phase));
 
 	// LCP now Opened
 	change_state(s, lcp, Opened);
@@ -765,6 +767,10 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 				if (!response) return;
 				*response = TerminateAck;
 				*((uint16_t *) (response + 2)) = htons(l = 4);
+
+				LOG(3, s, t, "LCP: send %s\n", ppp_code(*response));
+				if (config->debug > 3) dumplcp(response, l);
+
 				tunnelsend(b, l + (response - b), t);
 			}
 			break;
@@ -795,6 +801,10 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 		*p = TerminateAck;	// close
 		q = makeppp(b, sizeof(b),  p, l, s, t, PPPLCP);
 		if (!q) return;
+
+		LOG(3, s, t, "LCP: send %s\n", ppp_code(*q));
+		if (config->debug > 3) dumplcp(q, l);
+
 		tunnelsend(b, l + (q - b), t); // send it
 		sessionshutdown(s, "Remote end closed connection.", 3, 0);
 	}
@@ -822,6 +832,10 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 		*(uint32_t *) (p + 4) = htonl(session[s].magic); // our magic number
 		q = makeppp(b, sizeof(b), p, l, s, t, PPPLCP);
 		if (!q) return;
+
+		LOG(4, s, t, "LCP: send %s\n", ppp_code(*q));
+		if (config->debug > 3) dumplcp(q, l);
+
 		tunnelsend(b, l + (q - b), t); // send it
 	}
 	else if (*p == EchoReply)
@@ -841,7 +855,10 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 		q = makeppp(b, sizeof(b), p, l, s, t, PPPLCP);
 		if (!q) return;
 
-		LOG(3, s, t, "Unexpected LCP code %s\n", ppp_code(code));
+		LOG(2, s, t, "Unexpected LCP code %s\n", ppp_code(code));
+		LOG(3, s, t, "LCP: send %s\n", ppp_code(*q));
+		if (config->debug > 3) dumplcp(q, l);
+
 		tunnelsend(b, l + (q - b), t);
 	}
 }
@@ -898,6 +915,8 @@ void processipcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 		return;
 	}
 
+	LOG(3, s, t, "IPCP: recv %s\n", ppp_code(*p));
+
 	if (*p == ConfigAck)
 	{
 		switch (session[s].ppp.ipcp)
@@ -929,8 +948,6 @@ void processipcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 		int length = l - 4;
 		int gotip = 0;
 		in_addr_t addr;
-
-		LOG(3, s, t, "IPCP: ConfigReq received\n");
 
 		while (length > 2)
 		{
@@ -1055,15 +1072,15 @@ void processipcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 			return;
 		}
 
-		LOG(3, s, t, "IPCP: Sending %s\n", ppp_code(*response));
+		LOG(3, s, t, "IPCP: send %s\n", ppp_code(*response));
 		tunnelsend(b, l + (response - b), t);
 	}
 	else if (*p == TerminateReq)
 	{
-		LOG(3, s, t, "IPCP: Received TerminateReq.  Sending TerminateAck\n");
 		*p = TerminateAck;
 		q = makeppp(b, sizeof(b), p, l, s, t, PPPIPCP);
 		if (!q) return;
+		LOG(3, s, t, "IPCP: send %s\n", ppp_code(*q));
 		tunnelsend(b, l + (q - b), t);
 		change_state(s, ipcp, Stopped);
 	}
@@ -1080,7 +1097,8 @@ void processipcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 		q = makeppp(b, sizeof(b), p, l, s, t, PPPIPCP);
 		if (!q) return;
 
-		LOG(3, s, t, "Unexpected IPCP code %s\n", ppp_code(code));
+		LOG(2, s, t, "Unexpected IPCP code %s\n", ppp_code(code));
+		LOG(3, s, t, "IPCP: send %s\n", ppp_code(*q));
 		tunnelsend(b, l + (q - b), t);
 	}
 }
@@ -1127,6 +1145,8 @@ void processipv6cp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 	    	LOG(2, s, t, "IPV6CP %s ignored in %s phase\n", ppp_code(*p), ppp_phase(session[s].ppp.phase));
 		return;
 	}
+
+	LOG(3, s, t, "IPV6CP: recv %s\n", ppp_code(*p));
 
 	if (!config->ipv6_prefix.s6_addr[0])
 	{
@@ -1175,8 +1195,6 @@ void processipv6cp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 		int length = l - 4;
 		int gotip = 0;
 		uint8_t ident[8];
-
-		LOG(3, s, t, "IPV6CP: ConfigReq received\n");
 
 		while (length > 2)
 		{
@@ -1275,15 +1293,15 @@ void processipv6cp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 			return;
 		}
 
-		LOG(3, s, t, "IPV6CP: Sending %s\n", ppp_code(*response));
+		LOG(3, s, t, "IPV6CP: send %s\n", ppp_code(*response));
 		tunnelsend(b, l + (response - b), t);
 	}
 	else if (*p == TerminateReq)
 	{
-		LOG(3, s, t, "IPV6CP: Received TerminateReq.  Sending TerminateAck\n");
 		*p = TerminateAck;
 		q = makeppp(b, sizeof(b),  p, l, s, t, PPPIPV6CP);
 		if (!q) return;
+		LOG(3, s, t, "IPV6CP: Sending %s\n", ppp_code(*response));
 		tunnelsend(b, l + (q - b), t);
 		change_state(s, ipv6cp, Stopped);
 	}
@@ -1300,7 +1318,8 @@ void processipv6cp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 		q = makeppp(b, sizeof(b), p, l, s, t, PPPIPV6CP);
 		if (!q) return;
 
-		LOG(3, s, t, "Unexpected IPV6CP code %s\n", ppp_code(code));
+		LOG(2, s, t, "Unexpected IPV6CP code %s\n", ppp_code(code));
+		LOG(3, s, t, "IPV6CP: Sending %s\n", ppp_code(*response));
 		tunnelsend(b, l + (q - b), t);
 	}
 }
@@ -1550,6 +1569,7 @@ void processccp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 		STAT(tunnel_rx_errors);
 	}
 
+	LOG(3, s, t, "CCP: recv %s\n", ppp_code(*p));
 	if (*p == ConfigAck)
 	{
 		switch (session[s].ppp.ccp)
@@ -1634,15 +1654,15 @@ void processccp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 			return;
 		}
 
-		LOG(3, s, t, "CCP: Sending %s\n", ppp_code(*q));
+		LOG(3, s, t, "CCP: send %s\n", ppp_code(*q));
 		tunnelsend(b, l + (q - b), t);
 	}
 	else if (*p == TerminateReq)
 	{
-		LOG(3, s, t, "CCP: Received TerminateReq.  Sending TerminateAck\n");
 		*p = TerminateAck;
 		q = makeppp(b, sizeof(b),  p, l, s, t, PPPCCP);
 		if (!q) return;
+		LOG(3, s, t, "CCP: send %s\n", ppp_code(*q));
 		tunnelsend(b, l + (q - b), t);
 		change_state(s, ccp, Stopped);
 	}
@@ -1659,7 +1679,8 @@ void processccp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 		q = makeppp(b, sizeof(b), p, l, s, t, PPPCCP);
 		if (!q) return;
 
-		LOG(3, s, t, "Unexpected CCP code %s\n", ppp_code(code));
+		LOG(2, s, t, "Unexpected CCP code %s\n", ppp_code(code));
+		LOG(3, s, t, "CCP: send %s\n", ppp_code(*q));
 		tunnelsend(b, l + (q - b), t);
 	}
 }
