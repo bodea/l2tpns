@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.68 2005-08-10 11:25:56 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.69 2005-08-11 05:50:49 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -472,14 +472,14 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 	if (session[s].die) // going down...
 		return;
 
+	LOG(*p == EchoReq ? 4 : 3, s, t, "LCP: recv %s\n", ppp_code(*p));
+	if (config->debug > 3) dumplcp(p, l);
+
 	if (*p == ConfigAck)
 	{
 		int x = l - 4;
 		uint8_t *o = (p + 4);
 		int authtype = 0;
-
-		LOG(3, s, t, "LCP: ConfigAck (%d bytes)...\n", l);
-		if (config->debug > 3) dumplcp(p, l);
 
 		while (x > 2)
 		{
@@ -540,9 +540,6 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 		static uint8_t asyncmap[4] = { 0, 0, 0, 0 }; // all zero
 		static uint8_t authproto[5];
 
-		LOG(3, s, t, "LCP: ConfigReq (%d bytes)...\n", l);
-		if (config->debug > 3) dumplcp(p, l);
-
 		while (x > 2)
 		{
 			int type = o[0];
@@ -559,7 +556,7 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 					if (!ntohl(*(uint32_t *)(o + 2))) // all bits zero is OK
 						break;
 
-					LOG(2, s, t, "    Remote requesting asyncmap.  Rejecting.\n");
+					LOG(3, s, t, "    Remote requesting asyncmap.  Rejecting.\n");
 					q = ppp_nak(s, b, sizeof(b), PPPLCP, &response, q, p, o, asyncmap, sizeof(asyncmap));
 					break;
 
@@ -593,7 +590,7 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 						else
 							sprintf(proto_name, "%#4.4x", proto);
 
-						LOG(2, s, t, "    Remote requesting %s authentication.  Rejecting.\n", proto_name);
+						LOG(3, s, t, "    Remote requesting %s authentication.  Rejecting.\n", proto_name);
 
 						alen = add_lcp_auth(authproto, sizeof(authproto), config->radius_authprefer);
 						if (alen < 2) break; // paranoia
@@ -622,7 +619,7 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 					break;
 
 				default: // Reject any unknown options
-					LOG(2, s, t, "    Rejecting PPP LCP Option type %d\n", type);
+					LOG(3, s, t, "    Rejecting unknown PPP LCP option %d\n", type);
 					q = ppp_rej(s, b, sizeof(b), PPPLCP, &response, q, p, o);
 			}
 			x -= length;
@@ -691,7 +688,9 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 			return;
 		}
 
-		LOG(3, s, t, "LCP: Sending %s\n", ppp_code(*response));
+		LOG(3, s, t, "LCP: send %s\n", ppp_code(*response));
+		if (config->debug > 3) dumplcp(response, l);
+
 		tunnelsend(b, l + (response - b), t);
 	}
 	else if (*p == ConfigNak)
@@ -699,9 +698,6 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 		int x = l - 4;
 		uint8_t *o = (p + 4);
 		int authtype = -1;
-
-		LOG(3, s, t, "LCP: ConfigNak (%d bytes)...\n", l);
-		if (config->debug > 3) dumplcp(p, l);
 
 		while (x > 2)
 		{
@@ -796,7 +792,6 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 	}
 	else if (*p == TerminateReq)
 	{
-		LOG(3, s, t, "LCP: Received TerminateReq.  Sending TerminateAck\n");
 		*p = TerminateAck;	// close
 		q = makeppp(b, sizeof(b),  p, l, s, t, PPPLCP);
 		if (!q) return;
@@ -823,7 +818,6 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 	}
 	else if (*p == EchoReq)
 	{
-		LOG(5, s, t, "LCP: Received EchoReq.  Sending EchoReply\n");
 		*p = EchoReply;		// reply
 		*(uint32_t *) (p + 4) = htonl(session[s].magic); // our magic number
 		q = makeppp(b, sizeof(b), p, l, s, t, PPPLCP);
@@ -1792,9 +1786,10 @@ void sendlcp(sessionidt s, tunnelidt t, int authtype)
 	if (!(q = makeppp(b, sizeof(b), NULL, 0, s, t, PPPLCP)))
 		return;
 
-	LOG(4, s, t, "Sending LCP ConfigReq%s%s\n",
-	    authtype ? " for " : "",
-	    authtype ? (authtype == AUTHCHAP ? "CHAP" : "PAP") : "");
+	LOG(3, s, t, "LCP: send ConfigReq%s%s%s\n",
+	    authtype ? " (" : "",
+	    authtype ? (authtype == AUTHCHAP ? "CHAP" : "PAP") : "",
+	    authtype ? ")" : "");
 
 	if (!session[s].mru)
 		session[s].mru = DEFAULT_MRU;
@@ -1818,6 +1813,8 @@ void sendlcp(sessionidt s, tunnelidt t, int authtype)
 	*(uint16_t *)(q + 2) = htons(l - q); // Length
 
 	LOG_HEX(5, "PPPLCP", q, l - q);
+	if (config->debug > 3) dumplcp(q, l - q);
+
 	tunnelsend(b, (l - b), t);
 }
 
