@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.119 2005-08-10 11:25:56 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.120 2005-08-11 05:49:03 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -1829,7 +1829,6 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 		uint16_t message = 0xFFFF;	// message type
 		uint8_t fatal = 0;
 		uint8_t mandatory = 0;
-		uint8_t authtype = 0;		// proxy auth type
 		uint16_t asession = 0;		// assigned session
 		uint32_t amagic = 0;		// magic number
 		uint8_t aflags = 0;		// flags from last LCF
@@ -2214,11 +2213,6 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 					{
 						uint16_t atype = ntohs(*(uint16_t *)b);
 						LOG(4, s, t, "   Proxy Auth Type %d (%s)\n", atype, ppp_auth_type(atype));
-						if (atype == 2)
-							authtype = AUTHCHAP;
-						else if (atype == 3)
-							authtype = AUTHPAP;
-
 						break;
 					}
 				case 30:    // Proxy Authentication Name
@@ -2251,10 +2245,6 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 						{
 							if (*p == 5 && p[1] == 6) // Magic-Number
 								amagic = ntohl(*(uint32_t *) (p + 2));
-							else if (*p == 3 && p[1] == 4 && *(uint16_t *) (p + 2) == htons(PPPPAP)) // Authentication-Protocol (PAP)
-								authtype = AUTHPAP;
-							else if (*p == 3 && p[1] == 5 && *(uint16_t *) (p + 2) == htons(PPPCHAP) && p[4] == 5) // Authentication-Protocol (CHAP)
-								authtype = AUTHCHAP;
 							else if (*p == 7) // Protocol-Field-Compression
 								aflags |= SESSIONPFC;
 							else if (*p == 8) // Address-and-Control-Field-Compression
@@ -2386,7 +2376,6 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 					if (amagic == 0) amagic = time_now;
 					session[s].magic = amagic; // set magic number
 					session[s].l2tp_flags = aflags; // set flags received
-					LOG(3, s, t, "Magic %X Flags %X\n", amagic, aflags);
 					controlnull(t); // ack
 
 					// proxy authentication type is not supported
@@ -2394,11 +2383,11 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 						authtype = config->radius_authprefer;
 
 					// start LCP
-					sendlcp(s, t, authtype);
+					sendlcp(s, t, config->radius_authprefer);
 					sess_local[s].lcp.restart = time_now + config->ppp_restart_time;
 					sess_local[s].lcp.conf_sent = 1;
 					sess_local[s].lcp.nak_sent = 0;
-					sess_local[s].lcp_authtype = authtype;
+					sess_local[s].lcp_authtype = config->radius_authprefer;
 					session[s].ppp.lcp = RequestSent;
 
 					break;
