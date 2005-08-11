@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.120 2005-08-11 05:49:03 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.121 2005-08-11 05:50:24 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -2377,10 +2377,6 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 					session[s].magic = amagic; // set magic number
 					session[s].l2tp_flags = aflags; // set flags received
 					controlnull(t); // ack
-
-					// proxy authentication type is not supported
-					if (!(config->radius_authtypes & authtype))
-						authtype = config->radius_authprefer;
 
 					// start LCP
 					sendlcp(s, t, config->radius_authprefer);
