@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.70 2005-08-11 06:18:56 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.71 2005-08-11 06:22:11 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -1301,7 +1301,7 @@ void processipv6cp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 		*p = TerminateAck;
 		q = makeppp(b, sizeof(b),  p, l, s, t, PPPIPV6CP);
 		if (!q) return;
-		LOG(3, s, t, "IPV6CP: Sending %s\n", ppp_code(*response));
+		LOG(3, s, t, "IPV6CP: send %s\n", ppp_code(*q));
 		tunnelsend(b, l + (q - b), t);
 		change_state(s, ipv6cp, Stopped);
 	}
@@ -1319,7 +1319,7 @@ void processipv6cp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 		if (!q) return;
 
 		LOG(2, s, t, "Unexpected IPV6CP code %s\n", ppp_code(code));
-		LOG(3, s, t, "IPV6CP: Sending %s\n", ppp_code(*response));
+		LOG(3, s, t, "IPV6CP: send %s\n", ppp_code(*q));
 		tunnelsend(b, l + (q - b), t);
 	}
 }
@@ -1847,7 +1847,8 @@ void sendccp(sessionidt s, tunnelidt t)
 	if (!(q = makeppp(b, sizeof(b), NULL, 0, s, t, PPPCCP)))
 		return;
 
-	LOG(4, s, t, "Sending CCP ConfigReq for no compression\n");
+	LOG(3, s, t, "CCP: send ConfigReq (no compression)\n");
+
 	*q = ConfigReq;
 	*(uint8_t *)(q + 1) = (time_now % 255) + 1; // ID
 	*(uint16_t *)(q + 2) = htons(4); // Length
