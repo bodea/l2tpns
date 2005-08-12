@@ -1,6 +1,6 @@
 // L2TPNS Radius Stuff
 
-char const *cvs_id_radius = "$Id: radius.c,v 1.39 2005-08-10 11:25:56 bodea Exp $";
+char const *cvs_id_radius = "$Id: radius.c,v 1.40 2005-08-12 13:48:19 bodea Exp $";
 
 #include <time.h>
 #include <stdio.h>
@@ -13,7 +13,7 @@ char const *cvs_id_radius = "$Id: radius.c,v 1.39 2005-08-10 11:25:56 bodea Exp 
 #include <ctype.h>
 #include <netinet/in.h>
 #include <errno.h>
-#include <openssl/md5.h>
+#include "md5.h"
 #include "constants.h"
 #include "l2tpns.h"
 #include "plugin.h"
