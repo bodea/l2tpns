@@ -23,7 +23,7 @@ LDFLAGS =
 LDLIBS =
 INSTALL = install -c -D -o root -g root
 
-l2tpns.LIBS = -lcrypto -lm -lcli -ldl
+l2tpns.LIBS = -lm -lcli -ldl
 
 OBJS = arp.o cli.o cluster.o constants.o control.o icmp.o l2tpns.o \
     ll.o md5.o ppp.o radius.o tbf.o util.o
