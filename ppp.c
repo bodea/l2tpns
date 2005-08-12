@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.71 2005-08-11 06:22:11 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.72 2005-08-12 08:18:46 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -85,8 +85,7 @@ void processpap(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 		LOG(3, s, t, "PAP login %s/%s\n", user, pass);
 	}
 
-	r = radiusnew(s);
-	if (session[s].ip || !r)
+	if (session[s].ip || !(r = radiusnew(s)))
 	{
 		// respond now, either no RADIUS available or already authenticated
 		uint8_t b[MAXCONTROL];
