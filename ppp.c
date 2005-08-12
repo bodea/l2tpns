@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.72 2005-08-12 08:18:46 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.73 2005-08-12 14:12:28 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -427,7 +427,7 @@ static uint8_t *ppp_nak(sessionidt s, uint8_t *buf, size_t blen, uint16_t mtype,
 		if (!queued)
 			return 0;
 
-		*nak_sent++;
+		(*nak_sent)++;
 		*queued = ConfigNak;
 		queued += 4;
 	}
