@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.122 2005-08-11 06:18:56 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.123 2005-08-12 08:35:16 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -2717,7 +2717,7 @@ static void regular_cleanups(double period)
 					LOG(3, s, session[s].tunnel, "No ACK for LCP ConfigReq... resending\n");
 					sess_local[s].lcp.restart = time_now + config->ppp_restart_time;
 					sess_local[s].lcp.conf_sent++;
-					sendlcp(s, t, sess_local[s].lcp_authtype);
+					sendlcp(s, session[s].tunnel, sess_local[s].lcp_authtype);
 					change_state(s, lcp, next_state);
 				}
 				else
@@ -2748,7 +2748,7 @@ static void regular_cleanups(double period)
 					LOG(3, s, session[s].tunnel, "No ACK for IPCP ConfigReq... resending\n");
 					sess_local[s].ipcp.restart = time_now + config->ppp_restart_time;
 					sess_local[s].ipcp.conf_sent++;
-					sendipcp(s, t);
+					sendipcp(s, session[s].tunnel);
 					change_state(s, ipcp, next_state);
 				}
 				else
@@ -2779,7 +2779,7 @@ static void regular_cleanups(double period)
 					LOG(3, s, session[s].tunnel, "No ACK for IPV6CP ConfigReq... resending\n");
 					sess_local[s].ipv6cp.restart = time_now + config->ppp_restart_time;
 					sess_local[s].ipv6cp.conf_sent++;
-					sendipv6cp(s, t);
+					sendipv6cp(s, session[s].tunnel);
 					change_state(s, ipv6cp, next_state);
 				}
 				else
@@ -2807,7 +2807,7 @@ static void regular_cleanups(double period)
 					LOG(3, s, session[s].tunnel, "No ACK for CCP ConfigReq... resending\n");
 					sess_local[s].ccp.restart = time_now + config->ppp_restart_time;
 					sess_local[s].ccp.conf_sent++;
-					sendccp(s, t);
+					sendccp(s, session[s].tunnel);
 					change_state(s, ccp, next_state);
 				}
 				else
