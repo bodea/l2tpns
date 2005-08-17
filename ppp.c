@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.73 2005-08-12 14:12:28 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.74 2005-08-17 03:56:27 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -959,8 +959,9 @@ void processipcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 				addr = htonl(session[s].ip);
 				if (memcmp(o + 2, &addr, (sizeof addr)))
 				{
+					uint8_t *oq = q;
 					q = ppp_nak(s, b, sizeof(b), PPPIPCP, &response, q, p, o, (uint8_t *) &addr, sizeof(addr));
-					if (!q || *response == ConfigRej)
+					if (!q || (q != oq && *response == ConfigRej))
 					{
 						sessionshutdown(s, "Can't negotiate IPCP.", 3, 0);
 						return;
