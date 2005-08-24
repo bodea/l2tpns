@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.74 2005-08-17 03:56:27 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.75 2005-08-24 23:44:08 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -147,13 +147,6 @@ void processchap(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 	CSTAT(processchap);
 
 	LOG_HEX(5, "CHAP", p, l);
-	r = sess_local[s].radius;
-	if (!r)
-	{
-		LOG(1, s, t, "Unexpected CHAP message\n");
-		STAT(tunnel_rx_errors);
-		return;
-	}
 
 	if (l < 4)
 	{
@@ -177,6 +170,13 @@ void processchap(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 		LOG(1, s, t, "Unexpected CHAP response code %d\n", *p);
 		STAT(tunnel_rx_errors);
 		sessionshutdown(s, "CHAP length mismatch.", 3, 0);
+		return;
+	}
+
+	r = sess_local[s].radius;
+	if (!r)
+	{
+		LOG(3, s, t, "Unexpected CHAP message\n");
 		return;
 	}
 

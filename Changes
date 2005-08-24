@@ -1,3 +1,6 @@
+* Thu Aug 25 2005 Brendan O'Dea <bod@optus.net> 2.1.4
+- Drop level of "Unexpected CHAP message" log.
+
 * Wed Aug 17 2005 Brendan O'Dea <bod@optus.net> 2.1.3
 - Fail IPCP negotiation only on ConfigRej of IP-Address.
 
