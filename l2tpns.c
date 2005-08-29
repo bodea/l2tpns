@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.124 2005-08-29 06:17:53 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.125 2005-08-29 11:24:31 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -2294,7 +2294,7 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 						controlt *c = controlnew(2); // sending SCCRP
 						control16(c, 2, version, 1); // protocol version
 						control32(c, 3, 3, 1); // framing
-						controls(c, 7, tunnel[t].hostname, 1); // host name (TBA)
+						controls(c, 7, hostname, 1); // host name
 						if (chapresponse) controlb(c, 13, chapresponse, 16, 1); // Challenge response
 						control16(c, 9, t, 1); // assigned tunnel
 						controladd(c, 0, t); // send the resply
