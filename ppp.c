@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.75 2005-08-24 23:44:08 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.76 2005-08-29 03:21:14 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -813,16 +813,26 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 	}
 	else if (*p == ProtocolRej)
 	{
-		if (*(uint16_t *) (p+4) == htons(PPPIPV6CP))
+	    	uint16_t proto = 0;
+
+		if (l > 4)
+		{
+			proto = *(p+4);
+			if (l > 5 && !(proto & 1))
+			{
+				proto <<= 8;
+				proto |= *(p+5);
+			}
+		}
+
+		if (proto == PPPIPV6CP)
 		{
 			LOG(3, s, t, "IPv6 rejected\n");
 			change_state(s, ipv6cp, Closed);
 		}
 		else
 		{
-			LOG(1, s, t, "Unexpected LCP protocol reject 0x%X\n",
-				ntohs(*(uint16_t *) (p+4)));
-			STAT(tunnel_rx_errors);
+			LOG(3, s, t, "LCP protocol reject: 0x%04X\n", proto);
 		}
 	}
 	else if (*p == EchoReq)
