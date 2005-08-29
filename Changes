@@ -1,6 +1,7 @@
 * Mon Aug 29 2005 Brendan O'Dea <bod@optus.net> 2.1.4
 - Drop level of "Unexpected CHAP message" log.
 - Fix parsing of ProtocolRej (allow 1 or two byte protocols).
+- Handle rejection of MRU negotiation by peer.
 
 * Wed Aug 17 2005 Brendan O'Dea <bod@optus.net> 2.1.3
 - Fail IPCP negotiation only on ConfigRej of IP-Address.

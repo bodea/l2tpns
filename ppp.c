@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.76 2005-08-29 03:21:14 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.77 2005-08-29 06:17:53 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -521,7 +521,7 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 			if (session[s].ppp.lcp == Opened)
 				lcp_restart(s);
 
-			sendlcp(s, t, sess_local[s].lcp_authtype);
+			sendlcp(s, t);
 			change_state(s, lcp, RequestSent);
 			break;
 
@@ -651,7 +651,7 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 
 		case Stopped:
 		    	initialise_restart_count(s, lcp);
-			sendlcp(s, t, sess_local[s].lcp_authtype);
+			sendlcp(s, t);
 			if (*response == ConfigAck)
 				change_state(s, lcp, AckSent);
 			else
@@ -673,7 +673,7 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 
 		case Opened:
 		    	lcp_restart(s);
-			sendlcp(s, t, sess_local[s].lcp_authtype);
+			sendlcp(s, t);
 			/* fallthrough */
 
 		case AckSent:
@@ -694,7 +694,7 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 
 		tunnelsend(b, l + (response - b), t);
 	}
-	else if (*p == ConfigNak)
+	else if (*p == ConfigNak || *p == ConfigRej)
 	{
 		int x = l - 4;
 		uint8_t *o = (p + 4);
@@ -709,14 +709,24 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 			switch (type)
 			{
 				case 1: // Maximum-Receive-Unit
-					session[s].mru = ntohs(*(uint16_t *)(o + 2));
-					LOG(3, s, t, "    Remote requested MRU of %u\n", session[s].mru);
+					if (*p == ConfigNak)
+					{
+						session[s].mru = ntohs(*(uint16_t *)(o + 2));
+						LOG(3, s, t, "    Remote requested MRU of %u\n", session[s].mru);
+					}
+					else
+					{
+						session[s].mru = 0;
+						LOG(3, s, t, "    Remote rejected MRU negotiation\n");
+					}
+
 					break;
 
 				case 3: // Authentication-Protocol
 					if (authtype > 0)
 						break;
 
+					if (*p == ConfigNak)
 					{
 						int proto = ntohs(*(uint16_t *)(o + 2));
 						if (proto == PPPPAP)
@@ -737,11 +747,16 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 								proto);
 						}
 					}
+					else
+					{
+						LOG(2, s, t, "LCP: remote rejected auth negotiation\n");
+					    	authtype = 0; // shutdown
+					}
 
 					break;
 
 				default:
-				    	LOG(2, s, t, "    Remote NAKed LCP type %u?\n", type);
+				    	LOG(2, s, t, "LCP: remote sent %s for type %u?\n", ppp_code(*p), type);
 					break;
 			}
 			x -= length;
@@ -777,17 +792,17 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 		case RequestSent:
 		case AckSent:
 		    	initialise_restart_count(s, lcp);
-			sendlcp(s, t, sess_local[s].lcp_authtype);
+			sendlcp(s, t);
 			break;
 
 		case AckReceived:
 		    	LOG(2, s, t, "LCP: ConfigNak in state %s?  Sending ConfigReq\n", ppp_state(session[s].ppp.lcp));
-			sendlcp(s, t, sess_local[s].lcp_authtype);
+			sendlcp(s, t);
 			break;
 
 		case Opened:
 		    	lcp_restart(s);
-			sendlcp(s, t, sess_local[s].lcp_authtype);
+			sendlcp(s, t);
 			break;
 
 		default:
@@ -1810,9 +1825,10 @@ static int add_lcp_auth(uint8_t *b, int size, int authtype)
 }
 
 // Send initial LCP ConfigReq for MRU, authentication type and magic no
-void sendlcp(sessionidt s, tunnelidt t, int authtype)
+void sendlcp(sessionidt s, tunnelidt t)
 {
 	uint8_t b[500], *q, *l;
+	int authtype = sess_local[s].lcp_authtype;
 
 	if (!(q = makeppp(b, sizeof(b), NULL, 0, s, t, PPPLCP)))
 		return;
@@ -1822,17 +1838,17 @@ void sendlcp(sessionidt s, tunnelidt t, int authtype)
 	    authtype ? (authtype == AUTHCHAP ? "CHAP" : "PAP") : "",
 	    authtype ? ")" : "");
 
-	if (!session[s].mru)
-		session[s].mru = DEFAULT_MRU;
-
 	l = q;
 	*l++ = ConfigReq;
 	*l++ = (time_now % 255) + 1; // ID
 
 	l += 2; //Save space for length
 
-	*l++ = 1; *l++ = 4; // Maximum-Receive-Unit (length 4)
-	*(uint16_t *) l = htons(session[s].mru); l += 2;
+	if (session[s].mru)
+	{
+		*l++ = 1; *l++ = 4; // Maximum-Receive-Unit (length 4)
+		*(uint16_t *) l = htons(session[s].mru); l += 2;
+	}
 
 	if (authtype)
 		l += add_lcp_auth(l, sizeof(b) - (l - b), authtype);

@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.123 2005-08-12 08:35:16 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.124 2005-08-29 06:17:53 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -2378,15 +2378,16 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 					if (amagic == 0) amagic = time_now;
 					session[s].magic = amagic; // set magic number
 					session[s].l2tp_flags = aflags; // set flags received
+					session[s].mru = DEFAULT_MRU;
 					controlnull(t); // ack
 
 					// start LCP
-					sendlcp(s, t, config->radius_authprefer);
 					sess_local[s].lcp.restart = time_now + config->ppp_restart_time;
 					sess_local[s].lcp.conf_sent = 1;
 					sess_local[s].lcp.nak_sent = 0;
 					sess_local[s].lcp_authtype = config->radius_authprefer;
 					session[s].ppp.lcp = RequestSent;
+					sendlcp(s, t);
 
 					break;
 				case 14:      // CDN
@@ -2717,7 +2718,7 @@ static void regular_cleanups(double period)
 					LOG(3, s, session[s].tunnel, "No ACK for LCP ConfigReq... resending\n");
 					sess_local[s].lcp.restart = time_now + config->ppp_restart_time;
 					sess_local[s].lcp.conf_sent++;
-					sendlcp(s, session[s].tunnel, sess_local[s].lcp_authtype);
+					sendlcp(s, session[s].tunnel);
 					change_state(s, lcp, next_state);
 				}
 				else
