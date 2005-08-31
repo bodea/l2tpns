@@ -1,3 +1,6 @@
+* Wed Aug 31 2005 Brendan O'Dea <bod@optus.net> 2.1.5
+- Avoid Code-Reject loop.
+
 * Mon Aug 29 2005 Brendan O'Dea <bod@optus.net> 2.1.4
 - Drop level of "Unexpected CHAP message" log.
 - Fix parsing of ProtocolRej (allow 1 or two byte protocols).

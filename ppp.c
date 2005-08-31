@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.77 2005-08-29 06:17:53 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.78 2005-08-31 12:38:38 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -866,7 +866,7 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 	{
 		// Ignore it, last_packet time is set earlier than this.
 	}
-	else
+	else if (*p != CodeRej)
 	{
 		int code = *p;
 		int mru = session[s].mru;
@@ -1109,7 +1109,7 @@ void processipcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 		tunnelsend(b, l + (q - b), t);
 		change_state(s, ipcp, Stopped);
 	}
-	else
+	else if (*p != CodeRej)
 	{
 		int code = *p;
 		int mru = session[s].mru;
@@ -1330,7 +1330,7 @@ void processipv6cp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 		tunnelsend(b, l + (q - b), t);
 		change_state(s, ipv6cp, Stopped);
 	}
-	else
+	else if (*p != CodeRej)
 	{
 		int code = *p;
 		int mru = session[s].mru;
@@ -1627,7 +1627,7 @@ void processccp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 		else // compression requested--reject
 			*p = ConfigRej;
 
-		q = makeppp(b, sizeof(b), p, l, s, t, PPPCCP);
+		q = makeppp(b,sizeof(b), p, l, s, t, PPPCCP);
 		if (!q) return;
 
 		switch (session[s].ppp.ccp)
@@ -1691,7 +1691,7 @@ void processccp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 		tunnelsend(b, l + (q - b), t);
 		change_state(s, ccp, Stopped);
 	}
-	else
+	else if (*p != CodeRej)
 	{
 		int code = *p;
 		int mru = session[s].mru;
