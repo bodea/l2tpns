@@ -1,6 +1,6 @@
 // L2TPNS Radius Stuff
 
-char const *cvs_id_radius = "$Id: radius.c,v 1.40 2005-08-12 13:48:19 bodea Exp $";
+char const *cvs_id_radius = "$Id: radius.c,v 1.41 2005-08-31 12:41:09 bodea Exp $";
 
 #include <time.h>
 #include <stdio.h>
@@ -414,7 +414,7 @@ static void handle_avpair(sessionidt s, uint8_t *avp, int len)
 // process RADIUS response
 void processrad(uint8_t *buf, int len, char socket_index)
 {
-	uint8_t b[MAXCONTROL];
+	uint8_t b[MAXETHER];
 	MD5_CTX ctx;
 	uint16_t r;
 	sessionidt s;

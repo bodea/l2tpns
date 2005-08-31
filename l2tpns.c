@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.125 2005-08-29 11:24:31 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.126 2005-08-31 12:41:09 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -1580,7 +1580,7 @@ void sessionshutdown(sessionidt s, char *reason, int result, int error)
 
 void sendipcp(sessionidt s, tunnelidt t)
 {
-	uint8_t buf[MAXCONTROL];
+	uint8_t buf[MAXETHER];
 	uint8_t *q;
 
 	CSTAT(sendipcp);
@@ -1592,7 +1592,7 @@ void sendipcp(sessionidt s, tunnelidt t)
 		session[s].unique_id = last_id;
 	}
 
-	q = makeppp(buf,sizeof(buf), 0, 0, s, t, PPPIPCP);
+	q = makeppp(buf, sizeof(buf), 0, 0, s, t, PPPIPCP);
 	if (!q) return;
 
 	*q = ConfigReq;
@@ -1609,13 +1609,13 @@ void sendipcp(sessionidt s, tunnelidt t)
 
 void sendipv6cp(sessionidt s, tunnelidt t)
 {
-	uint8_t buf[MAXCONTROL];
+	uint8_t buf[MAXETHER];
 	uint8_t *q;
 
 	CSTAT(sendipv6cp);
 	LOG(3, s, t, "IPV6CP: send ConfigReq\n");
 
-	q = makeppp(buf,sizeof(buf), 0, 0, s, t, PPPIPV6CP);
+	q = makeppp(buf, sizeof(buf), 0, 0, s, t, PPPIPV6CP);
 	if (!q) return;
 
 	*q = ConfigReq;
@@ -2833,7 +2833,7 @@ static void regular_cleanups(double period)
 		// No data in ECHO_TIMEOUT seconds, send LCP ECHO
 		if (session[s].ppp.phase >= Establish && (time_now - session[s].last_packet >= ECHO_TIMEOUT))
 		{
-			uint8_t b[MAXCONTROL] = {0};
+			uint8_t b[MAXETHER];
 
 			uint8_t *q = makeppp(b, sizeof(b), 0, 0, s, session[s].tunnel, PPPLCP);
 			if (!q) continue;

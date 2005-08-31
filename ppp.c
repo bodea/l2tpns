@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.78 2005-08-31 12:38:38 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.79 2005-08-31 12:41:09 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -88,7 +88,7 @@ void processpap(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 	if (session[s].ip || !(r = radiusnew(s)))
 	{
 		// respond now, either no RADIUS available or already authenticated
-		uint8_t b[MAXCONTROL];
+		uint8_t b[MAXETHER];
 		uint8_t id = p[1];
 		uint8_t *p = makeppp(b, sizeof(b), 0, 0, s, t, PPPPAP);
 		if (!p) return;
@@ -447,7 +447,7 @@ static uint8_t *ppp_nak(sessionidt s, uint8_t *buf, size_t blen, uint16_t mtype,
 // Process LCP messages
 void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 {
-	uint8_t b[MAXCONTROL];
+	uint8_t b[MAXETHER];
 	uint8_t *q = NULL;
 	uint32_t magicno = 0;
 	uint16_t hl;
@@ -911,7 +911,7 @@ static void ipcp_open(sessionidt s, tunnelidt t)
 // Process IPCP messages
 void processipcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 {
-	uint8_t b[MAXCONTROL];
+	uint8_t b[MAXETHER];
 	uint8_t *q = 0;
 	uint16_t hl;
 
@@ -1143,7 +1143,7 @@ static void ipv6cp_open(sessionidt s, tunnelidt t)
 // Process IPV6CP messages
 void processipv6cp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 {
-	uint8_t b[MAXCONTROL];
+	uint8_t b[MAXETHER];
 	uint8_t *q = 0;
 	uint16_t hl;
 
@@ -1575,7 +1575,7 @@ void send_ipin(sessionidt s, uint8_t *buf, int len)
 // Process CCP messages
 void processccp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 {
-	uint8_t b[MAXCONTROL];
+	uint8_t b[MAXETHER];
 	uint8_t *q;
 
 	CSTAT(processccp);
@@ -1627,7 +1627,7 @@ void processccp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 		else // compression requested--reject
 			*p = ConfigRej;
 
-		q = makeppp(b,sizeof(b), p, l, s, t, PPPCCP);
+		q = makeppp(b, sizeof(b), p, l, s, t, PPPCCP);
 		if (!q) return;
 
 		switch (session[s].ppp.ccp)
@@ -1713,7 +1713,7 @@ void processccp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 // send a CHAP challenge
 void sendchap(sessionidt s, tunnelidt t)
 {
-	uint8_t b[MAXCONTROL];
+	uint8_t b[MAXETHER];
 	uint16_t r;
 	uint8_t *q;
 
