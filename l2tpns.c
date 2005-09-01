@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.126 2005-08-31 12:41:09 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.127 2005-09-01 06:59:06 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -2645,7 +2645,7 @@ static void regular_cleanups(double period)
 			}
 		}
 		// Send hello
-		if (tunnel[t].state == TUNNELOPEN && tunnel[t].lastrec < TIME + 600)
+		if (tunnel[t].state == TUNNELOPEN && (time_now - tunnel[t].lastrec) > 60)
 		{
 			controlt *c = controlnew(6); // sending HELLO
 			controladd(c, 0, t); // send the message
