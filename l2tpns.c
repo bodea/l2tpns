@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.127 2005-09-01 06:59:06 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.128 2005-09-02 23:59:56 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -135,6 +135,7 @@ config_descriptt config_values[] = {
 	CONFIG("packet_limit", max_packets, INT),
 	CONFIG("cluster_address", cluster_address, IPv4),
 	CONFIG("cluster_interface", cluster_interface, STRING),
+	CONFIG("cluster_mcast_ttl", cluster_mcast_ttl, INT),
 	CONFIG("cluster_hb_interval", cluster_hb_interval, INT),
 	CONFIG("cluster_hb_timeout", cluster_hb_timeout, INT),
  	CONFIG("cluster_master_min_adv", cluster_master_min_adv, INT),
@@ -3469,6 +3470,7 @@ static void initdata(int optdebug, char *optconfig)
 	config->debug = optdebug;
 	config->num_tbfs = MAXTBFS;
 	config->rl_rate = 28; // 28kbps
+	config->cluster_mcast_ttl = 1;
  	config->cluster_master_min_adv = 1;
 	config->ppp_restart_time = 3;
 	config->ppp_max_configure = 10;

@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.86 2005-08-31 12:38:38 bodea Exp $
+// $Id: l2tpns.h,v 1.87 2005-09-02 23:59:56 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -570,6 +570,7 @@ typedef struct
 	int		cluster_last_hb_ver;		// Heartbeat version last seen from master
 	int		cluster_num_changes;		// Number of changes queued.
 
+	int		cluster_mcast_ttl;		// TTL for multicast packets
 	int		cluster_hb_interval;		// How often to send a heartbeat.
 	int		cluster_hb_timeout;		// How many missed heartbeats trigger an election.
 	uint64_t	cluster_table_version;		// # state changes processed by cluster

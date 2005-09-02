@@ -3,6 +3,8 @@
 - Increase size of PPP buffers to MAXETHER.
 - Bug fixes for CLI ringbuffer and tunnel HELLO from Yuri.
 - Restart rather than halt BGP on receipt of CEASE (Dominique Rousseau).
+- Add cluster_mcast_ttl option to allow a cluster to span multiple
+  subnets (suggested by Tim Devries).
 
 * Mon Aug 29 2005 Brendan O'Dea <bod@optus.net> 2.1.4
 - Drop level of "Unexpected CHAP message" log.

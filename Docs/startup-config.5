@@ -2,7 +2,7 @@
 .de Id
 .ds Dt \\$4 \\$5
 ..
-.Id $Id: startup-config.5,v 1.12 2005-07-31 10:04:14 bodea Exp $
+.Id $Id: startup-config.5,v 1.13 2005-09-02 23:59:56 bodea Exp $
 .TH STARTUP-CONFIG 5 "\*(Dt" L2TPNS "File Formats and Conventions"
 .SH NAME
 startup\-config \- configuration file for l2tpns
@@ -193,6 +193,9 @@ Multicast cluster address (default: 239.192.13.13).
 .TP
 .B cluster_interface
 Interface for cluster packets (default: eth0).
+.TP
+.B cluster_mcast_ttl
+TTL for multicast packets (default: 1).
 .TP
 .B cluster_hb_interval
 Interval in tenths of a second between cluster heartbeat/pings.

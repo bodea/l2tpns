@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.45 2005-07-31 10:04:09 bodea Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.46 2005-09-02 23:59:56 bodea Exp $";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -126,6 +126,15 @@ int cluster_init()
 
 	opt = 0;	// Turn off multicast loopback.
 	setsockopt(cluster_sockfd, IPPROTO_IP, IP_MULTICAST_LOOP, &opt, sizeof(opt));
+
+	if (config->cluster_mcast_ttl != 1)
+	{
+		uint8_t ttl = 0;
+		if (config->cluster_mcast_ttl > 0)
+			ttl = config->cluster_mcast_ttl < 256 ? config->cluster_mcast_ttl : 255;
+
+		setsockopt(cluster_sockfd, IPPROTO_IP, IP_MULTICAST_TTL, &ttl, sizeof(ttl));
+	}
 
 	if (setsockopt(cluster_sockfd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0)
 	{
