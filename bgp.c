@@ -10,7 +10,7 @@
  *   nor RFC2385 (which requires a kernel patch on 2.4 kernels).
  */
 
-char const *cvs_id_bgp = "$Id: bgp.c,v 1.11 2005-07-31 10:04:09 bodea Exp $";
+char const *cvs_id_bgp = "$Id: bgp.c,v 1.12 2005-09-02 23:39:36 bodea Exp $";
 
 #include <stdlib.h>
 #include <unistd.h>
@@ -996,7 +996,7 @@ static int bgp_handle_input(struct bgp_peer *peer)
 	    if (notification->error_code == BGP_ERR_CEASE)
 	    {
 		LOG(4, 0, 0, "BGP peer %s sent CEASE\n", peer->name);
-		bgp_halt(peer);
+		bgp_restart(peer);
 		return 0;
 	    }
 
