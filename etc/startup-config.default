@@ -83,6 +83,9 @@ set accounting_dir "/var/run/l2tpns/acct"
 #set cluster_address 239.192.13.13
 #set cluster_interface eth0
 
+# Cluster multicast TTL
+#set cluster_mcast_ttl 1
+
 # Cluster timers (1/10th second)
 #set cluster_hb_interval 5
 #set cluster_hb_timeout 150
