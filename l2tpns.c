@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.128 2005-09-02 23:59:56 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.129 2005-09-12 05:16:42 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -1827,6 +1827,11 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 		return;
 	}
 	l -= (p - buf);
+
+	// used to time out old tunnels
+	if (t && tunnel[t].state == TUNNELOPEN)
+		tunnel[t].lastrec = time_now;
+
 	if (*buf & 0x80)
 	{                          // control
 		uint16_t message = 0xFFFF;	// message type
@@ -1913,9 +1918,6 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 				controlnull(t);
 			return;
 		}
-
-		// This is used to time out old tunnels
-		tunnel[t].lastrec = time_now;
 
 		// check sequence of this message
 		{
