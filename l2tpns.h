@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.88 2005-09-12 05:16:42 bodea Exp $
+// $Id: l2tpns.h,v 1.89 2005-09-13 14:23:07 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -31,7 +31,8 @@
 #define T_FREE		(0)		// A tunnel ID that won't ever be used. Mark session as free.
 
 #define	MAXCONTROL	1000		// max length control message we ever send...
-#define	MAXETHER	(1500+18)	// max packet we try sending to tun
+#define MAXMRU		1500		// max MRU as defined by RFC1661
+#define	MAXETHER	(MAXMRU+18)	// max packet we try sending to tun
 #define	MAXTEL		96		// telephone number
 #define MAXUSER		128		// username
 #define MAXPASS		128		// password
@@ -285,6 +286,9 @@ typedef struct
 		int conf_sent;
 		int nak_sent;
 	} lcp, ipcp, ipv6cp, ccp;
+
+	// identifier for Protocol-Reject, Code-Reject
+	uint8_t lcp_ident;
 
 	// authentication to use
 	int lcp_authtype;

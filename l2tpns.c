@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.129 2005-09-12 05:16:42 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.130 2005-09-13 14:23:07 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -2483,7 +2483,7 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 			if (!config->cluster_iam_master) { master_forward_packet(buf, len, addr->sin_addr.s_addr, addr->sin_port); return; }
 			processipcp(s, t, p, l);
 		}
-		else if (prot == PPPIPV6CP)
+		else if (prot == PPPIPV6CP && config->ipv6_prefix.s6_addr[0])
 		{
 			session[s].last_packet = time_now;
 			if (!config->cluster_iam_master) { master_forward_packet(buf, len, addr->sin_addr.s_addr, addr->sin_port); return; }
@@ -2512,13 +2512,8 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 
 			processipin(s, t, p, l);
 		}
-		else if (prot == PPPIPV6)
+		else if (prot == PPPIPV6 && config->ipv6_prefix.s6_addr[0])
 		{
-			if (!config->ipv6_prefix.s6_addr[0])
-			{
-				LOG(1, s, t, "IPv6 not configured; yet received IPv6 packet. Ignoring.\n");
-				return;
-			}
 			if (session[s].die)
 			{
 				LOG(4, s, t, "Session %d is closing.  Don't process PPP packets\n", s);
@@ -2534,10 +2529,40 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 
 			processipv6in(s, t, p, l);
 		}
+		else if (session[s].ppp.lcp == Opened)
+		{
+			uint8_t
+			uint8_t *q;
+			int mru = session[s].mru;
+
+			if (!mru) mru = MAXMRU;
+			if (mru > size) mru = size;
+
+			l += 6;
+			if (l > mru) l = mru;
+
+			q = makeppp(buf, size, 0, 0, s, t, proto);
+			if (!q) return;
+
+			*q = CodeRej;
+			*(q + 1) = ++sess_local[s].lcp_ident;
+			*(uint16_t *)(q + 2) = l;
+			*(uint16_t *)(q + 4) = htons(proto);
+			memcpy(q + 6, p, l - 6);
+
+			if (prot == PPPIPV6CP)
+				LOG(3, s, t, "LCP: send ProtocolRej (IPV6CP: not configured)\n");
+			else
+				LOG(2, s, t, "LCP: sent ProtocolRej (0x%04X: unsupported)\n", prot);
+
+			if (config->debug > 3) dumplcp(q, l);
+
+			tunnelsend(buf, l + (q - buf), t);
+		}
 		else
 		{
-			STAT(tunnel_rx_errors);
-			LOG(1, s, t, "Unknown PPP protocol %04X\n", prot);
+			LOG(2, s, t, "Unknown PPP protocol 0x%04X received in LCP %s state\n",
+				prot, ppp_state(session[s].ppp.lcp));
 		}
 	}
 }

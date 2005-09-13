@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.79 2005-08-31 12:41:09 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.80 2005-09-13 14:23:07 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -300,7 +300,7 @@ static void dumplcp(uint8_t *p, int l)
 				else if (length == 5)
 				{
 					int proto = ntohs(*(uint16_t *)(o + 2));
-					int algo = *(uint8_t *)(o + 4);
+					int algo = *(o + 4);
 					LOG(4, 0, 0, "    %s 0x%x 0x%x (%s)\n", ppp_lcp_option(type), proto, algo,
 						(proto == PPPCHAP && algo == 5) ? "CHAP MD5"  : "UNSUPPORTED");
 				}
@@ -374,7 +374,7 @@ static void lcp_restart(sessionidt s)
 	change_state(s, ccp, Dead);
 }
 
-static uint8_t *ppp_rej(sessionidt s, uint8_t *buf, size_t blen, uint16_t mtype,
+static uint8_t *ppp_conf_rej(sessionidt s, uint8_t *buf, size_t blen, uint16_t mtype,
 	uint8_t **response, uint8_t *queued, uint8_t *packet, uint8_t *option)
 {
 	if (!*response || **response != ConfigRej)
@@ -397,7 +397,7 @@ static uint8_t *ppp_rej(sessionidt s, uint8_t *buf, size_t blen, uint16_t mtype,
 	return queued + option[1];
 }
 
-static uint8_t *ppp_nak(sessionidt s, uint8_t *buf, size_t blen, uint16_t mtype,
+static uint8_t *ppp_conf_nak(sessionidt s, uint8_t *buf, size_t blen, uint16_t mtype,
 	uint8_t **response, uint8_t *queued, uint8_t *packet, uint8_t *option,
 	uint8_t *value, size_t vlen)
 {
@@ -415,13 +415,13 @@ static uint8_t *ppp_nak(sessionidt s, uint8_t *buf, size_t blen, uint16_t mtype,
 	    	if (*nak_sent < config->ppp_max_failure) // reject queued
 			return queued;
 
-		return ppp_rej(s, buf, blen, mtype, response, 0, packet, option);
+		return ppp_conf_rej(s, buf, blen, mtype, response, 0, packet, option);
 	}
 
 	if (!*response)
 	{
 	    	if (*nak_sent >= config->ppp_max_failure)
-			return ppp_rej(s, buf, blen, mtype, response, 0, packet, option);
+			return ppp_conf_rej(s, buf, blen, mtype, response, 0, packet, option);
 
 		queued = *response = makeppp(buf, blen, packet, 2, s, session[s].tunnel, mtype);
 		if (!queued)
@@ -442,6 +442,33 @@ static uint8_t *ppp_nak(sessionidt s, uint8_t *buf, size_t blen, uint16_t mtype,
 	*queued++ = vlen + 2;
 	memcpy(queued, value, vlen);
 	return queued + vlen;
+}
+
+static void ppp_code_rej(sessionidt s, tunnelidt t, uint16_t proto,
+	char *pname, uint8_t *p, uint16_t l, uint8_t *buf, size_t size)
+{
+	uint8_t *q;
+	int mru = session[s].mru;
+
+	if (!mru) mru = MAXMRU;
+	if (mru > size) mru = size;
+
+	l += 4;
+	if (l > mru) l = mru;
+
+	q = makeppp(buf, size, 0, 0, s, t, proto);
+	if (!q) return;
+
+	*q = CodeRej;
+	*(q + 1) = ++sess_local[s].lcp_ident;
+	*(uint16_t *)(q + 2) = l;
+	memcpy(q + 4, p, l - 4);
+
+	LOG(2, s, t, "Unexpected %s code %s\n", pname, ppp_code(*p));
+	LOG(3, s, t, "%s: send %s\n", pname, ppp_code(*q));
+	if (config->debug > 3) dumplcp(q, l);
+
+	tunnelsend(buf, l + (q - buf), t);
 }
 
 // Process LCP messages
@@ -558,7 +585,7 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 						break;
 
 					LOG(3, s, t, "    Remote requesting asyncmap.  Rejecting.\n");
-					q = ppp_nak(s, b, sizeof(b), PPPLCP, &response, q, p, o, asyncmap, sizeof(asyncmap));
+					q = ppp_conf_nak(s, b, sizeof(b), PPPLCP, &response, q, p, o, asyncmap, sizeof(asyncmap));
 					break;
 
 				case 3: // Authentication-Protocol
@@ -596,14 +623,14 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 						alen = add_lcp_auth(authproto, sizeof(authproto), config->radius_authprefer);
 						if (alen < 2) break; // paranoia
 
-						q = ppp_nak(s, b, sizeof(b), PPPLCP, &response, q, p, o, authproto + 2, alen - 2);
+						q = ppp_conf_nak(s, b, sizeof(b), PPPLCP, &response, q, p, o, authproto + 2, alen - 2);
 						if (q && *response == ConfigNak &&
 							config->radius_authtypes != config->radius_authprefer)
 						{
 							// alternate type
 						    	alen = add_lcp_auth(authproto, sizeof(authproto), config->radius_authtypes & ~config->radius_authprefer);
 							if (alen < 2) break;
-							q = ppp_nak(s, b, sizeof(b), PPPLCP, &response, q, p, o, authproto + 2, alen - 2);
+							q = ppp_conf_nak(s, b, sizeof(b), PPPLCP, &response, q, p, o, authproto + 2, alen - 2);
 						}
 
 						break;
@@ -621,7 +648,7 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 
 				default: // Reject any unknown options
 					LOG(3, s, t, "    Rejecting unknown PPP LCP option %d\n", type);
-					q = ppp_rej(s, b, sizeof(b), PPPLCP, &response, q, p, o);
+					q = ppp_conf_rej(s, b, sizeof(b), PPPLCP, &response, q, p, o);
 			}
 			x -= length;
 			o += length;
@@ -868,22 +895,7 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 	}
 	else if (*p != CodeRej)
 	{
-		int code = *p;
-		int mru = session[s].mru;
-		if (!mru)
-			mru = DEFAULT_MRU;
-
-		if (l > mru) l = mru;
-
-		*p = CodeRej;
-		q = makeppp(b, sizeof(b), p, l, s, t, PPPLCP);
-		if (!q) return;
-
-		LOG(2, s, t, "Unexpected LCP code %s\n", ppp_code(code));
-		LOG(3, s, t, "LCP: send %s\n", ppp_code(*q));
-		if (config->debug > 3) dumplcp(q, l);
-
-		tunnelsend(b, l + (q - b), t);
+		ppp_code_rej(s, t, PPPLCP, "LCP", p, l, b, sizeof(b));
 	}
 }
 
@@ -985,7 +997,7 @@ void processipcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 				if (memcmp(o + 2, &addr, (sizeof addr)))
 				{
 					uint8_t *oq = q;
-					q = ppp_nak(s, b, sizeof(b), PPPIPCP, &response, q, p, o, (uint8_t *) &addr, sizeof(addr));
+					q = ppp_conf_nak(s, b, sizeof(b), PPPIPCP, &response, q, p, o, (uint8_t *) &addr, sizeof(addr));
 					if (!q || (q != oq && *response == ConfigRej))
 					{
 						sessionshutdown(s, "Can't negotiate IPCP.", 3, 0);
@@ -1001,7 +1013,7 @@ void processipcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 				addr = htonl(session[s].dns1);
 				if (memcmp(o + 2, &addr, (sizeof addr)))
 				{
-					q = ppp_nak(s, b, sizeof(b), PPPIPCP, &response, q, p, o, (uint8_t *) &addr, sizeof(addr));
+					q = ppp_conf_nak(s, b, sizeof(b), PPPIPCP, &response, q, p, o, (uint8_t *) &addr, sizeof(addr));
 					if (!q) return;
 				}
 
@@ -1013,7 +1025,7 @@ void processipcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 				addr = htonl(session[s].dns1);
 				if (memcmp(o + 2, &addr, sizeof(addr)))
 				{
-					q = ppp_nak(s, b, sizeof(b), PPPIPCP, &response, q, p, o, (uint8_t *) &addr, sizeof(addr));
+					q = ppp_conf_nak(s, b, sizeof(b), PPPIPCP, &response, q, p, o, (uint8_t *) &addr, sizeof(addr));
 					if (!q) return;
 				}
 
@@ -1021,7 +1033,7 @@ void processipcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 
 			default:
 				LOG(2, s, t, "    Rejecting PPP IPCP Option type %d\n", *o);
-				q = ppp_rej(s, b, sizeof(b), PPPIPCP, &response, q, p, o);
+				q = ppp_conf_rej(s, b, sizeof(b), PPPIPCP, &response, q, p, o);
 				if (!q) return;
 			}
 
@@ -1111,20 +1123,7 @@ void processipcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 	}
 	else if (*p != CodeRej)
 	{
-		int code = *p;
-		int mru = session[s].mru;
-		if (!mru)
-			mru = DEFAULT_MRU;
-
-		if (l > mru) l = mru;
-
-		*p = CodeRej;
-		q = makeppp(b, sizeof(b), p, l, s, t, PPPIPCP);
-		if (!q) return;
-
-		LOG(2, s, t, "Unexpected IPCP code %s\n", ppp_code(code));
-		LOG(3, s, t, "IPCP: send %s\n", ppp_code(*q));
-		tunnelsend(b, l + (q - b), t);
+		ppp_code_rej(s, t, PPPIPCP, "IPCP", p, l, b, sizeof(b));
 	}
 }
 
@@ -1172,16 +1171,6 @@ void processipv6cp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 	}
 
 	LOG(3, s, t, "IPV6CP: recv %s\n", ppp_code(*p));
-
-	if (!config->ipv6_prefix.s6_addr[0])
-	{
-	    	LOG(2, s, t, "IPV6CP: %s rejected (not configured)\n", ppp_code(*p));
-		*p = ProtocolRej;
-		q = makeppp(b, sizeof(b),  p, l, s, t, PPPIPV6CP);
-		if (!q) return;
-		tunnelsend(b, l + (q - b), t);
-		return;
-	}
 
 	if (!session[s].ip)
 	{
@@ -1234,7 +1223,7 @@ void processipv6cp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 
 				if (memcmp(o + 2, ident, sizeof(ident)))
 				{
-					q = ppp_nak(s, b, sizeof(b), PPPIPV6CP, &response, q, p, o, ident, sizeof(ident));
+					q = ppp_conf_nak(s, b, sizeof(b), PPPIPV6CP, &response, q, p, o, ident, sizeof(ident));
 					if (!q) return;
 				}
 
@@ -1242,7 +1231,7 @@ void processipv6cp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 
 			default:
 				LOG(2, s, t, "    Rejecting PPP IPV6CP Option type %d\n", *o);
-				q = ppp_rej(s, b, sizeof(b), PPPIPV6CP, &response, q, p, o);
+				q = ppp_conf_rej(s, b, sizeof(b), PPPIPV6CP, &response, q, p, o);
 				if (!q) return;
 			}
 
@@ -1332,20 +1321,7 @@ void processipv6cp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 	}
 	else if (*p != CodeRej)
 	{
-		int code = *p;
-		int mru = session[s].mru;
-		if (!mru)
-			mru = DEFAULT_MRU;
-
-		if (l > mru) l = mru;
-
-		*p = CodeRej;
-		q = makeppp(b, sizeof(b), p, l, s, t, PPPIPV6CP);
-		if (!q) return;
-
-		LOG(2, s, t, "Unexpected IPV6CP code %s\n", ppp_code(code));
-		LOG(3, s, t, "IPV6CP: send %s\n", ppp_code(*q));
-		tunnelsend(b, l + (q - b), t);
+		ppp_code_rej(s, t, PPPIPV6CP, "IPV6CP", p, l, b, sizeof(b));
 	}
 }
 
@@ -1693,20 +1669,7 @@ void processccp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 	}
 	else if (*p != CodeRej)
 	{
-		int code = *p;
-		int mru = session[s].mru;
-		if (!mru)
-			mru = DEFAULT_MRU;
-
-		if (l > mru) l = mru;
-
-		*p = CodeRej;
-		q = makeppp(b, sizeof(b), p, l, s, t, PPPCCP);
-		if (!q) return;
-
-		LOG(2, s, t, "Unexpected CCP code %s\n", ppp_code(code));
-		LOG(3, s, t, "CCP: send %s\n", ppp_code(*q));
-		tunnelsend(b, l + (q - b), t);
+		ppp_code_rej(s, t, PPPCCP, "CCP", p, l, b, sizeof(b));
 	}
 }
 
@@ -1840,7 +1803,7 @@ void sendlcp(sessionidt s, tunnelidt t)
 
 	l = q;
 	*l++ = ConfigReq;
-	*l++ = (time_now % 255) + 1; // ID
+	*l++ = ++sess_local[s].lcp_ident; // ID
 
 	l += 2; //Save space for length
 
@@ -1876,7 +1839,7 @@ void sendccp(sessionidt s, tunnelidt t)
 	LOG(3, s, t, "CCP: send ConfigReq (no compression)\n");
 
 	*q = ConfigReq;
-	*(uint8_t *)(q + 1) = (time_now % 255) + 1; // ID
+	*(q + 1) = ++sess_local[s].lcp_ident; // ID
 	*(uint16_t *)(q + 2) = htons(4); // Length
 
 	LOG_HEX(5, "PPPCCP", q, 4);
