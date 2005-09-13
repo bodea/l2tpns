@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.130 2005-09-13 14:23:07 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.131 2005-09-13 14:27:14 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -2418,7 +2418,7 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 	}
 	else
 	{                          // data
-		uint16_t prot;
+		uint16_t proto;
 
 		LOG_HEX(5, "Receive Tunnel Data", p, l);
 		if (l > 2 && p[0] == 0xFF && p[1] == 0x03)
@@ -2434,12 +2434,12 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 		}
 		if (*p & 1)
 		{
-			prot = *p++;
+			proto = *p++;
 			l--;
 		}
 		else
 		{
-			prot = ntohs(*(uint16_t *) p);
+			proto = ntohs(*(uint16_t *) p);
 			p += 2;
 			l -= 2;
 		}
@@ -2459,43 +2459,43 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 			return;
 		}
 
-		if (prot == PPPPAP)
+		if (proto == PPPPAP)
 		{
 			session[s].last_packet = time_now;
 			if (!config->cluster_iam_master) { master_forward_packet(buf, len, addr->sin_addr.s_addr, addr->sin_port); return; }
 			processpap(s, t, p, l);
 		}
-		else if (prot == PPPCHAP)
+		else if (proto == PPPCHAP)
 		{
 			session[s].last_packet = time_now;
 			if (!config->cluster_iam_master) { master_forward_packet(buf, len, addr->sin_addr.s_addr, addr->sin_port); return; }
 			processchap(s, t, p, l);
 		}
-		else if (prot == PPPLCP)
+		else if (proto == PPPLCP)
 		{
 			session[s].last_packet = time_now;
 			if (!config->cluster_iam_master) { master_forward_packet(buf, len, addr->sin_addr.s_addr, addr->sin_port); return; }
 			processlcp(s, t, p, l);
 		}
-		else if (prot == PPPIPCP)
+		else if (proto == PPPIPCP)
 		{
 			session[s].last_packet = time_now;
 			if (!config->cluster_iam_master) { master_forward_packet(buf, len, addr->sin_addr.s_addr, addr->sin_port); return; }
 			processipcp(s, t, p, l);
 		}
-		else if (prot == PPPIPV6CP && config->ipv6_prefix.s6_addr[0])
+		else if (proto == PPPIPV6CP && config->ipv6_prefix.s6_addr[0])
 		{
 			session[s].last_packet = time_now;
 			if (!config->cluster_iam_master) { master_forward_packet(buf, len, addr->sin_addr.s_addr, addr->sin_port); return; }
 			processipv6cp(s, t, p, l);
 		}
-		else if (prot == PPPCCP)
+		else if (proto == PPPCCP)
 		{
 			session[s].last_packet = time_now;
 			if (!config->cluster_iam_master) { master_forward_packet(buf, len, addr->sin_addr.s_addr, addr->sin_port); return; }
 			processccp(s, t, p, l);
 		}
-		else if (prot == PPPIP)
+		else if (proto == PPPIP)
 		{
 			if (session[s].die)
 			{
@@ -2512,7 +2512,7 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 
 			processipin(s, t, p, l);
 		}
-		else if (prot == PPPIPV6 && config->ipv6_prefix.s6_addr[0])
+		else if (proto == PPPIPV6 && config->ipv6_prefix.s6_addr[0])
 		{
 			if (session[s].die)
 			{
@@ -2531,17 +2531,17 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 		}
 		else if (session[s].ppp.lcp == Opened)
 		{
-			uint8_t
+			uint8_t buf[MAXETHER];
 			uint8_t *q;
 			int mru = session[s].mru;
 
 			if (!mru) mru = MAXMRU;
-			if (mru > size) mru = size;
+			if (mru > sizeof(buf)) mru = sizeof(buf);
 
 			l += 6;
 			if (l > mru) l = mru;
 
-			q = makeppp(buf, size, 0, 0, s, t, proto);
+			q = makeppp(buf, sizeof(buf), 0, 0, s, t, proto);
 			if (!q) return;
 
 			*q = CodeRej;
@@ -2550,19 +2550,17 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 			*(uint16_t *)(q + 4) = htons(proto);
 			memcpy(q + 6, p, l - 6);
 
-			if (prot == PPPIPV6CP)
+			if (proto == PPPIPV6CP)
 				LOG(3, s, t, "LCP: send ProtocolRej (IPV6CP: not configured)\n");
 			else
-				LOG(2, s, t, "LCP: sent ProtocolRej (0x%04X: unsupported)\n", prot);
-
-			if (config->debug > 3) dumplcp(q, l);
+				LOG(2, s, t, "LCP: sent ProtocolRej (0x%04X: unsupported)\n", proto);
 
 			tunnelsend(buf, l + (q - buf), t);
 		}
 		else
 		{
 			LOG(2, s, t, "Unknown PPP protocol 0x%04X received in LCP %s state\n",
-				prot, ppp_state(session[s].ppp.lcp));
+				proto, ppp_state(session[s].ppp.lcp));
 		}
 	}
 }
