@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.89 2005-09-13 14:23:07 bodea Exp $
+// $Id: l2tpns.h,v 1.90 2005-09-15 09:34:49 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -15,7 +15,7 @@
 #include <sys/types.h>
 #include <libcli.h>
 
-#define VERSION	"2.1.6"
+#define VERSION	"2.1.7"
 
 // Limits
 #define MAXTUNNEL	500		// could be up to 65535
@@ -519,6 +519,7 @@ typedef struct
 	int		ppp_restart_time;		// timeout for PPP restart
 	int		ppp_max_configure;		// max lcp configure requests to send
 	int		ppp_max_failure;		// max lcp configure naks to send
+	int		ppp_mru;			// MRU to advertise
 
 	char		radiussecret[64];
 	int		radius_accounting;

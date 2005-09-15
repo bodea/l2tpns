@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.80 2005-09-13 14:23:07 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.81 2005-09-15 09:34:49 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -577,7 +577,18 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 			switch (type)
 			{
 				case 1: // Maximum-Receive-Unit
-					session[s].mru = ntohs(*(uint16_t *)(o + 2));
+					{
+						uint16_t mru = ntohs(*(uint16_t *)(o + 2));
+						if (!config->ppp_mru || mru <= config->ppp_mru)
+						{
+							session[s].mru = mru;
+							break;
+						}
+
+						LOG(3, s, t, "    Remote requesting MRU of %u.  Rejecting.\n", mru);
+						mru = htons(config->ppp_mru);
+						q = ppp_conf_nak(s, b, sizeof(b), PPPLCP, &response, q, p, o, (uint8_t *) &mru, sizeof(mru));
+					}
 					break;
 
 				case 2: // Async-Control-Character-Map
@@ -738,8 +749,9 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 				case 1: // Maximum-Receive-Unit
 					if (*p == ConfigNak)
 					{
-						session[s].mru = ntohs(*(uint16_t *)(o + 2));
-						LOG(3, s, t, "    Remote requested MRU of %u\n", session[s].mru);
+						session[s].mru = 0;
+						LOG(3, s, t, "    Remote requested MRU of %u; removing option\n",
+							ntohs(*(uint16_t *)(o + 2)));
 					}
 					else
 					{

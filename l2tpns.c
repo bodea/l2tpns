@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.131 2005-09-13 14:27:14 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.132 2005-09-15 09:34:48 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -108,6 +108,7 @@ config_descriptt config_values[] = {
 	CONFIG("ppp_restart_time", ppp_restart_time, INT),
 	CONFIG("ppp_max_configure", ppp_max_configure, INT),
 	CONFIG("ppp_max_failure", ppp_max_failure, INT),
+	CONFIG("ppp_mru", ppp_mru, INT),
 	CONFIG("primary_dns", default_dns1, IPv4),
 	CONFIG("secondary_dns", default_dns2, IPv4),
 	CONFIG("primary_radius", radiusserver[0], IPv4),
@@ -2381,7 +2382,7 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 					if (amagic == 0) amagic = time_now;
 					session[s].magic = amagic; // set magic number
 					session[s].l2tp_flags = aflags; // set flags received
-					session[s].mru = DEFAULT_MRU;
+					session[s].mru = config->ppp_mru;
 					controlnull(t); // ack
 
 					// start LCP
@@ -3500,6 +3501,7 @@ static void initdata(int optdebug, char *optconfig)
 	config->ppp_restart_time = 3;
 	config->ppp_max_configure = 10;
 	config->ppp_max_failure = 5;
+	config->ppp_mru = DEFAULT_MRU;
 	strcpy(config->random_device, RANDOMDEVICE);
 
 	log_stream = stderr;
@@ -4247,6 +4249,8 @@ static void update_config()
 		log_stream = stderr;
 		setbuf(log_stream, NULL);
 	}
+
+	if (config->ppp_mru < 0) config->ppp_mru = 0;
 
 	// Update radius
 	config->numradiusservers = 0;

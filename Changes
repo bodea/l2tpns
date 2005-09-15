@@ -1,7 +1,8 @@
-* Wed Sep 14 2005 Brendan O'Dea <bod@optus.net> 2.1.6
+* Thu Sep 15 2005 Brendan O'Dea <bod@optus.net> 2.1.6
 - Any traffic on a tunnel resets lastrec, not just control messages.
 - Use a unique identifier for LCP.
 - Fix Code-Reject/Protocol-Reject.
+- Make MRU configurable, NAK config requests for larger values.
 
 * Sat Sep 3 2005 Brendan O'Dea <bod@optus.net> 2.1.5
 - Avoid Code-Reject loop.

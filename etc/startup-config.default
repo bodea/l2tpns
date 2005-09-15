@@ -15,6 +15,9 @@ set l2tp_secret "secret"
 #set ppp_max_configure 10
 #set ppp_max_failure 5
 
+# Link MRU
+#set ppp_mru 1452
+
 # Only 2 DNS server entries are allowed
 set primary_dns 10.0.0.1
 set secondary_dns 10.0.0.2
