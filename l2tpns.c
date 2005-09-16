@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.135 2005-09-16 05:35:31 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.136 2005-09-16 05:54:53 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -990,6 +990,8 @@ void adjust_tcp_mss(sessionidt s, tunnelidt t, uint8_t *buf, int len, uint8_t *t
 	uint8_t *mss = 0;
 	uint8_t *opts;
 	uint8_t *data;
+	uint16_t orig;
+	uint32_t sum;
 
 	if ((tcp[13] & 0x3f) & ~(TCP_FLAG_SYN|TCP_FLAG_ACK)) // only want SYN and SYN,ACK
 		return;
@@ -1017,15 +1019,23 @@ void adjust_tcp_mss(sessionidt s, tunnelidt t, uint8_t *buf, int len, uint8_t *t
 	}
 
 	if (!mss) return; // not found
-	if (ntohs(*(uint16_t *) mss) <= MSS) return; // mss OK
+	orig = ntohs(*(uint16_t *) mss);
+
+	if (orig <= MSS) return; // mss OK
 
 	LOG(5, s, t, "TCP: %s:%u -> %s:%u SYN%s, adjusted mss from %u to %u\n",
-		fmtaddr(*(in_addr_t *)(buf + 12), 0), ntohs(*(uint16_t *)tcp),
-		fmtaddr(*(in_addr_t *)(buf + 16), 1), ntohs(*(uint16_t *)(tcp + 2)),
-		(tcp[13] & TCP_FLAG_ACK) ? ",ACK" : "",
-		ntohs(*(uint16_t *) mss), MSS);
+		fmtaddr(*(in_addr_t *) (buf + 12), 0), ntohs(*(uint16_t *) tcp),
+		fmtaddr(*(in_addr_t *) (buf + 16), 1), ntohs(*(uint16_t *) (tcp + 2)),
+		(tcp[13] & TCP_FLAG_ACK) ? ",ACK" : "", orig, MSS);
 
-	// FIXME
+	// set mss
+	*(int16_t *) mss = MSS;
+
+	// adjust checksum (see rfc1141)
+	sum = orig + (~MSS & 0xffff);
+	sum += ntohs(*(uint16_t *) (tcp + 16));
+	sum = (sum & 0xffff) + (sum >> 16);
+	*(uint16_t *) (tcp + 16) = htons(sum);
 }
 
 // process outgoing (to tunnel) IP
