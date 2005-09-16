@@ -185,15 +185,16 @@ the same as the LAC, or authentication will fail.  Only actually be
 used if the LAC requests authentication.
 </LI>
 
+<LI><B>l2tp_mtu</B> (int)<BR>
+MTU of interface for L2TP traffic (default: 1500).  Used to set link
+MRU and adjust TCP MSS.
+</LI>
+
 <LI><B>ppp_restart_time</B> (int)<BR>
 <B>ppp_max_configure</B> (int)<BR>
 <B>ppp_max_failure</B> (int)<BR>
 PPP counter and timer values, as described in &sect;4.1 of
 <a href="ftp://ftp.rfc-editor.org/in-notes/rfc1661.txt">RFC1661</a>.
-</LI>
-
-<LI><B>ppp_mru</B> (int)<BR>
-PPP link MRU (default: 1452).
 </LI>
 
 <LI><B>primary_dns</B> (ip address)

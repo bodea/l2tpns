@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.90 2005-09-15 09:34:49 bodea Exp $
+// $Id: l2tpns.h,v 1.91 2005-09-16 05:04:29 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -31,8 +31,10 @@
 #define T_FREE		(0)		// A tunnel ID that won't ever be used. Mark session as free.
 
 #define	MAXCONTROL	1000		// max length control message we ever send...
-#define MAXMRU		1500		// max MRU as defined by RFC1661
-#define	MAXETHER	(MAXMRU+18)	// max packet we try sending to tun
+#define MINMTU		576		// minimum recommended MTU (rfc1063)
+#define PPPMTU		1500		// default PPP MTU
+#define MAXMTU		2600		// arbitrary maximum MTU
+#define	MAXETHER	(MAXMTU+18)	// max packet we try sending to tun
 #define	MAXTEL		96		// telephone number
 #define MAXUSER		128		// username
 #define MAXPASS		128		// password
@@ -45,7 +47,6 @@
 #define ECHO_TIMEOUT	60		// Time between last packet sent and LCP ECHO generation
 #define IDLE_TIMEOUT	240		// Time between last packet sent and LCP ECHO generation
 #define BUSY_WAIT_TIME	3000		// 5 minutes in 1/10th seconds to wait for radius to cleanup on shutdown
-#define DEFAULT_MRU	1452		// maximum packet size to avoid fragmentation when LNS ethernet MTU is 1500
 
 // Constants
 #ifndef ETCDIR
@@ -293,6 +294,9 @@ typedef struct
 	// authentication to use
 	int lcp_authtype;
 
+	// our MRU
+	uint16_t ppp_mru;
+
 	// DoS prevention
 	clockt last_packet_out;
 	uint32_t packets_out;
@@ -512,14 +516,15 @@ typedef struct
 
 	char		tundevice[10];			// tun device name
 	char		log_filename[128];
-	char		l2tpsecret[64];
+
+	char		l2tp_secret[64];		// L2TP shared secret
+	int		l2tp_mtu;			// MTU of interface used for L2TP
 
 	char		random_device[256];		// random device path, defaults to RANDOMDEVICE
 
 	int		ppp_restart_time;		// timeout for PPP restart
 	int		ppp_max_configure;		// max lcp configure requests to send
 	int		ppp_max_failure;		// max lcp configure naks to send
-	int		ppp_mru;			// MRU to advertise
 
 	char		radiussecret[64];
 	int		radius_accounting;
@@ -704,6 +709,8 @@ void sessionshutdown(sessionidt s, char *reason, int result, int error);
 void filter_session(sessionidt s, int filter_in, int filter_out);
 void send_garp(in_addr_t ip);
 void tunnelsend(uint8_t *buf, uint16_t l, tunnelidt t);
+int tun_write(uint8_t *data, int size);
+void adjust_tcp_mss(sessionidt s, tunnelidt t, uint8_t *buf, int len, uint8_t *tcp);
 void sendipcp(sessionidt s, tunnelidt t);
 void sendipv6cp(sessionidt s, tunnelidt t);
 void processudp(uint8_t *buf, int len, struct sockaddr_in *addr);
@@ -770,7 +777,6 @@ extern char main_quit;
 extern uint32_t last_id;
 extern struct Tstats *_statistics;
 extern in_addr_t my_address;
-extern int tun_write(uint8_t *data, int size);
 extern int clifd;
 extern int epollfd;
 
@@ -789,6 +795,9 @@ struct event_data {
 };
 
 #define TIME (config->current_time)
+
+extern uint16_t MRU;
+extern uint16_t MSS;
 
 // macros for handling help in cli commands
 #define CLI_HELP_REQUESTED	(argc > 0 && argv[argc-1][strlen(argv[argc-1])-1] == '?')

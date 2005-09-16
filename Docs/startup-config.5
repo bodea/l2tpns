@@ -2,7 +2,7 @@
 .de Id
 .ds Dt \\$4 \\$5
 ..
-.Id $Id: startup-config.5,v 1.14 2005-09-15 09:34:49 bodea Exp $
+.Id $Id: startup-config.5,v 1.15 2005-09-16 05:04:31 bodea Exp $
 .TH STARTUP-CONFIG 5 "\*(Dt" L2TPNS "File Formats and Conventions"
 .SH NAME
 startup\-config \- configuration file for l2tpns
@@ -63,6 +63,10 @@ for authenticating tunnel request.  Must be the same as the LAC, or
 authentication will fail.  Only actually be used if the LAC requests
 authentication.
 .TP
+.B l2tp_mtu
+MTU of interface for L2TP traffic (default: 1500).  Used to set link
+MRU and adjust TCP MSS.
+.TP
 .B ppp_restart_time
 Restart timer for PPP protocol negotiation in seconds (default: 3).
 .TP
@@ -72,9 +76,6 @@ Number of configure requests to send before giving up (default: 10).
 .B ppp_max_failure
 Number of Configure-Nak requests to send before sending a
 Configure-Reject (default: 5).
-.TP
-.B ppp_mru
-PPP link MRU (default: 1452).
 .TP
 .BR primary_dns , " secondary_dns"
 Whenever a PPP connection is established, DNS servers will be sent to the

@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.132 2005-09-15 09:34:48 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.133 2005-09-16 05:04:29 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -75,6 +75,10 @@ static int syslog_log = 0;	// are we logging to syslog
 static FILE *log_stream = 0;	// file handle for direct logging (i.e. direct into file, not via syslog).
 uint32_t last_id = 0;		// Unique ID for radius accounting
 
+// calculated from config->l2tp_mtu
+uint16_t MRU = 0;		// PPP MRU
+uint16_t MSS = 0;		// TCP MSS
+
 struct cli_session_actions *cli_session_actions = NULL;	// Pending session changes requested by CLI
 struct cli_tunnel_actions *cli_tunnel_actions = NULL;	// Pending tunnel changes required by CLI
 
@@ -104,11 +108,11 @@ config_descriptt config_values[] = {
 	CONFIG("log_file", log_filename, STRING),
 	CONFIG("pid_file", pid_file, STRING),
 	CONFIG("random_device", random_device, STRING),
-	CONFIG("l2tp_secret", l2tpsecret, STRING),
+	CONFIG("l2tp_secret", l2tp_secret, STRING),
+	CONFIG("l2tp_mtu", l2tp_mtu, INT),
 	CONFIG("ppp_restart_time", ppp_restart_time, INT),
 	CONFIG("ppp_max_configure", ppp_max_configure, INT),
 	CONFIG("ppp_max_failure", ppp_max_failure, INT),
-	CONFIG("ppp_mru", ppp_mru, INT),
 	CONFIG("primary_dns", default_dns1, IPv4),
 	CONFIG("secondary_dns", default_dns2, IPv4),
 	CONFIG("primary_radius", radiusserver[0], IPv4),
@@ -979,6 +983,50 @@ int tun_write(uint8_t * data, int size)
 	return write(tunfd, data, size);
 }
 
+// adjust tcp mss to avoid fragmentation (called only for tcp packets with syn set)
+void adjust_tcp_mss(sessionidt s, tunnelidt t, uint8_t *buf, int len, uint8_t *tcp)
+{
+	int d = (tcp[12] >> 4) * 4;
+	uint8_t *mss = 0;
+	uint8_t *data;
+
+	if ((tcp[13] & 0x3f) & ~(TCP_FLAG_SYN|TCP_FLAG_ACK)) // only want SYN and SYN,ACK
+		return;
+
+	if (tcp + d > buf + len) // short?
+		return;
+
+	data = tcp + d;
+	tcp += 20;
+
+	while (tcp < data)
+	{
+		if (*tcp == 2 && tcp[1] == 4) // mss option (2), length 4
+		{
+			mss = tcp + 2;
+			if (mss + 2 > data) return; // short?
+			break;
+		}
+
+		if (*tcp == 0) return; // end of options
+		if (*tcp == 1 || !tcp[1]) // no op (one byte), or no length (prevent loop)
+			tcp++;
+		else
+			tcp += tcp[1]; // skip over option
+	}
+
+	if (!mss) return; // not found
+	if (ntohl(*(uint16_t *) mss) <= MSS) return; // mss OK
+
+	LOG(5, s, t, "TCP: %s:%u -> %s:%u SYN%s, adjusted mss from %u to %u\n",
+		fmtaddr(*(in_addr_t *)(buf + 12), 0), *(uint16_t *)tcp,
+		fmtaddr(*(in_addr_t *)(buf + 16), 1), *(uint16_t *)(tcp + 2),
+		(tcp[13] & TCP_FLAG_ACK) ? ",ACK" : "",
+		ntohl(*(uint16_t *) mss), MSS);
+
+	// FIXME
+}
+
 // process outgoing (to tunnel) IP
 //
 static void processipout(uint8_t *buf, int len)
@@ -1085,6 +1133,14 @@ static void processipout(uint8_t *buf, int len)
 	// run access-list if any
 	if (session[s].filter_out && !ip_filter(buf, len, session[s].filter_out - 1))
 		return;
+
+	// adjust MSS on SYN and SYN,ACK packets with options
+	if ((ntohs(*(uint16_t *) (buf + 6)) & 0x1fff) == 0 && buf[9] == IPPROTO_TCP) // first tcp fragment
+	{
+		int ihl = (buf[0] & 0xf) * 4; // length of IP header
+		if (len >= ihl + 20 && (buf[ihl + 13] & TCP_FLAG_SYN) && ((buf[ihl + 12] >> 4) > 5))
+			adjust_tcp_mss(s, t, buf, len, buf + ihl);
+	}
 
 	if (sp->tbf_out)
 	{
@@ -2009,7 +2065,7 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 					uint16_t orig_len;
 
 					// handle hidden AVPs
-					if (!*config->l2tpsecret)
+					if (!*config->l2tp_secret)
 					{
 						LOG(1, s, t, "Hidden AVP requested, but no L2TP secret.\n");
 						fatal = flags;
@@ -2382,7 +2438,7 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 					if (amagic == 0) amagic = time_now;
 					session[s].magic = amagic; // set magic number
 					session[s].l2tp_flags = aflags; // set flags received
-					session[s].mru = config->ppp_mru;
+					session[s].mru = PPPMTU; // default
 					controlnull(t); // ack
 
 					// start LCP
@@ -2390,6 +2446,7 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 					sess_local[s].lcp.conf_sent = 1;
 					sess_local[s].lcp.nak_sent = 0;
 					sess_local[s].lcp_authtype = config->radius_authprefer;
+					sess_local[s].ppp_mru = MRU;
 					session[s].ppp.lcp = RequestSent;
 					sendlcp(s, t);
 
@@ -2535,8 +2592,6 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 			uint8_t buf[MAXETHER];
 			uint8_t *q;
 			int mru = session[s].mru;
-
-			if (!mru) mru = MAXMRU;
 			if (mru > sizeof(buf)) mru = sizeof(buf);
 
 			l += 6;
@@ -3501,7 +3556,6 @@ static void initdata(int optdebug, char *optconfig)
 	config->ppp_restart_time = 3;
 	config->ppp_max_configure = 10;
 	config->ppp_max_failure = 5;
-	config->ppp_mru = DEFAULT_MRU;
 	strcpy(config->random_device, RANDOMDEVICE);
 
 	log_stream = stderr;
@@ -4171,7 +4225,7 @@ static void build_chap_response(uint8_t *challenge, uint8_t id, uint16_t challen
 	MD5_CTX ctx;
 	*challenge_response = NULL;
 
-	if (!*config->l2tpsecret)
+	if (!*config->l2tp_secret)
 	{
 		LOG(0, 0, 0, "LNS requested CHAP authentication, but no l2tp secret is defined\n");
 		return;
@@ -4183,7 +4237,7 @@ static void build_chap_response(uint8_t *challenge, uint8_t id, uint16_t challen
 
 	MD5_Init(&ctx);
 	MD5_Update(&ctx, &id, 1);
-	MD5_Update(&ctx, config->l2tpsecret, strlen(config->l2tpsecret));
+	MD5_Update(&ctx, config->l2tp_secret, strlen(config->l2tp_secret));
 	MD5_Update(&ctx, challenge, challenge_length);
 	MD5_Final(*challenge_response, &ctx);
 
@@ -4250,7 +4304,16 @@ static void update_config()
 		setbuf(log_stream, NULL);
 	}
 
-	if (config->ppp_mru < 0) config->ppp_mru = 0;
+#define L2TP_HDRS		(20+8+6+4)	// L2TP data encaptulation: ip + udp + l2tp (data) + ppp (inc hdlc)
+#define TCP_HDRS		(20+20)		// TCP encapsulation: ip + tcp
+
+	if (config->l2tp_mtu <= 0)		config->l2tp_mtu = PPPMTU;
+	else if (config->l2tp_mtu < MINMTU)	config->l2tp_mtu = MINMTU;
+	else if (config->l2tp_mtu > MAXMTU)	config->l2tp_mtu = MAXMTU;
+
+	// reset MRU/MSS globals
+	MRU = config->l2tp_mtu - L2TP_HDRS;
+	MSS = MRU - TCP_HDRS;
 
 	// Update radius
 	config->numradiusservers = 0;
@@ -5150,7 +5213,7 @@ static void unhide_value(uint8_t *value, size_t len, uint16_t type, uint8_t *vec
 	// Compute initial pad
 	MD5_Init(&ctx);
 	MD5_Update(&ctx, (unsigned char *) &m, 2);
-	MD5_Update(&ctx, config->l2tpsecret, strlen(config->l2tpsecret));
+	MD5_Update(&ctx, config->l2tp_secret, strlen(config->l2tp_secret));
 	MD5_Update(&ctx, vector, vec_len);
 	MD5_Final(digest, &ctx);
 
@@ -5163,7 +5226,7 @@ static void unhide_value(uint8_t *value, size_t len, uint16_t type, uint8_t *vec
 		if (d >= sizeof(digest))
 		{
 			MD5_Init(&ctx);
-			MD5_Update(&ctx, config->l2tpsecret, strlen(config->l2tpsecret));
+			MD5_Update(&ctx, config->l2tp_secret, strlen(config->l2tp_secret));
 			MD5_Update(&ctx, last, sizeof(digest));
 			MD5_Final(digest, &ctx);
 

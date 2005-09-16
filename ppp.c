@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.81 2005-09-15 09:34:49 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.82 2005-09-16 05:04:29 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -449,8 +449,6 @@ static void ppp_code_rej(sessionidt s, tunnelidt t, uint16_t proto,
 {
 	uint8_t *q;
 	int mru = session[s].mru;
-
-	if (!mru) mru = MAXMRU;
 	if (mru > size) mru = size;
 
 	l += 4;
@@ -577,18 +575,7 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 			switch (type)
 			{
 				case 1: // Maximum-Receive-Unit
-					{
-						uint16_t mru = ntohs(*(uint16_t *)(o + 2));
-						if (!config->ppp_mru || mru <= config->ppp_mru)
-						{
-							session[s].mru = mru;
-							break;
-						}
-
-						LOG(3, s, t, "    Remote requesting MRU of %u.  Rejecting.\n", mru);
-						mru = htons(config->ppp_mru);
-						q = ppp_conf_nak(s, b, sizeof(b), PPPLCP, &response, q, p, o, (uint8_t *) &mru, sizeof(mru));
-					}
+					session[s].mru = ntohs(*(uint16_t *)(o + 2));
 					break;
 
 				case 2: // Async-Control-Character-Map
@@ -749,13 +736,12 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 				case 1: // Maximum-Receive-Unit
 					if (*p == ConfigNak)
 					{
-						session[s].mru = 0;
-						LOG(3, s, t, "    Remote requested MRU of %u; removing option\n",
-							ntohs(*(uint16_t *)(o + 2)));
+						sess_local[s].ppp_mru = ntohs(*(uint16_t *)(o + 2));
+						LOG(3, s, t, "    Remote requested MRU of %u\n", sess_local[s].ppp_mru);
 					}
 					else
 					{
-						session[s].mru = 0;
+						sess_local[s].ppp_mru = 0;
 						LOG(3, s, t, "    Remote rejected MRU negotiation\n");
 					}
 
@@ -1349,6 +1335,13 @@ void processipin(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 
 	LOG_HEX(5, "IP", p, l);
 
+	if (l < 20 || l < ntohl(*(uint32_t *)(p + 2)))
+	{
+		LOG(1, s, t, "IP packet too short %d\n", l);
+		STAT(tunnel_rx_errors);
+		return ;
+	}
+
 	ip = ntohl(*(uint32_t *)(p + 12));
 
 	if (l > MAXETHER)
@@ -1371,6 +1364,14 @@ void processipin(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 	// run access-list if any
 	if (session[s].filter_in && !ip_filter(p, l, session[s].filter_in - 1))
 		return;
+
+	// adjust MSS on SYN and SYN,ACK packets with options
+	if ((ntohs(*(uint16_t *) (p + 6)) & 0x1fff) == 0 && p[9] == IPPROTO_TCP) // first tcp fragment
+	{
+		int ihl = (p[0] & 0xf) * 4; // length of IP header
+		if (l >= ihl + 20 && (p[ihl + 13] & TCP_FLAG_SYN) && ((p[ihl + 12] >> 4) > 5))
+			adjust_tcp_mss(s, t, p, l, p + ihl);
+	}
 
 	// Add on the tun header
 	p -= 4;
@@ -1819,10 +1820,10 @@ void sendlcp(sessionidt s, tunnelidt t)
 
 	l += 2; //Save space for length
 
-	if (session[s].mru)
+	if (sess_local[s].ppp_mru)
 	{
 		*l++ = 1; *l++ = 4; // Maximum-Receive-Unit (length 4)
-		*(uint16_t *) l = htons(session[s].mru); l += 2;
+		*(uint16_t *) l = htons(sess_local[s].ppp_mru); l += 2;
 	}
 
 	if (authtype)
