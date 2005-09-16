@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.82 2005-09-16 05:04:29 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.83 2005-09-16 05:20:32 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -1335,7 +1335,7 @@ void processipin(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 
 	LOG_HEX(5, "IP", p, l);
 
-	if (l < 20 || l < ntohl(*(uint32_t *)(p + 2)))
+	if (l < 20)
 	{
 		LOG(1, s, t, "IP packet too short %d\n", l);
 		STAT(tunnel_rx_errors);
