@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.137 2005-09-16 06:10:21 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.138 2005-09-16 06:11:28 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -1029,7 +1029,7 @@ void adjust_tcp_mss(sessionidt s, tunnelidt t, uint8_t *buf, int len, uint8_t *t
 		(tcp[13] & TCP_FLAG_ACK) ? ",ACK" : "", orig, MSS);
 
 	// set mss
-	*(int16_t *) mss = htns(MSS);
+	*(int16_t *) mss = htons(MSS);
 
 	// adjust checksum (see rfc1141)
 	sum = orig + (~MSS & 0xffff);
