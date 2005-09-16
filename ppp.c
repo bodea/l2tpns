@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.83 2005-09-16 05:20:32 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.84 2005-09-16 13:20:39 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -459,7 +459,7 @@ static void ppp_code_rej(sessionidt s, tunnelidt t, uint16_t proto,
 
 	*q = CodeRej;
 	*(q + 1) = ++sess_local[s].lcp_ident;
-	*(uint16_t *)(q + 2) = l;
+	*(uint16_t *)(q + 2) = htons(l);
 	memcpy(q + 4, p, l - 4);
 
 	LOG(2, s, t, "Unexpected %s code %s\n", pname, ppp_code(*p));
