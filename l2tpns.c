@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.138 2005-09-16 06:11:28 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.139 2005-09-16 11:46:48 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -2608,10 +2608,10 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 			l += 6;
 			if (l > mru) l = mru;
 
-			q = makeppp(buf, sizeof(buf), 0, 0, s, t, proto);
+			q = makeppp(buf, sizeof(buf), 0, 0, s, t, PPPLCP);
 			if (!q) return;
 
-			*q = CodeRej;
+			*q = ProtocolRej;
 			*(q + 1) = ++sess_local[s].lcp_ident;
 			*(uint16_t *)(q + 2) = l;
 			*(uint16_t *)(q + 4) = htons(proto);
