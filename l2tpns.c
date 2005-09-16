@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.134 2005-09-16 05:30:30 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.135 2005-09-16 05:35:31 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -988,6 +988,7 @@ void adjust_tcp_mss(sessionidt s, tunnelidt t, uint8_t *buf, int len, uint8_t *t
 {
 	int d = (tcp[12] >> 4) * 4;
 	uint8_t *mss = 0;
+	uint8_t *opts;
 	uint8_t *data;
 
 	if ((tcp[13] & 0x3f) & ~(TCP_FLAG_SYN|TCP_FLAG_ACK)) // only want SYN and SYN,ACK
@@ -996,23 +997,23 @@ void adjust_tcp_mss(sessionidt s, tunnelidt t, uint8_t *buf, int len, uint8_t *t
 	if (tcp + d > buf + len) // short?
 		return;
 
+	opts = tcp + 20;
 	data = tcp + d;
-	tcp += 20;
 
-	while (tcp < data)
+	while (opts < data)
 	{
-		if (*tcp == 2 && tcp[1] == 4) // mss option (2), length 4
+		if (*opts == 2 && opts[1] == 4) // mss option (2), length 4
 		{
-			mss = tcp + 2;
+			mss = opts + 2;
 			if (mss + 2 > data) return; // short?
 			break;
 		}
 
-		if (*tcp == 0) return; // end of options
-		if (*tcp == 1 || !tcp[1]) // no op (one byte), or no length (prevent loop)
-			tcp++;
+		if (*opts == 0) return; // end of options
+		if (*opts == 1 || !opts[1]) // no op (one byte), or no length (prevent loop)
+			opts++;
 		else
-			tcp += tcp[1]; // skip over option
+			opts += opts[1]; // skip over option
 	}
 
 	if (!mss) return; // not found
