@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.133 2005-09-16 05:04:29 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.134 2005-09-16 05:30:30 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -1016,13 +1016,13 @@ void adjust_tcp_mss(sessionidt s, tunnelidt t, uint8_t *buf, int len, uint8_t *t
 	}
 
 	if (!mss) return; // not found
-	if (ntohl(*(uint16_t *) mss) <= MSS) return; // mss OK
+	if (ntohs(*(uint16_t *) mss) <= MSS) return; // mss OK
 
 	LOG(5, s, t, "TCP: %s:%u -> %s:%u SYN%s, adjusted mss from %u to %u\n",
-		fmtaddr(*(in_addr_t *)(buf + 12), 0), *(uint16_t *)tcp,
-		fmtaddr(*(in_addr_t *)(buf + 16), 1), *(uint16_t *)(tcp + 2),
+		fmtaddr(*(in_addr_t *)(buf + 12), 0), ntohs(*(uint16_t *)tcp),
+		fmtaddr(*(in_addr_t *)(buf + 16), 1), ntohs(*(uint16_t *)(tcp + 2)),
 		(tcp[13] & TCP_FLAG_ACK) ? ",ACK" : "",
-		ntohl(*(uint16_t *) mss), MSS);
+		ntohs(*(uint16_t *) mss), MSS);
 
 	// FIXME
 }
