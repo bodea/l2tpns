@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.141 2005-09-19 00:29:12 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.142 2005-09-19 02:39:57 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -3411,18 +3411,19 @@ static void mainloop(void)
 
 		if (time_changed)
 		{
-			double Mbps = ((1024.0 / 1024.0) * 8) / time_changed;
-			time_changed = 0;
+			double Mbps = 1024.0 * 1024.0 / 8 * time_changed;
 
 			// Log current traffic stats
 			snprintf(config->bandwidth, sizeof(config->bandwidth),
 				"UDP-ETH:%1.0f/%1.0f  ETH-UDP:%1.0f/%1.0f  TOTAL:%0.1f   IN:%u OUT:%u",
 				(udp_rx / Mbps), (eth_tx / Mbps), (eth_rx / Mbps), (udp_tx / Mbps),
-				((udp_tx + udp_rx + eth_tx + eth_rx) / Mbps), udp_rx_pkt, eth_rx_pkt);
+				((udp_tx + udp_rx + eth_tx + eth_rx) / Mbps),
+				udp_rx_pkt / time_changed, eth_rx_pkt / time_changed);
 		 
 			udp_tx = udp_rx = 0;
 			udp_rx_pkt = eth_rx_pkt = 0;
 			eth_tx = eth_rx = 0;
+			time_changed = 0;
 		 
 			if (config->dump_speed)
 				printf("%s\n", config->bandwidth);
