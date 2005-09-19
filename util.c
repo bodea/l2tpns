@@ -1,6 +1,6 @@
 /* Misc util functions */
 
-char const *cvs_id_util = "$Id: util.c,v 1.12 2005-06-28 14:48:28 bodea Exp $";
+char const *cvs_id_util = "$Id: util.c,v 1.13 2005-09-19 00:29:12 bodea Exp $";
 
 #include <unistd.h>
 #include <errno.h>
@@ -69,7 +69,6 @@ pid_t fork_and_close()
 	signal(SIGUSR1, SIG_DFL);
 	signal(SIGQUIT, SIG_DFL);
 	signal(SIGKILL, SIG_DFL);
-	signal(SIGALRM, SIG_DFL);
 	signal(SIGTERM, SIG_DFL);
 
 	// Close sockets

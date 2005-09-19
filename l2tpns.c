@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.140 2005-09-16 13:20:39 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.141 2005-09-19 00:29:12 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -96,7 +96,9 @@ uint32_t eth_tx = 0;
 static uint32_t ip_pool_size = 1;	// Size of the pool of addresses used for dynamic address allocation.
 time_t time_now = 0;			// Current time in seconds since epoch.
 static char time_now_string[64] = {0};	// Current time as a string.
+int time_changed = 0;			// time_now changed
 char main_quit = 0;			// True if we're in the process of exiting.
+char main_reload = 0;			// Re-load pending
 linked_list *loaded_plugins;
 linked_list *plugins[MAX_PLUGIN_TYPES];
 
@@ -188,7 +190,6 @@ static void cache_ipv6map(struct in6_addr ip, int prefixlen, int s);
 static void free_ip_address(sessionidt s);
 static void dump_acct_info(int all);
 static void sighup_handler(int sig);
-static void sigalrm_handler(int sig);
 static void shutdown_handler(int sig);
 static void sigchild_handler(int sig);
 static void build_chap_response(uint8_t *challenge, uint8_t id, uint16_t challenge_length, uint8_t **challenge_response);
@@ -210,11 +211,17 @@ static void unhide_value(uint8_t *value, size_t len, uint16_t type, uint8_t *vec
 #define QUIT_SHUTDOWN	2 // SIGQUIT: shutdown sessions/tunnels, reject new connections
 
 // return internal time (10ths since process startup), set f if given
+// as a side-effect sets time_now, and time_changed
 static clockt now(double *f)
 {
 	struct timeval t;
 	gettimeofday(&t, 0);
 	if (f) *f = t.tv_sec + t.tv_usec / 1000000.0;
+	if (t.tv_sec != time_now)
+	{
+	    time_now = t.tv_sec;
+	    time_changed++;
+	}
 	return (t.tv_sec - basetime) * 10 + t.tv_usec / 100000 + 1;
 }
 
@@ -3228,9 +3235,17 @@ static void mainloop(void)
 		int more = 0;
 		int n;
 
+
+		if (main_reload)
+		{
+			main_reload = 0;
+			read_config_file();
+			config->reload_config++;
+		}
+
 		if (config->reload_config)
 		{
-			// Update the config state based on config settings
+			config->reload_config = 0;
 			update_config();
 		}
 
@@ -3391,6 +3406,34 @@ static void mainloop(void)
 
 				STAT(multi_read_exceeded);
 				more++;
+			}
+		}
+
+		if (time_changed)
+		{
+			double Mbps = ((1024.0 / 1024.0) * 8) / time_changed;
+			time_changed = 0;
+
+			// Log current traffic stats
+			snprintf(config->bandwidth, sizeof(config->bandwidth),
+				"UDP-ETH:%1.0f/%1.0f  ETH-UDP:%1.0f/%1.0f  TOTAL:%0.1f   IN:%u OUT:%u",
+				(udp_rx / Mbps), (eth_tx / Mbps), (eth_rx / Mbps), (udp_tx / Mbps),
+				((udp_tx + udp_rx + eth_tx + eth_rx) / Mbps), udp_rx_pkt, eth_rx_pkt);
+		 
+			udp_tx = udp_rx = 0;
+			udp_rx_pkt = eth_rx_pkt = 0;
+			eth_tx = eth_rx = 0;
+		 
+			if (config->dump_speed)
+				printf("%s\n", config->bandwidth);
+		 
+			// Update the internal time counter
+			strftime(time_now_string, sizeof(time_now_string), "%Y-%m-%d %H:%M:%S", localtime(&time_now));
+		 
+			{
+				// Run timer hooks
+				struct param_timer p = { time_now };
+				run_plugins(PLUGIN_TIMER, &p);
 			}
 		}
 
@@ -4069,14 +4112,13 @@ int main(int argc, char *argv[])
 	// Start the timer routine off
 	time(&time_now);
 	strftime(time_now_string, sizeof(time_now_string), "%Y-%m-%d %H:%M:%S", localtime(&time_now));
-	signal(SIGALRM, sigalrm_handler);
-	siginterrupt(SIGALRM, 0);
 
 	initplugins();
 	initdata(optdebug, optconfig);
 
 	init_cli(hostname);
 	read_config_file();
+	update_config();
 	init_tbf(config->num_tbfs);
 
 	LOG(0, 0, 0, "L2TPNS version " VERSION "\n");
@@ -4152,8 +4194,6 @@ int main(int argc, char *argv[])
 			LOG(0, 0, 0, "Can't lock pages: %s\n", strerror(errno));
 	}
 
-	alarm(1);
-
 	// Drop privileges here
 	if (config->target_uid > 0 && geteuid() == 0)
 		setuid(config->target_uid);
@@ -4175,53 +4215,11 @@ int main(int argc, char *argv[])
 
 static void sighup_handler(int sig)
 {
-	if (log_stream)
-	{
-		if (log_stream != stderr)
-			fclose(log_stream);
-
-		log_stream = NULL;
-	}
-
-	read_config_file();
-}
-
-static void sigalrm_handler(int sig)
-{
-	// Log current traffic stats
-
-	snprintf(config->bandwidth, sizeof(config->bandwidth),
-		"UDP-ETH:%1.0f/%1.0f  ETH-UDP:%1.0f/%1.0f  TOTAL:%0.1f   IN:%u OUT:%u",
-		(udp_rx / 1024.0 / 1024.0 * 8),
-		(eth_tx / 1024.0 / 1024.0 * 8),
-		(eth_rx / 1024.0 / 1024.0 * 8),
-		(udp_tx / 1024.0 / 1024.0 * 8),
-		((udp_tx + udp_rx + eth_tx + eth_rx) / 1024.0 / 1024.0 * 8),
-		udp_rx_pkt, eth_rx_pkt);
-
-	udp_tx = udp_rx = 0;
-	udp_rx_pkt = eth_rx_pkt = 0;
-	eth_tx = eth_rx = 0;
-
-	if (config->dump_speed)
-		printf("%s\n", config->bandwidth);
-
-	// Update the internal time counter
-	time(&time_now);
-	strftime(time_now_string, sizeof(time_now_string), "%Y-%m-%d %H:%M:%S", localtime(&time_now));
-	alarm(1);
-
-	{
-		// Run timer hooks
-		struct param_timer p = { time_now };
-		run_plugins(PLUGIN_TIMER, &p);
-	}
-
+	main_reload++;
 }
 
 static void shutdown_handler(int sig)
 {
-	LOG(1, 0, 0, "Shutting down\n");
 	main_quit = (sig == SIGQUIT) ? QUIT_SHUTDOWN : QUIT_FAILOVER;
 }
 
@@ -4471,8 +4469,6 @@ static void update_config()
 			LOG(0, 0, 0, "Can't write to PID file %s: %s\n", config->pid_file, strerror(errno));
 		}
 	}
-
-	config->reload_config = 0;
 }
 
 static void read_config_file()
@@ -4490,7 +4486,6 @@ static void read_config_file()
 	cli_do_file(f);
 	LOG(3, 0, 0, "Done reading config file\n");
 	fclose(f);
-	update_config();
 }
 
 int sessionsetup(sessionidt s, tunnelidt t)

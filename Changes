@@ -1,3 +1,7 @@
+* Mon Sep 19 2005 Brendan O'Dea <bod@optus.net> 2.1.8
+- Move code from signal handlers into mainloop, avoiding a race
+  condition when forking CLI.
+
 * Fri Sep 16 2005 Brendan O'Dea <bod@optus.net> 2.1.7
 - This time, for sure: really fix Protocol-Reject.
 
