@@ -1,3 +1,6 @@
+* Fri Sep 30 2005 Brendan O'Dea <bod@optus.net> 2.1.9
+- Fix Calling-Station-Id in RADIUS accounting records (Slobodan Tomic).
+
 * Mon Sep 19 2005 Brendan O'Dea <bod@optus.net> 2.1.8
 - Move code from signal handlers into mainloop, avoiding a race
   condition when forking CLI.
