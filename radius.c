@@ -1,6 +1,6 @@
 // L2TPNS Radius Stuff
 
-char const *cvs_id_radius = "$Id: radius.c,v 1.42 2005-09-30 13:13:26 bodea Exp $";
+char const *cvs_id_radius = "$Id: radius.c,v 1.43 2005-10-11 02:27:40 foonly Exp $";
 
 #include <time.h>
 #include <stdio.h>
@@ -26,6 +26,20 @@ extern tunnelt *tunnel;
 extern configt *config;
 extern int *radfds;
 extern ip_filtert *ip_filters;
+
+static const hasht zero;
+
+static void calc_auth(const void *buf, size_t len, const uint8_t *in, uint8_t *out)
+{
+	MD5_CTX ctx;
+
+	MD5_Init(&ctx);
+	MD5_Update(&ctx, (void *)buf, 4); // code, id, length
+	MD5_Update(&ctx, (void *)in, 16); // auth
+	MD5_Update(&ctx, (void *)(buf + 20), len - 20);
+	MD5_Update(&ctx, config->radiussecret, strlen(config->radiussecret));
+	MD5_Final(out, &ctx);
+}
 
 // Set up socket for radius requests
 void initrad(void)
@@ -343,18 +357,9 @@ void radiussend(uint16_t r, uint8_t state)
 	*(uint16_t *) (b + 2) = htons(p - b);
 	if (state != RADIUSAUTH)
 	{
-	    // Build auth for accounting packet
-	    uint8_t z[16] = {0};
-	    uint8_t hash[16] = {0};
-	    MD5_CTX ctx;
-	    MD5_Init(&ctx);
-	    MD5_Update(&ctx, b, 4);
-	    MD5_Update(&ctx, z, 16);
-	    MD5_Update(&ctx, b + 20, (p - b) - 20);
-	    MD5_Update(&ctx, config->radiussecret, strlen(config->radiussecret));
-	    MD5_Final(hash, &ctx);
-	    memcpy(b + 4, hash, 16);
-	    memcpy(radius[r].auth, hash, 16);
+		// Build auth for accounting packet
+		calc_auth(b, p - b, zero, b + 4);
+		memcpy(radius[r].auth, b + 4, 16);
 	}
 	memset(&addr, 0, sizeof(addr));
 	addr.sin_family = AF_INET;
@@ -415,7 +420,6 @@ static void handle_avpair(sessionidt s, uint8_t *avp, int len)
 void processrad(uint8_t *buf, int len, char socket_index)
 {
 	uint8_t b[MAXETHER];
-	MD5_CTX ctx;
 	uint16_t r;
 	sessionidt s;
 	tunnelidt t = 0;
@@ -454,12 +458,7 @@ void processrad(uint8_t *buf, int len, char socket_index)
 		return;
 	}
 	t = session[s].tunnel;
-	MD5_Init(&ctx);
-	MD5_Update(&ctx, buf, 4);
-	MD5_Update(&ctx, radius[r].auth, 16);
-	MD5_Update(&ctx, buf + 20, len - 20);
-	MD5_Update(&ctx, config->radiussecret, strlen(config->radiussecret));
-	MD5_Final(hash, &ctx);
+	calc_auth(buf, len, radius[r].auth, hash);
 	do {
 		if (memcmp(hash, buf + 4, 16))
 		{
@@ -762,8 +761,8 @@ extern int daefd;
 void processdae(uint8_t *buf, int len, struct sockaddr_in *addr, int alen)
 {
 	int i, r_code, r_id, length, attribute_length;
-	uint8_t vector[16], hash[16], *packet, attribute;
-	MD5_CTX ctx;
+	uint8_t *packet, attribute;
+	hasht hash;
 	char username[MAXUSER] = "";
 	in_addr_t nas = 0;
 	in_addr_t ip = 0;
@@ -808,17 +807,8 @@ void processdae(uint8_t *buf, int len, struct sockaddr_in *addr, int alen)
 	LOG(3, 0, 0, "Received DAE %s, id %d\n", radius_code(r_code), r_id);
 
 	// check authenticator
-	memcpy(vector, buf + 4, 16);
-	memset(buf + 4, 0, 16);
-
-	i = strlen(config->radiussecret);
-	if (i > 16) i = 16;
-
-	MD5_Init(&ctx);
-	MD5_Update(&ctx, buf, len);
-	MD5_Update(&ctx, config->radiussecret, i);
-	MD5_Final(hash, &ctx);
-	if (memcmp(hash, vector, 16) != 0)
+	calc_auth(buf, len, zero, hash);
+	if (memcmp(hash, buf + 4, 16) != 0)
 	{
 		LOG(1, 0, 0, "Incorrect vector in DAE request (wrong secret in radius config?)\n");
 		return;
@@ -1024,10 +1014,9 @@ void processdae(uint8_t *buf, int len, struct sockaddr_in *addr, int alen)
 	packet = buf;
 	*packet++ = r_code;
 	*packet++ = r_id;
-	packet += 2;
-	memset(packet, 0, 16);
-	packet += 16;
-	len = 20;
+	// skip len + auth
+	packet += 2 + 16;
+	len = packet - buf;
 
 	// add attributes
 	if (error)
@@ -1042,14 +1031,7 @@ void processdae(uint8_t *buf, int len, struct sockaddr_in *addr, int alen)
 	*((uint16_t *)(buf + 2)) = htons(len);
 
 	// make vector
-	i = strlen(config->radiussecret);
-	if (i > 16) i = 16;
-
-	MD5_Init(&ctx);
-	MD5_Update(&ctx, buf, len);
-	MD5_Update(&ctx, config->radiussecret, i);
-	MD5_Final(hash, &ctx);
-	memcpy(buf + 4, hash, 16);
+	calc_auth(buf, len, hash, buf + 4);
 
 	LOG(3, 0, 0, "Sending DAE %s, id=%d\n", radius_code(r_code), r_id);
 
