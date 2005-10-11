@@ -1,6 +1,6 @@
 // L2TPNS Radius Stuff
 
-char const *cvs_id_radius = "$Id: radius.c,v 1.43 2005-10-11 02:27:40 foonly Exp $";
+char const *cvs_id_radius = "$Id: radius.c,v 1.44 2005-10-11 09:04:53 bodea Exp $";
 
 #include <time.h>
 #include <stdio.h>
@@ -304,18 +304,11 @@ void radiussend(uint16_t r, uint8_t state)
 				p[1] = 6;
 				*(uint32_t *) (p + 2) = htonl(session[s].cout_wrap);
 				p += p[1];
-			}
 
-			if (session[s].snoop_ip && session[s].snoop_port)
-			{
-				*p = 26;				// vendor-specific
-				*(uint32_t *) (p + 2) = htonl(9);	// Cisco
-				p[6] = 1;				// Cisco-AVPair
-				p[7] = 2 + sprintf((char *) p + 8, "intercept=%s:%d",
-					fmtaddr(session[s].snoop_ip, 0), session[s].snoop_port);
-
-				p[1] = p[7] + 6;
-				p += p[1];
+				{
+					struct param_radius_account acct = { &tunnel[session[s].tunnel], &session[s], &p };
+					run_plugins(PLUGIN_RADIUS_ACCOUNT, &acct);
+				}
 			}
 		}
 	}

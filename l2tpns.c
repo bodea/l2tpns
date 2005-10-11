@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.143 2005-10-11 07:06:56 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.144 2005-10-11 09:04:53 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -162,6 +162,7 @@ static char *plugin_functions[] = {
 	"plugin_control",
 	"plugin_radius_response",
 	"plugin_radius_reset",
+	"plugin_radius_account",
 	"plugin_become_master",
 	"plugin_new_session_master",
 };

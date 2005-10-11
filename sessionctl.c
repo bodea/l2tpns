@@ -5,10 +5,10 @@
 
 /* session control */
 
-char const *cvs_id = "$Id: sessionctl.c,v 1.3 2005-06-28 14:48:28 bodea Exp $";
+char const *cvs_id = "$Id: sessionctl.c,v 1.4 2005-10-11 09:04:53 bodea Exp $";
 
 int plugin_api_version = PLUGIN_API_VERSION;
-static struct pluginfuncs *p = 0;
+static struct pluginfuncs *f = 0;
 
 char *plugin_control_help[] = {
     "  drop USER|SID [REASON]                      Shutdown user session",
@@ -40,10 +40,10 @@ int plugin_control(struct param_control *data)
     }
 
     if (!(session = strtol(data->argv[1], &end, 10)) || *end)
-	session = p->get_session_by_username(data->argv[1]);
+	session = f->get_session_by_username(data->argv[1]);
 
     if (session)
-	s = p->get_session_by_id(session);
+	s = f->get_session_by_id(session);
 
     if (!s || !s->ip)
     {
@@ -58,9 +58,9 @@ int plugin_control(struct param_control *data)
 	reason = "Requested by administrator.";
 
     if (data->argv[0][0] == 'd')
-	p->sessionshutdown(session, reason, 3, 0);
+	f->sessionshutdown(session, reason, 3, 0);
     else
-	p->sessionkill(session, reason);
+	f->sessionkill(session, reason);
 
     data->response = NSCTL_RES_OK;
     data->additional = 0;
@@ -70,5 +70,5 @@ int plugin_control(struct param_control *data)
 
 int plugin_init(struct pluginfuncs *funcs)
 {
-	return ((p = funcs)) ? 1 : 0;
+    return ((f = funcs)) ? 1 : 0;
 }

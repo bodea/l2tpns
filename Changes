@@ -3,6 +3,7 @@
 - Fix RADIUS authentication on DAE responses.
 - Don't send tunnel HELLO when there are pending control messages.
 - Move plugin_radius_reset from *ctl to auto* plugins.
+- Add Cisco-AVPairs to RADIUS accounting records via plugin_radius_account.
 
 * Mon Sep 19 2005 Brendan O'Dea <bod@optus.net> 2.1.8
 - Move code from signal handlers into mainloop, avoiding a race
