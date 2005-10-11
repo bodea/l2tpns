@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.93 2005-09-30 13:13:26 bodea Exp $
+// $Id: l2tpns.h,v 1.94 2005-10-11 07:06:56 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -323,7 +323,7 @@ typedef struct
 	uint16_t ns;		// next send
 	int state;		// current state (tunnelstate enum)
 	clockt last;		// when last control message sent (used for resend timeout)
-	clockt retry;		// when to try resenting pending control
+	clockt retry;		// when to try resending pending control
 	clockt die;		// being closed, when to finally free
 	clockt lastrec;		// when the last control message was received
 	char hostname[128];	// tunnel hostname

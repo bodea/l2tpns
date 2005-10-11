@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.142 2005-09-19 02:39:57 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.143 2005-10-11 07:06:56 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -961,7 +961,7 @@ void tunnelsend(uint8_t * buf, uint16_t l, tunnelidt t)
 	{
 		tunnel[t].last = time_now; // control message sent
 		tunnel[t].retry = backoff(tunnel[t].try); // when to resend
-		if (tunnel[t].try > 1)
+		if (tunnel[t].try)
 		{
 			STAT(tunnel_retries);
 			LOG(3, 0, t, "Control message resend try %d\n", tunnel[t].try);
@@ -2745,7 +2745,7 @@ static void regular_cleanups(double period)
 			}
 		}
 		// Send hello
-		if (tunnel[t].state == TUNNELOPEN && (time_now - tunnel[t].lastrec) > 60)
+		if (tunnel[t].state == TUNNELOPEN && !tunnel[t].controlc && (time_now - tunnel[t].lastrec) > 60)
 		{
 			controlt *c = controlnew(6); // sending HELLO
 			controladd(c, 0, t); // send the message
