@@ -4,7 +4,7 @@
 
 /* set up intercept based on RADIUS reply */
 
-char const *cvs_id = "$Id: autosnoop.c,v 1.10 2004-11-30 05:49:47 bodea Exp $";
+char const *cvs_id = "$Id: autosnoop.c,v 1.11 2005-10-11 07:59:09 bodea Exp $";
 
 int plugin_api_version = PLUGIN_API_VERSION;
 struct pluginfuncs *p;
@@ -33,6 +33,13 @@ int plugin_radius_response(struct param_radius_response *data)
 		}
 	}
 
+	return PLUGIN_RET_OK;
+}
+
+int plugin_radius_reset(struct param_radius_reset *data)
+{
+	data->s->snoop_ip = 0;
+	data->s->snoop_port = 0;
 	return PLUGIN_RET_OK;
 }
 

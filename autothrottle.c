@@ -13,7 +13,7 @@
  * throttle=no
  */
 
-char const *cvs_id = "$Id: autothrottle.c,v 1.14 2005-05-13 05:28:16 bodea Exp $";
+char const *cvs_id = "$Id: autothrottle.c,v 1.15 2005-10-11 07:59:09 bodea Exp $";
 
 int plugin_api_version = PLUGIN_API_VERSION;
 struct pluginfuncs *p;
@@ -107,6 +107,12 @@ int plugin_radius_response(struct param_radius_response *data)
 		data->s->throttle_in = data->s->throttle_out = rate;
 	}
 
+	return PLUGIN_RET_OK;
+}
+
+int plugin_radius_reset(struct param_radius_reset *data)
+{
+	p->throttle(p->get_id_by_session(data->s), 0, 0);
 	return PLUGIN_RET_OK;
 }
 
