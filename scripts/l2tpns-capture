@@ -12,7 +12,7 @@ use IO::File;
 use IO::Socket;
 use Time::HiRes 'gettimeofday';
 
-(my $cmd = $0) =~ s!.*//!!;
+(my $cmd = $0) =~ s!.*/!!;
 
 die "Usage: $cmd PREFIX PORT\n" unless @ARGV == 2 and $ARGV[1] =~ /^\d+$/;
 
