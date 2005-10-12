@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.94 2005-10-11 07:06:56 bodea Exp $
+// $Id: l2tpns.h,v 1.95 2005-10-12 07:16:13 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -15,7 +15,7 @@
 #include <sys/types.h>
 #include <libcli.h>
 
-#define VERSION	"2.1.9"
+#define VERSION	"2.1.10"
 
 // Limits
 #define MAXTUNNEL	500		// could be up to 65535

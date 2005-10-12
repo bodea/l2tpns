@@ -1,0 +1,68 @@
+#! /usr/bin/perl -w
+
+#
+# Accept intercept data from l2tpns, write to a file in pcap format
+# (http://wiki.ethereal.com/Development/LibpcapFileFormat) suffixed
+# with timestamp.  Killing the process with SIGHUP causes a new file
+# to be opened.
+#
+
+use strict;
+use IO::File;
+use IO::Socket;
+use Time::HiRes 'gettimeofday';
+
+(my $cmd = $0) =~ s!.*//!!;
+
+die "Usage: $cmd PREFIX PORT\n" unless @ARGV == 2 and $ARGV[1] =~ /^\d+$/;
+
+my ($prefix, $port) = @ARGV;
+my $sock = IO::Socket::INET->new(
+    LocalPort	=> $port,
+    Proto	=> 'udp',
+    Type	=> SOCK_DGRAM,
+) or die "$cmd: can't bind to port $port ($!)\n";
+
+my $restart = 0;
+$SIG{HUP} = sub { $restart++ };
+
+my $header = pack LSSlLLL =>
+    0xa1b2c3d4,	# magic no
+    2,		# version maj
+    4,		# version min
+    0,		# timezone offset (GMT)
+    0,		# timestamp accuracy
+    65536,	# snaplen
+    12;		# link type (RAW_IP)
+
+my $cap;
+my $buf;
+my $file;
+for (;;)
+{
+    unless ($cap)
+    {
+	$file = $prefix . time;
+	$cap = IO::File->new("> $file")
+	    or die "$0: can't create capture file $file ($!)\n";
+
+	$cap->print($header)
+	    or die "$0: error writing to $file ($!)\n";
+    }
+
+    while ($sock->recv($buf, 1600))
+    {
+	$cap->print(
+	    # packet header: sec, usec, included size, original size
+	    (pack LLLL => (gettimeofday), (length $buf) x 2),
+	    $buf
+	) or die "$0: error writing to $file ($!)\n";
+    }
+
+    if ($restart)
+    {
+	$restart = 0;
+	$cap->close;
+	undef $cap;
+    }
+}
