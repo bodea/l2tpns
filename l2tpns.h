@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.95 2005-10-12 07:16:13 bodea Exp $
+// $Id: l2tpns.h,v 1.96 2005-10-18 07:19:29 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -307,6 +307,9 @@ typedef struct
 
 	// interim RADIUS
 	time_t last_interim;
+
+	// last LCP Echo
+	time_t last_echo;
 } sessionlocalt;
 
 #define	SESSIONPFC	1	// PFC negotiated flags

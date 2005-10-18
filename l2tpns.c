@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.144 2005-10-11 09:04:53 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.145 2005-10-18 07:19:28 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -2932,7 +2932,8 @@ static void regular_cleanups(double period)
 		}
 
 		// No data in ECHO_TIMEOUT seconds, send LCP ECHO
-		if (session[s].ppp.phase >= Establish && (time_now - session[s].last_packet >= ECHO_TIMEOUT))
+		if (session[s].ppp.phase >= Establish && (time_now - session[s].last_packet >= ECHO_TIMEOUT) &&
+			(time_now - sess_local[s].last_echo >= ECHO_TIMEOUT))
 		{
 			uint8_t b[MAXETHER];
 
@@ -2947,6 +2948,7 @@ static void regular_cleanups(double period)
 			LOG(4, s, session[s].tunnel, "No data in %d seconds, sending LCP ECHO\n",
 					(int)(time_now - session[s].last_packet));
 			tunnelsend(b, 24, session[s].tunnel); // send it
+			sess_local[s].last_echo = time_now;
 			s_actions++;
 		}
 
