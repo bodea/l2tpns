@@ -1,6 +1,6 @@
 // L2TPNS Radius Stuff
 
-char const *cvs_id_radius = "$Id: radius.c,v 1.44 2005-10-11 09:04:53 bodea Exp $";
+char const *cvs_id_radius = "$Id: radius.c,v 1.45 2005-10-19 03:09:30 bodea Exp $";
 
 #include <time.h>
 #include <stdio.h>
@@ -325,6 +325,30 @@ void radiussend(uint16_t r, uint8_t state)
 		p[1] = 6;
 		*(uint32_t *) (p + 2) = htonl(session[s].ip);
 		p += p[1];
+	}
+	if (s && session[s].route[0].ip)
+	{
+		int r;
+		for (r = 0; s && r < MAXROUTE && session[s].route[r].ip; r++)
+		{
+		    	int width = 32;
+			if (session[s].route[r].mask)
+			{
+			    int mask = session[s].route[r].mask;
+			    while (!(mask & 1))
+			    {
+				width--;
+				mask >>= 1;
+			    }
+			}
+
+			*p = 22;	// Framed-Route
+			p[1] = sprintf((char *) p + 2, "%s/%d %s 1",
+				fmtaddr(htonl(session[s].route[r].ip), 0),
+				width, fmtaddr(htonl(session[s].ip), 1)) + 2;
+
+			p += p[1];
+		}
 	}
 	if (*session[s].called)
 	{

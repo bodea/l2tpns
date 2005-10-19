@@ -1,6 +1,7 @@
-* Tue Oct 18 2005 Brendan O'Dea <bod@optus.net> 2.1.10
+* Wed Oct 19 2005 Brendan O'Dea <bod@optus.net> 2.1.10
 - Add scripts/l2tpns-capture.
 - Fix LCP Echo frequency.
+- Add Framed-Route entries to RADIUS records.
 
 * Tue Oct 11 2005 Brendan O'Dea <bod@optus.net> 2.1.9
 - Fix Calling-Station-Id in RADIUS accounting records (Slobodan Tomic).
