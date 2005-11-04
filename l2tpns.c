@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.145 2005-10-18 07:19:28 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.146 2005-11-04 14:41:50 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -1682,6 +1682,7 @@ void sendipcp(sessionidt s, tunnelidt t)
 				 my_address; // send my IP
 
 	tunnelsend(buf, 10 + (q - buf), t); // send it
+	restart_timer(s, ipcp);
 }
 
 void sendipv6cp(sessionidt s, tunnelidt t)
@@ -1707,6 +1708,7 @@ void sendipv6cp(sessionidt s, tunnelidt t)
 	q[13] = 1;
 
 	tunnelsend(buf, 14 + (q - buf), t);	// send it
+	restart_timer(s, ipv6cp);
 }
 
 static void sessionclear(sessionidt s)
@@ -2327,9 +2329,9 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 							if (*p == 5 && p[1] == 6) // Magic-Number
 								amagic = ntohl(*(uint32_t *) (p + 2));
 							else if (*p == 7) // Protocol-Field-Compression
-								aflags |= SESSIONPFC;
+								aflags |= SESSION_PFC;
 							else if (*p == 8) // Address-and-Control-Field-Compression
-								aflags |= SESSIONACFC;
+								aflags |= SESSION_ACFC;
 							p += p[1];
 						}
 					}
@@ -2456,20 +2458,17 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 				case 12:      // ICCN
 					if (amagic == 0) amagic = time_now;
 					session[s].magic = amagic; // set magic number
-					session[s].l2tp_flags = aflags; // set flags received
+					session[s].flags = aflags; // set flags received
 					session[s].mru = PPPMTU; // default
 					controlnull(t); // ack
 
 					// start LCP
-					sess_local[s].lcp.restart = time_now + config->ppp_restart_time;
-					sess_local[s].lcp.conf_sent = 1;
-					sess_local[s].lcp.nak_sent = 0;
 					sess_local[s].lcp_authtype = config->radius_authprefer;
 					sess_local[s].ppp_mru = MRU;
-					session[s].ppp.lcp = RequestSent;
 					sendlcp(s, t);
-
+					change_state(s, lcp, RequestSent);
 					break;
+
 				case 14:      // CDN
 					controlnull(t); // ack
 					sessionshutdown(s, "Closed (Received CDN).", 0, 0);
@@ -2817,8 +2816,6 @@ static void regular_cleanups(double period)
 				if (sess_local[s].lcp.conf_sent < config->ppp_max_configure)
 				{
 					LOG(3, s, session[s].tunnel, "No ACK for LCP ConfigReq... resending\n");
-					sess_local[s].lcp.restart = time_now + config->ppp_restart_time;
-					sess_local[s].lcp.conf_sent++;
 					sendlcp(s, session[s].tunnel);
 					change_state(s, lcp, next_state);
 				}
@@ -2848,8 +2845,6 @@ static void regular_cleanups(double period)
 				if (sess_local[s].ipcp.conf_sent < config->ppp_max_configure)
 				{
 					LOG(3, s, session[s].tunnel, "No ACK for IPCP ConfigReq... resending\n");
-					sess_local[s].ipcp.restart = time_now + config->ppp_restart_time;
-					sess_local[s].ipcp.conf_sent++;
 					sendipcp(s, session[s].tunnel);
 					change_state(s, ipcp, next_state);
 				}
@@ -2879,8 +2874,6 @@ static void regular_cleanups(double period)
 				if (sess_local[s].ipv6cp.conf_sent < config->ppp_max_configure)
 				{
 					LOG(3, s, session[s].tunnel, "No ACK for IPV6CP ConfigReq... resending\n");
-					sess_local[s].ipv6cp.restart = time_now + config->ppp_restart_time;
-					sess_local[s].ipv6cp.conf_sent++;
 					sendipv6cp(s, session[s].tunnel);
 					change_state(s, ipv6cp, next_state);
 				}
@@ -2907,8 +2900,6 @@ static void regular_cleanups(double period)
 				if (sess_local[s].ccp.conf_sent < config->ppp_max_configure)
 				{
 					LOG(3, s, session[s].tunnel, "No ACK for CCP ConfigReq... resending\n");
-					sess_local[s].ccp.restart = time_now + config->ppp_restart_time;
-					sess_local[s].ccp.conf_sent++;
 					sendccp(s, session[s].tunnel);
 					change_state(s, ccp, next_state);
 				}

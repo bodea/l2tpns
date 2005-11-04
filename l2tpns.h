@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.96 2005-10-18 07:19:29 bodea Exp $
+// $Id: l2tpns.h,v 1.97 2005-11-04 14:41:50 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -148,7 +148,14 @@ enum {
 
 // reset state machine counters
 #define initialise_restart_count(_s, _fsm)			\
-	sess_local[_s]._fsm.conf_sent = sess_local[_s]._fsm.nak_sent
+	sess_local[_s]._fsm.conf_sent = sess_local[_s]._fsm.nak_sent = 0
+
+// increment ConfReq counter and reset timer
+#define restart_timer(_s, _fsm) ({				\
+	sess_local[_s]._fsm.conf_sent++;			\
+	sess_local[_s]._fsm.restart =				\
+		time_now + config->ppp_restart_time;		\
+})
 
 // stop timer on change to state where timer does not run
 #define change_state(_s, _fsm, _new) ({				\
@@ -221,7 +228,7 @@ typedef struct
 	sessionidt next;		// next session in linked list
 	sessionidt far;			// far end session ID
 	tunnelidt tunnel;		// near end tunnel ID
-	uint8_t l2tp_flags;		// various bit flags from the ICCN on the l2tp tunnel.
+	uint8_t flags;			// session flags: see SESSION_*
 	struct {
 		uint8_t phase;		// PPP phase
 		uint8_t lcp:4;		//   LCP    state
@@ -312,8 +319,10 @@ typedef struct
 	time_t last_echo;
 } sessionlocalt;
 
-#define	SESSIONPFC	1	// PFC negotiated flags
-#define	SESSIONACFC	2	// ACFC negotiated flags
+// session flags
+#define	SESSION_PFC	(1 << 0)	// use Protocol-Field-Compression
+#define	SESSION_ACFC	(1 << 1)	// use Address-and-Control-Field-Compression
+#define SESSION_STARTED	(1 << 2)	// RADIUS Start record sent
 
 // 168 bytes per tunnel
 typedef struct

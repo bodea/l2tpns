@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.84 2005-09-16 13:20:39 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.85 2005-11-04 14:41:50 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -903,11 +903,17 @@ static void ipcp_open(sessionidt s, tunnelidt t)
 
 	change_state(s, ipcp, Opened);
 
-	if (!session[s].walled_garden)
+	if (!(session[s].walled_garden || session[s].flags & SESSION_STARTED))
 	{
 		uint16_t r = radiusnew(s);
 		if (r)
+		{
 			radiussend(r, RADIUSSTART); // send radius start
+
+			// don't send further Start records if IPCP is restarted
+			session[s].flags |= SESSION_STARTED;
+			cluster_send_session(s);
+		}
 	}
 
 	// start IPv6 if configured and still in passive state
@@ -1747,12 +1753,12 @@ uint8_t *makeppp(uint8_t *b, int size, uint8_t *p, int l, sessionidt s, tunnelid
 	*(uint16_t *) (b + 2) = htons(tunnel[t].far); // tunnel
 	*(uint16_t *) (b + 4) = htons(session[s].far); // session
 	b += 6;
-	if (mtype == PPPLCP || !(session[s].l2tp_flags & SESSIONACFC))
+	if (mtype == PPPLCP || !(session[s].flags & SESSION_ACFC))
 	{
 		*(uint16_t *) b = htons(0xFF03); // HDLC header
 		b += 2;
 	}
-	if (mtype < 0x100 && session[s].l2tp_flags & SESSIONPFC)
+	if (mtype < 0x100 && session[s].flags & SESSION_PFC)
 		*b++ = mtype;
 	else
 	{
@@ -1839,6 +1845,7 @@ void sendlcp(sessionidt s, tunnelidt t)
 	if (config->debug > 3) dumplcp(q, l - q);
 
 	tunnelsend(b, (l - b), t);
+	restart_timer(s, lcp);
 }
 
 // Send CCP request for no compression
@@ -1857,4 +1864,5 @@ void sendccp(sessionidt s, tunnelidt t)
 
 	LOG_HEX(5, "PPPCCP", q, 4);
 	tunnelsend(b, (q - b) + 4 , t);
+	restart_timer(s, ccp);
 }

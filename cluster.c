@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.46 2005-09-02 23:59:56 bodea Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.47 2005-11-04 14:41:50 bodea Exp $";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -1268,7 +1268,7 @@ static uint8_t *convert_session(struct oldsession *old)
 	new.next = old->next;
 	new.far = old->far;
 	new.tunnel = old->tunnel;
-	new.l2tp_flags = old->l2tp_flags;
+	new.flags = old->l2tp_flags;
 	new.ip = old->ip;
 	new.ip_pool_index = old->ip_pool_index;
 	new.unique_id = old->unique_id;
