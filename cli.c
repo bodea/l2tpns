@@ -2,9 +2,10 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.66 2005-09-01 06:59:06 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.67 2005-11-14 09:49:01 bodea Exp $";
 
 #include <stdio.h>
+#include <stddef.h>
 #include <stdarg.h>
 #include <unistd.h>
 #include <sys/file.h>
@@ -2884,7 +2885,7 @@ static int cmd_ip_access_list_rule(struct cli_def *cli, char *command, char **ar
 			return CLI_OK;
 		}
 
-		if (!memcmp(&ip_filters[filt].rules[i], rule, sizeof(*rule)))
+		if (!memcmp(&ip_filters[filt].rules[i], rule, offsetof(ip_filter_rulet, counter)))
 			return CLI_OK;
 	}
 
