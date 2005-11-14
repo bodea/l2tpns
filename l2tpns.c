@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.146 2005-11-04 14:41:50 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.147 2005-11-14 08:38:02 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -5350,7 +5350,10 @@ int ip_filter(uint8_t *buf, int len, uint8_t filter)
 
 		if (frag_offset)
 		{
-			if (!rule->frag || rule->action == FILTER_ACTION_DENY)
+			// non-fragmented deny rules are skipped if containing L4 matches
+			if (!rule->frag &&
+			    (rule->src_ports.op || rule->dst_ports.op || rule->tcp_flag_op) &&
+			    rule->action == FILTER_ACTION_DENY)
 				continue;
 		}
 		else

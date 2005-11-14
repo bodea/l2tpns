@@ -1,3 +1,6 @@
+* Mon Nov 14 2005 Brendan O'Dea <bod@optus.net> 2.1.11
+- Fix fragment handling in ip_filter.
+
 * Sat Nov 5 2005 Brendan O'Dea <bod@optus.net> 2.1.10
 - Add scripts/l2tpns-capture.
 - Fix LCP Echo frequency.
