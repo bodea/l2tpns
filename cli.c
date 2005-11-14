@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.67 2005-11-14 09:49:01 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.68 2005-11-14 20:19:08 bodea Exp $";
 
 #include <stdio.h>
 #include <stddef.h>
@@ -3069,7 +3069,7 @@ static int cmd_show_access_list(struct cli_def *cli, char *command, char **argv,
 		{
 			char const *r = show_access_list_rule(ip_filters[f].extended, rules);
 		    	if (rules->counter)
-				cli_print(cli, "%s (%d match%s)", r,
+				cli_print(cli, "%s (%u match%s)", r,
 					rules->counter, rules->counter > 1 ? "es" : "");
 			else
 				cli_print(cli, "%s", r);
