@@ -1,3 +1,9 @@
+* Thu Nov 17 2005 Brendan O'Dea <bod@optus.net> 2.1.12
+- Set MTU on tunnel interface so the kernel will re-fragment large
+  packets to within MRU.
+- Fix TCP checksum recalc.
+- NAK silly MRU values for peer.
+
 * Mon Nov 14 2005 Brendan O'Dea <bod@optus.net> 2.1.11
 - Fix fragment handling in ip_filter.
 - Exclude counter when comparing filter rules.

@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.149 2005-11-17 06:46:24 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.150 2005-11-17 07:35:35 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -552,6 +552,13 @@ static void inittun(void)
 	if (ioctl(ifrfd, SIOCSIFTXQLEN, (void *) &ifr) < 0)
 	{
 		LOG(0, 0, 0, "Error setting tun queue length: %s\n", strerror(errno));
+		exit(1);
+	}
+	/* set MTU to modem MRU + 4 (tun header) */
+	ifr.ifr_mtu = MRU + 4;
+	if (ioctl(ifrfd, SIOCSIFMTU, (void *) &ifr) < 0)
+	{
+		LOG(0, 0, 0, "Error setting tun MTU: %s\n", strerror(errno));
 		exit(1);
 	}
 	ifr.ifr_flags = IFF_UP;
