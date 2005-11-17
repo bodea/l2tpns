@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.148 2005-11-14 21:08:30 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.149 2005-11-17 06:46:24 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -1043,7 +1043,7 @@ void adjust_tcp_mss(sessionidt s, tunnelidt t, uint8_t *buf, int len, uint8_t *t
 	sum = orig + (~MSS & 0xffff);
 	sum += ntohs(*(uint16_t *) (tcp + 16));
 	sum = (sum & 0xffff) + (sum >> 16);
-	*(uint16_t *) (tcp + 16) = htons(sum);
+	*(uint16_t *) (tcp + 16) = htons(sum + (sum >> 16));
 }
 
 // process outgoing (to tunnel) IP
@@ -1170,7 +1170,8 @@ static void processipout(uint8_t *buf, int len)
 			master_throttle_packet(sp->tbf_out, data, size);
 		return;
 	}
-	else if (sp->walled_garden && !config->cluster_iam_master)
+
+	if (sp->walled_garden && !config->cluster_iam_master)
 	{
 		// We are walled-gardening this
 		master_garden_packet(s, data, size);
