@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.85 2005-11-04 14:41:50 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.86 2005-11-17 05:24:17 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -575,7 +575,18 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 			switch (type)
 			{
 				case 1: // Maximum-Receive-Unit
-					session[s].mru = ntohs(*(uint16_t *)(o + 2));
+					{
+						uint16_t mru = ntohs(*(uint16_t *)(o + 2));
+						if (mru >= 576)
+						{
+							session[s].mru = mru;
+							break;
+						}
+
+						LOG(3, s, t, "    Remote requesting MRU of %u.  Rejecting.\n", mru);
+						mru = htons(MRU);
+						q = ppp_conf_nak(s, b, sizeof(b), PPPLCP, &response, q, p, o, (uint8_t *) &mru, sizeof(mru));
+					}
 					break;
 
 				case 2: // Async-Control-Character-Map
