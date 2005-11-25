@@ -1,0 +1,121 @@
+#! /usr/bin/perl -w
+
+# Ping test: run through packet sizes (default: 56-3000)
+
+use strict;
+use Socket;
+
+use constant TRIES			=> 4;
+use constant TIMEOUT			=> 3; # 3s
+use constant MAXPACK			=> 16*1024;
+
+use constant ICMP_TYPE_ECHOREPLY	=> 0; # ICMP packet types
+use constant ICMP_TYPE_ECHO		=> 8;
+use constant ICMP_CODE			=> 0; # No ICMP code for ECHO and ECHOREPLY
+
+use constant SOL_IP			=> 0;
+use constant IP_MTU_DISCOVER		=> 10;
+use constant IP_PMTUDISC_WANT		=> 0;
+use constant IP_PMTUDISC_DONT		=> 1;
+use constant IP_PMTUDISC_DO		=> 2;
+
+my $verbose = shift if @ARGV and $ARGV[0] =~ /^--?v(erbose)?$/;
+my ($host, $min, $max) = @ARGV;
+
+die "Usage: $0 [-v] HOST [MIN [MAX]]\n" unless $host;
+my $addr = inet_aton $host or die "$0: invalid host $host\n";
+my $sin = sockaddr_in 0, $addr;
+
+$min =   56 if @ARGV < 2;
+$max = 3000 if @ARGV < 3;
+$max = $min if $min > $max;
+
+my $icmp = getprotobyname 'icmp' or die "$0: can't get ICMP proto ($!)\n";
+socket my $sock, PF_INET, SOCK_RAW, $icmp
+    or die "$0: can't create ICMP socket ($!)\n";
+
+setsockopt $sock, SOL_IP, IP_MTU_DISCOVER, IP_PMTUDISC_DONT
+    or die "$0: can't disable PMTU discovery ($!)\n";
+
+{
+    my $seq = 0;
+    sub icmp_out
+    {
+	my $len = shift;
+
+	# fill data with the *$len*$len*$len*...
+	my $d = sprintf '*%d', $len;
+	my $data = $d x (int ($len / length $d) + 1);
+
+	my $s = 0 + $seq++;
+	$seq %= 65536;
+
+	my $pack = pack "C C n n n a$len" =>
+	    ICMP_TYPE_ECHO,	# icmp_type
+	    ICMP_CODE,		# icmp_code
+	    0,			# icmp_cksum
+	    $$,			# icmp_id
+	    $s,			# icmp_seq
+	    $data;		# payload
+
+	my $cksum = 0;
+	$cksum += $_ for unpack 'n*' => $pack . "\x00";
+	my $wrap;
+	$cksum = ($cksum & 0xffff) + $wrap while ($wrap = ($cksum >> 16));
+
+	substr $pack, 2, 2, pack n => ~$cksum;
+	($s, $pack);
+    }
+}
+
+sub icmp_in
+{
+    my ($pack, $seq) = @_;
+    return unless length $pack >= 28;
+    my ($type, $code, $cksum, $id, $s) = unpack 'C C n n n' => substr $pack, 20;
+    return $type == ICMP_TYPE_ECHOREPLY
+	and $code == ICMP_CODE
+	and $id == $$
+	and $s == $seq;
+}
+
+$|++ if $verbose;
+
+for (my $size = $min; $size <= $max; $size++)
+{
+    my ($seq, $pack) = icmp_out $size;
+
+    print "$size: " if $verbose;
+    my $res = 0;
+
+    for (my $t = 0; $t < TRIES; $t++)
+    {
+	send $sock, $pack, 0, $sin
+	    or die "$0: sendto failed ($!)\n";
+
+	my $rin = '';
+	(vec $rin, fileno $sock, 1) = 1;
+	select $rin, undef, undef, TIMEOUT or next;
+	
+	my $peer = recv $sock, my $buf, MAXPACK, 0
+	    or die "$0: recvfrom failed ($!)\n";
+
+	next unless (sockaddr_in $peer)[1] eq $addr
+	    and icmp_in $buf, $seq;
+
+	# OK
+	$res++;
+	last;
+    }
+
+    if ($verbose)
+    {
+	print +($res ? 'OK' : 'FAIL'), "\n";
+    }
+    else
+    {
+    	print "$size\n" unless $res;
+    }
+}
+
+1;
