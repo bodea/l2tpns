@@ -15,8 +15,8 @@ use constant ICMP_CODE			=> 0; # No ICMP code for ECHO and ECHOREPLY
 
 use constant SOL_IP			=> 0;
 use constant IP_MTU_DISCOVER		=> 10;
-use constant IP_PMTUDISC_WANT		=> 0;
-use constant IP_PMTUDISC_DONT		=> 1;
+use constant IP_PMTUDISC_DONT		=> 0;
+use constant IP_PMTUDISC_WANT		=> 1;
 use constant IP_PMTUDISC_DO		=> 2;
 
 my $verbose = shift if @ARGV and $ARGV[0] =~ /^--?v(erbose)?$/;
