@@ -2,11 +2,11 @@ Summary: A high-speed clustered L2TP LNS
 Name: l2tpns
 Version: 2.1.13
 Release: 1
-Copyright: GPL
+License: GPL
 Group: System Environment/Daemons
 Source: http://optusnet.dl.sourceforge.net/sourceforge/l2tpns/l2tpns-%{version}.tar.gz
 URL: http://sourceforge.net/projects/l2tpns
-BuildRoot: %{_tmppath}/%{name}-%{version}-root
+BuildRoot: %{_tmppath}/%{name}-%{version}-%(%__id -un)
 Prereq: /sbin/chkconfig
 BuildRequires: libcli >= 1.8.5
 Requires: libcli >= 1.8.5

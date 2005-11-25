@@ -1,5 +1,7 @@
 * Fri Nov 25 2005 Brendan O'Dea <bod@optus.net> 2.1.13
 - Add test/ping-sweep.
+- Apply spec changes from Charlie Brady: use License header, change
+  BuildRoot to include username.
 
 * Thu Nov 17 2005 Brendan O'Dea <bod@optus.net> 2.1.12
 - Set MTU on tunnel interface so the kernel will re-fragment large
