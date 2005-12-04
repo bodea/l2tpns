@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.86 2005-11-17 05:24:17 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.87 2005-12-04 13:06:50 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -1037,7 +1037,7 @@ void processipcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 			case 131: // secondary DNS
 				if (o[1] != 6 || o[1] > length) return;
 
-				addr = htonl(session[s].dns1);
+				addr = htonl(session[s].dns2);
 				if (memcmp(o + 2, &addr, sizeof(addr)))
 				{
 					q = ppp_conf_nak(s, b, sizeof(b), PPPIPCP, &response, q, p, o, (uint8_t *) &addr, sizeof(addr));
