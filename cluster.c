@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.47 2005-11-04 14:41:50 bodea Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.48 2005-12-05 12:47:12 bodea Exp $";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -1553,7 +1553,7 @@ static int cluster_process_heartbeat(uint8_t *data, int size, int more, uint8_t 
 				s -= (p - orig_p);
 
 				if (size != sizeof(tunnelt) ) { // Ouch! Very very bad!
-					LOG(0, 0, 0, "DANGER: Received a CSESSION that didn't decompress correctly!\n");
+					LOG(0, 0, 0, "DANGER: Received a CTUNNEL that didn't decompress correctly!\n");
 						// Now what? Should exit! No-longer up to date!
 					break;
 				}
