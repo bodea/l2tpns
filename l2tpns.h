@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.100 2005-11-25 02:18:40 bodea Exp $
+// $Id: l2tpns.h,v 1.101 2005-12-05 13:56:12 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -235,8 +235,8 @@ typedef struct
 		uint8_t ipcp:4;		//   IPCP   state
 		uint8_t ipv6cp:4;	//   IPV6CP state
 		uint8_t ccp:4;		//   CCP    state
-		uint8_t pad;		// unused
 	} ppp;
+	char pad[2];			// unused
 	in_addr_t ip;			// IP of session set by RADIUS response (host byte order).
 	int ip_pool_index;		// index to IP pool
 	uint32_t unique_id;		// unique session id
