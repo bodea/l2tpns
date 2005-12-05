@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.101 2005-12-05 13:56:12 bodea Exp $
+// $Id: l2tpns.h,v 1.102 2005-12-05 14:10:42 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -236,12 +236,11 @@ typedef struct
 		uint8_t ipv6cp:4;	//   IPV6CP state
 		uint8_t ccp:4;		//   CCP    state
 	} ppp;
-	char pad[2];			// unused
+	char reserved_1[2];		// unused: padding
 	in_addr_t ip;			// IP of session set by RADIUS response (host byte order).
 	int ip_pool_index;		// index to IP pool
 	uint32_t unique_id;		// unique session id
-	uint16_t nr;			// next receive
-	uint16_t ns;			// next send
+	char reserved_2[4];		// unused: was ns/nr
 	uint32_t magic;			// ppp magic number
 	uint32_t pin, pout;		// packet counts
 	uint32_t cin, cout;		// byte counts
@@ -271,7 +270,7 @@ typedef struct
 	uint8_t walled_garden;		// is this session gardened?
 	uint8_t ipv6prefixlen;		// IPv6 route prefix length
 	struct in6_addr ipv6route;	// Static IPv6 route
-	char reserved[11];		// Space to expand structure without changing HB_VERSION
+	char reserved_3[11];		// Space to expand structure without changing HB_VERSION
 }
 sessiont;
 
