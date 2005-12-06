@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.103 2005-12-06 00:00:32 bodea Exp $
+// $Id: l2tpns.h,v 1.104 2005-12-06 23:53:14 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -23,24 +23,24 @@
 #define MAXTBFS		6000		// Maximum token bucket filters. Might need up to 2 * session.
 
 #define RADIUS_SHIFT	6
-#define	RADIUS_FDS	(1 << RADIUS_SHIFT)
+#define RADIUS_FDS	(1 << RADIUS_SHIFT)
 #define RADIUS_MASK	((1 << RADIUS_SHIFT) - 1)
 #define MAXRADIUS	(1 << (8 + RADIUS_SHIFT))
 
 #define T_UNDEF		(0xffff)	// A tunnel ID that won't ever be used. Mark session as undefined.
 #define T_FREE		(0)		// A tunnel ID that won't ever be used. Mark session as free.
 
-#define	MAXCONTROL	1000		// max length control message we ever send...
+#define MAXCONTROL	1000		// max length control message we ever send...
 #define MINMTU		576		// minimum recommended MTU (rfc1063)
 #define PPPMTU		1500		// default PPP MTU
 #define MAXMTU		2600		// arbitrary maximum MTU
-#define	MAXETHER	(MAXMTU+18)	// max packet we try sending to tun
-#define	MAXTEL		96		// telephone number
+#define MAXETHER	(MAXMTU+18)	// max packet we try sending to tun
+#define MAXTEL		96		// telephone number
 #define MAXUSER		128		// username
 #define MAXPASS		128		// password
 #define MAXPLUGINS	20		// maximum number of plugins to load
 #define MAXRADSERVER	10		// max radius servers
-#define	MAXROUTE	10		// max static routes per session
+#define MAXROUTE	10		// max static routes per session
 #define MAXIPPOOL	131072		// max number of ip addresses in pool
 #define RINGBUFFER_SIZE	10000		// Number of ringbuffer entries to allocate
 #define MAX_LOG_LENGTH	512		// Maximum size of log message
@@ -76,18 +76,18 @@
 #define IPPOOLFILE	FLASHDIR "/ip_pool"		// Address pool configuration
 #define ACCT_TIME	3000				// 5 minute accounting interval
 #define ACCT_SHUT_TIME	600				// 1 minute for counters of shutdown sessions
-#define	L2TPPORT	1701				// L2TP port
+#define L2TPPORT	1701				// L2TP port
 #define RADPORT		1645				// old radius port...
 #define DAEPORT		3799				// DAE port
-#define	PKTARP		0x0806				// ARP packet type
-#define	PKTIP		0x0800				// IPv4 packet type
-#define	PKTIPV6		0x86DD				// IPv6 packet type
-#define	PPPPAP		0xC023
-#define	PPPCHAP		0xC223
-#define	PPPLCP		0xC021
-#define	PPPIPCP		0x8021
-#define	PPPIPV6CP	0x8057
-#define	PPPCCP		0x80FD
+#define PKTARP		0x0806				// ARP packet type
+#define PKTIP		0x0800				// IPv4 packet type
+#define PKTIPV6		0x86DD				// IPv6 packet type
+#define PPPPAP		0xC023
+#define PPPCHAP		0xC223
+#define PPPLCP		0xC021
+#define PPPIPCP		0x8021
+#define PPPIPV6CP	0x8057
+#define PPPCCP		0x80FD
 #define PPPIP		0x0021
 #define PPPIPV6		0x0057
 #define PPPMP		0x003D
@@ -319,8 +319,8 @@ typedef struct
 } sessionlocalt;
 
 // session flags
-#define	SESSION_PFC	(1 << 0)	// use Protocol-Field-Compression
-#define	SESSION_ACFC	(1 << 1)	// use Address-and-Control-Field-Compression
+#define SESSION_PFC	(1 << 0)	// use Protocol-Field-Compression
+#define SESSION_ACFC	(1 << 1)	// use Address-and-Control-Field-Compression
 #define SESSION_STARTED	(1 << 2)	// RADIUS Start record sent
 
 // 168 bytes per tunnel
