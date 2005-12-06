@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.70 2005-12-06 00:00:31 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.71 2005-12-06 09:43:42 bodea Exp $";
 
 #include <stdio.h>
 #include <stddef.h>
@@ -101,7 +101,6 @@ static int cmd_remove_plugin(struct cli_def *cli, char *command, char **argv, in
 static int cmd_uptime(struct cli_def *cli, char *command, char **argv, int argc);
 
 static int regular_stuff(struct cli_def *cli);
-static void parsemac(char *string, char mac[6]);
 
 #ifdef STATISTICS
 static int cmd_show_counters(struct cli_def *cli, char *command, char **argv, int argc);
