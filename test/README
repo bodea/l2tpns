@@ -6,4 +6,8 @@ generateload, bounce
 
 radius
 
-    RADIUS authentication load test.  
+    RADIUS authentication load test.
+
+ping-sweep
+
+    Send pings of varying sizes to a target host.
