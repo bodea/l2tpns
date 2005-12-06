@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.69 2005-12-05 14:10:42 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.70 2005-12-06 00:00:31 bodea Exp $";
 
 #include <stdio.h>
 #include <stddef.h>
@@ -964,14 +964,6 @@ static int cmd_show_run(struct cli_def *cli, char *command, char **argv, int arg
 			cli_print(cli, "set %s %d", config_values[i].key, *(int *) value);
 		else if (config_values[i].type == UNSIGNED_LONG)
 			cli_print(cli, "set %s %lu", config_values[i].key, *(unsigned long *) value);
-		else if (config_values[i].type == MAC)
-			cli_print(cli, "set %s %02x%02x.%02x%02x.%02x%02x", config_values[i].key,
-					*(unsigned short *) (value + 0),
-					*(unsigned short *) (value + 1),
-					*(unsigned short *) (value + 2),
-					*(unsigned short *) (value + 3),
-					*(unsigned short *) (value + 4),
-					*(unsigned short *) (value + 5));
 	}
 
 	cli_print(cli, "# Plugins");
@@ -1887,9 +1879,6 @@ static int cmd_set(struct cli_def *cli, char *command, char **argv, int argc)
 				break;
 			case IPv6:
 				inet_pton(AF_INET6, argv[1], value);
-				break;
-			case MAC:
-				parsemac(argv[1], (char *)value);
 				break;
 			case BOOL:
 				if (strcasecmp(argv[1], "yes") == 0 || strcasecmp(argv[1], "true") == 0 || strcasecmp(argv[1], "1") == 0)
@@ -3075,14 +3064,4 @@ static int cmd_show_access_list(struct cli_def *cli, char *command, char **argv,
 	}
 
 	return CLI_OK;
-}
-
-// Convert a string in the form of abcd.ef12.3456 into char[6]
-void parsemac(char *string, char mac[6])
-{
-	if (sscanf(string, "%02x%02x.%02x%02x.%02x%02x", (unsigned int *)&mac[0], (unsigned int *)&mac[1], (unsigned int *)&mac[2], (unsigned int *)&mac[3], (unsigned int *)&mac[4], (unsigned int *)&mac[5]) == 6)
-		return;
-	if (sscanf(string, "%02x%02x:%02x%02x:%02x%02x", (unsigned int *)&mac[0], (unsigned int *)&mac[1], (unsigned int *)&mac[2], (unsigned int *)&mac[3], (unsigned int *)&mac[4], (unsigned int *)&mac[5]) == 6)
-		return;
-	memset(mac, 0, 6);
 }

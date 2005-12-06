@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.102 2005-12-05 14:10:42 bodea Exp $
+// $Id: l2tpns.h,v 1.103 2005-12-06 00:00:32 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -614,7 +614,7 @@ typedef struct
 #endif
 } configt;
 
-enum config_typet { INT, STRING, UNSIGNED_LONG, SHORT, BOOL, IPv4, IPv6, MAC };
+enum config_typet { INT, STRING, UNSIGNED_LONG, SHORT, BOOL, IPv4, IPv6 };
 typedef struct
 {
 	char *key;

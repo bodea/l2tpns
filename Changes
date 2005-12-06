@@ -4,6 +4,7 @@
   BuildRoot to include username.
 - Fix IPCP negotiation of secondary DNS server, reported by Jon Morby.
 - Clean up sessiont, removing some unused fields.
+- Remove unused "MAC" config type.
 
 * Thu Nov 17 2005 Brendan O'Dea <bod@optus.net> 2.1.12
 - Set MTU on tunnel interface so the kernel will re-fragment large
