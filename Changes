@@ -1,10 +1,12 @@
-* Tue Dec 6 2005 Brendan O'Dea <bod@optus.net> 2.1.13
+* Wed Dec 7 2005 Brendan O'Dea <bod@optus.net> 2.1.13
 - Add test/ping-sweep.
 - Apply spec changes from Charlie Brady: use License header, change
   BuildRoot to include username.
 - Fix IPCP negotiation of secondary DNS server, reported by Jon Morby.
 - Clean up sessiont, removing some unused fields.
 - Remove unused "MAC" config type.
+- Reject unknown/unconfigured protocols on the master.
+- Sanity check MRU before using in ppp_code_rej, protoreject.
 
 * Thu Nov 17 2005 Brendan O'Dea <bod@optus.net> 2.1.12
 - Set MTU on tunnel interface so the kernel will re-fragment large

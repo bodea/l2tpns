@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.104 2005-12-06 23:53:14 bodea Exp $
+// $Id: l2tpns.h,v 1.105 2005-12-07 05:21:37 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -694,6 +694,7 @@ uint8_t *makeppp(uint8_t *b, int size, uint8_t *p, int l, sessionidt s, tunnelid
 void sendlcp(sessionidt s, tunnelidt t);
 void send_ipin(sessionidt s, uint8_t *buf, int len);
 void sendccp(sessionidt s, tunnelidt t);
+void protoreject(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l, uint16_t proto);
 
 
 // radius.c

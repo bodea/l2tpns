@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.87 2005-12-04 13:06:50 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.88 2005-12-07 05:21:37 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -449,6 +449,7 @@ static void ppp_code_rej(sessionidt s, tunnelidt t, uint16_t proto,
 {
 	uint8_t *q;
 	int mru = session[s].mru;
+	if (mru < MINMTU) mru = MINMTU;
 	if (mru > size) mru = size;
 
 	l += 4;
@@ -577,7 +578,7 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 				case 1: // Maximum-Receive-Unit
 					{
 						uint16_t mru = ntohs(*(uint16_t *)(o + 2));
-						if (mru >= 576)
+						if (mru >= MINMTU)
 						{
 							session[s].mru = mru;
 							break;
@@ -1876,4 +1877,34 @@ void sendccp(sessionidt s, tunnelidt t)
 	LOG_HEX(5, "PPPCCP", q, 4);
 	tunnelsend(b, (q - b) + 4 , t);
 	restart_timer(s, ccp);
+}
+
+// Reject unknown/unconfigured protocols
+void protoreject(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l, uint16_t proto)
+{
+
+	uint8_t buf[MAXETHER];
+	uint8_t *q;
+	int mru = session[s].mru;
+	if (mru < MINMTU) mru = MINMTU;
+	if (mru > sizeof(buf)) mru = sizeof(buf);
+
+	l += 6;
+	if (l > mru) l = mru;
+
+	q = makeppp(buf, sizeof(buf), 0, 0, s, t, PPPLCP);
+	if (!q) return;
+
+	*q = ProtocolRej;
+	*(q + 1) = ++sess_local[s].lcp_ident;
+	*(uint16_t *)(q + 2) = htons(l);
+	*(uint16_t *)(q + 4) = htons(proto);
+	memcpy(q + 6, p, l - 6);
+
+	if (proto == PPPIPV6CP)
+		LOG(3, s, t, "LCP: send ProtocolRej (IPV6CP: not configured)\n");
+	else
+		LOG(2, s, t, "LCP: sent ProtocolRej (0x%04X: unsupported)\n", proto);
+
+	tunnelsend(buf, l + (q - buf), t);
 }

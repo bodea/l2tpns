@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.150 2005-11-17 07:35:35 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.151 2005-12-07 05:21:37 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -96,9 +96,9 @@ uint32_t eth_tx = 0;
 static uint32_t ip_pool_size = 1;	// Size of the pool of addresses used for dynamic address allocation.
 time_t time_now = 0;			// Current time in seconds since epoch.
 static char time_now_string[64] = {0};	// Current time as a string.
-int time_changed = 0;			// time_now changed
+static int time_changed = 0;		// time_now changed
 char main_quit = 0;			// True if we're in the process of exiting.
-char main_reload = 0;			// Re-load pending
+static char main_reload = 0;		// Re-load pending
 linked_list *loaded_plugins;
 linked_list *plugins[MAX_PLUGIN_TYPES];
 
@@ -2615,29 +2615,9 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 		}
 		else if (session[s].ppp.lcp == Opened)
 		{
-			uint8_t buf[MAXETHER];
-			uint8_t *q;
-			int mru = session[s].mru;
-			if (mru > sizeof(buf)) mru = sizeof(buf);
-
-			l += 6;
-			if (l > mru) l = mru;
-
-			q = makeppp(buf, sizeof(buf), 0, 0, s, t, PPPLCP);
-			if (!q) return;
-
-			*q = ProtocolRej;
-			*(q + 1) = ++sess_local[s].lcp_ident;
-			*(uint16_t *)(q + 2) = htons(l);
-			*(uint16_t *)(q + 4) = htons(proto);
-			memcpy(q + 6, p, l - 6);
-
-			if (proto == PPPIPV6CP)
-				LOG(3, s, t, "LCP: send ProtocolRej (IPV6CP: not configured)\n");
-			else
-				LOG(2, s, t, "LCP: sent ProtocolRej (0x%04X: unsupported)\n", proto);
-
-			tunnelsend(buf, l + (q - buf), t);
+			session[s].last_packet = time_now;
+			if (!config->cluster_iam_master) { master_forward_packet(buf, len, addr->sin_addr.s_addr, addr->sin_port); return; }
+			protoreject(s, t, p, l, proto);
 		}
 		else
 		{

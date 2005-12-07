@@ -119,7 +119,7 @@ l2tpns.o: l2tpns.c md5.h l2tpns.h cluster.h plugin.h ll.h constants.h \
 ll.o: ll.c ll.h
 md5.o: md5.c md5.h
 ppp.o: ppp.c l2tpns.h constants.h plugin.h util.h tbf.h cluster.h
-radius.o: radius.c constants.h l2tpns.h plugin.h util.h cluster.h
+radius.o: radius.c md5.h constants.h l2tpns.h plugin.h util.h cluster.h
 tbf.o: tbf.c l2tpns.h util.h tbf.h
 util.o: util.c l2tpns.h bgp.h
 bgp.o: bgp.c l2tpns.h bgp.h util.h
