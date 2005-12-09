@@ -1,6 +1,6 @@
 // L2TPNS Radius Stuff
 
-char const *cvs_id_radius = "$Id: radius.c,v 1.45 2005-10-19 03:09:30 bodea Exp $";
+char const *cvs_id_radius = "$Id: radius.c,v 1.46 2005-12-09 00:43:17 bodea Exp $";
 
 #include <time.h>
 #include <stdio.h>
@@ -304,11 +304,11 @@ void radiussend(uint16_t r, uint8_t state)
 				p[1] = 6;
 				*(uint32_t *) (p + 2) = htonl(session[s].cout_wrap);
 				p += p[1];
+			}
 
-				{
-					struct param_radius_account acct = { &tunnel[session[s].tunnel], &session[s], &p };
-					run_plugins(PLUGIN_RADIUS_ACCOUNT, &acct);
-				}
+			{
+				struct param_radius_account acct = { &tunnel[session[s].tunnel], &session[s], &p };
+				run_plugins(PLUGIN_RADIUS_ACCOUNT, &acct);
 			}
 		}
 	}
