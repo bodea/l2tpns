@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.88 2005-12-07 05:21:37 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.89 2005-12-14 02:19:15 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -1755,9 +1755,7 @@ uint8_t *makeppp(uint8_t *b, int size, uint8_t *p, int l, sessionidt s, tunnelid
 {
 	if (size < 12) // Need more space than this!!
 	{
-		static int backtrace_count = 0;
 		LOG(0, s, t, "makeppp buffer too small for L2TP header (size=%d)\n", size);
-		log_backtrace(backtrace_count, 5)
 		return NULL;
 	}
 
@@ -1780,9 +1778,7 @@ uint8_t *makeppp(uint8_t *b, int size, uint8_t *p, int l, sessionidt s, tunnelid
 
 	if (l + 12 > size)
 	{
-		static int backtrace_count = 0;
 		LOG(2, s, t, "makeppp would overflow buffer (size=%d, header+payload=%d)\n", size, l + 12);
-		log_backtrace(backtrace_count, 5)
 		return NULL;
 	}
 

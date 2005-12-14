@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.151 2005-12-07 05:21:37 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.152 2005-12-14 02:19:15 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -940,18 +940,14 @@ void tunnelsend(uint8_t * buf, uint16_t l, tunnelidt t)
 
 	if (!t)
 	{
-		static int backtrace_count = 0;
 		LOG(0, 0, t, "tunnelsend called with 0 as tunnel id\n");
 		STAT(tunnel_tx_errors);
-		log_backtrace(backtrace_count, 5)
 		return;
 	}
 
 	if (!tunnel[t].ip)
 	{
-		static int backtrace_count = 0;
 		LOG(1, 0, t, "Error sending data out tunnel: no remote endpoint (tunnel not set up)\n");
-		log_backtrace(backtrace_count, 5)
 		STAT(tunnel_tx_errors);
 		return;
 	}

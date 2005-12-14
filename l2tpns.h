@@ -1,11 +1,10 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.106 2005-12-09 00:43:17 bodea Exp $
+// $Id: l2tpns.h,v 1.107 2005-12-14 02:19:15 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
 
 #include <netinet/in.h>
-#include <execinfo.h>
 #include <stdio.h>
 #include <signal.h>
 #include <stdlib.h>
@@ -15,7 +14,7 @@
 #include <sys/types.h>
 #include <libcli.h>
 
-#define VERSION	"2.1.14"
+#define VERSION	"2.1.15"
 
 // Limits
 #define MAXTUNNEL	500		// could be up to 65535
@@ -741,6 +740,7 @@ int cmd_show_hist_open(struct cli_def *cli, char *command, char **argv, int argc
 void _log(int level, sessionidt s, tunnelidt t, const char *format, ...) __attribute__((format (printf, 4, 5)));
 void _log_hex(int level, const char *title, const uint8_t *data, int maxsize);
 
+
 int sessionsetup(sessionidt s, tunnelidt t);
 int run_plugins(int plugin_type, void *data);
 void rebuild_address_pool(void);
@@ -765,21 +765,6 @@ extern sessiont *session;
 extern sessionlocalt *sess_local;
 extern ippoolt *ip_address_pool;
 #define sessionfree (session[0].next)
-
-#define log_backtrace(count, max) \
-if (count++ < max) { \
-	void *array[20]; \
-	char **strings; \
-	int size, i; \
-	LOG(0, 0, t, "Backtrace follows:\n"); \
-	size = backtrace(array, 10); \
-	strings = backtrace_symbols(array, size); \
-	if (strings) for (i = 0; i < size; i++) \
-	{ \
-		LOG(0, 0, t, " %s\n", strings[i]); \
-	} \
-	free(strings); \
-}
 
 
 extern configt *config;
