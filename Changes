@@ -1,5 +1,6 @@
-* Wed Dec 14 2005 Brendan O'Dea <bod@optus.net> 2.1.15
+* Fri Dec 16 2005 Brendan O'Dea <bod@optus.net> 2.1.15
 - Drop backtrace.
+- Reduce logging of LCP EchoReply packets.
 
 * Fri Dec 9 2005 Brendan O'Dea <bod@optus.net> 2.1.14
 - Run PLUGIN_RADIUS_ACCOUNT for Start records.
