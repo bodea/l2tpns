@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.90 2005-12-15 14:18:16 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.91 2005-12-15 14:23:03 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -796,6 +796,7 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 
 				default:
 				    	LOG(2, s, t, "LCP: remote sent %s for type %u?\n", ppp_code(*p), type);
+					sessionshutdown(s, "Unable to negotiate LCP.", 3, 0);
 					break;
 			}
 			x -= length;
