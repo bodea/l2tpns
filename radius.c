@@ -1,6 +1,6 @@
 // L2TPNS Radius Stuff
 
-char const *cvs_id_radius = "$Id: radius.c,v 1.46 2005-12-09 00:43:17 bodea Exp $";
+char const *cvs_id_radius = "$Id: radius.c,v 1.47 2005-12-19 06:18:13 bodea Exp $";
 
 #include <time.h>
 #include <stdio.h>
@@ -314,9 +314,19 @@ void radiussend(uint16_t r, uint8_t state)
 	}
 	if (s)
 	{
-		*p = 5; // NAS-Port
+		*p = 5;		// NAS-Port
 		p[1] = 6;
 		*(uint32_t *) (p + 2) = htonl(s);
+		p += p[1];
+
+	        *p = 6;		// Service-Type
+		p[1] = 6;
+		*(uint32_t *) (p + 2) = htonl(2); // Framed-User
+		p += p[1];
+		   
+	        *p = 7;		// Framed-Protocol
+		p[1] = 6;
+		*(uint32_t *) (p + 2) = htonl(1); // PPP
 		p += p[1];
 	}
 	if (s && session[s].ip)

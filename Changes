@@ -4,6 +4,7 @@
 - Break LCP configure loop with shutdown.
 - Limit value of MRU of 1492 (rfc2516).
 - Tun MTU should be MRU (not MRU+4).
+- Add Service-Type/Framed-Protocol to RADIUS records (Paul Martin).
 
 * Fri Dec 9 2005 Brendan O'Dea <bod@optus.net> 2.1.14
 - Run PLUGIN_RADIUS_ACCOUNT for Start records.
