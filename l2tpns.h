@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.107 2005-12-14 02:19:15 bodea Exp $
+// $Id: l2tpns.h,v 1.108 2005-12-19 06:08:43 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -31,8 +31,8 @@
 
 #define MAXCONTROL	1000		// max length control message we ever send...
 #define MINMTU		576		// minimum recommended MTU (rfc1063)
-#define PPPMTU		1500		// default PPP MTU
 #define MAXMTU		2600		// arbitrary maximum MTU
+#define PPPoE_MRU	1492		// maximum PPPoE MRU (rfc2516: 1500 less PPPoE header (6) and PPP protocol ID (2))
 #define MAXETHER	(MAXMTU+18)	// max packet we try sending to tun
 #define MAXTEL		96		// telephone number
 #define MAXUSER		128		// username

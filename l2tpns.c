@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.152 2005-12-14 02:19:15 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.153 2005-12-19 06:08:42 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -554,8 +554,8 @@ static void inittun(void)
 		LOG(0, 0, 0, "Error setting tun queue length: %s\n", strerror(errno));
 		exit(1);
 	}
-	/* set MTU to modem MRU + 4 (tun header) */
-	ifr.ifr_mtu = MRU + 4;
+	/* set MTU to modem MRU */
+	ifr.ifr_mtu = MRU;
 	if (ioctl(ifrfd, SIOCSIFMTU, (void *) &ifr) < 0)
 	{
 		LOG(0, 0, 0, "Error setting tun MTU: %s\n", strerror(errno));
@@ -2463,7 +2463,7 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 					if (amagic == 0) amagic = time_now;
 					session[s].magic = amagic; // set magic number
 					session[s].flags = aflags; // set flags received
-					session[s].mru = PPPMTU; // default
+					session[s].mru = PPPoE_MRU; // default
 					controlnull(t); // ack
 
 					// start LCP
@@ -4295,12 +4295,15 @@ static void update_config()
 #define L2TP_HDRS		(20+8+6+4)	// L2TP data encaptulation: ip + udp + l2tp (data) + ppp (inc hdlc)
 #define TCP_HDRS		(20+20)		// TCP encapsulation: ip + tcp
 
-	if (config->l2tp_mtu <= 0)		config->l2tp_mtu = PPPMTU;
+	if (config->l2tp_mtu <= 0)		config->l2tp_mtu = 1500; // ethernet default
 	else if (config->l2tp_mtu < MINMTU)	config->l2tp_mtu = MINMTU;
 	else if (config->l2tp_mtu > MAXMTU)	config->l2tp_mtu = MAXMTU;
 
 	// reset MRU/MSS globals
 	MRU = config->l2tp_mtu - L2TP_HDRS;
+	if (MRU > PPPoE_MRU)
+		MRU = PPPoE_MRU;
+
 	MSS = MRU - TCP_HDRS;
 
 	// Update radius
