@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.153 2005-12-19 06:08:42 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.154 2005-12-20 04:57:16 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -2918,7 +2918,7 @@ static void regular_cleanups(double period)
 			*q = EchoReq;
 			*(uint8_t *)(q + 1) = (time_now % 255); // ID
 			*(uint16_t *)(q + 2) = htons(8); // Length
-			*(uint32_t *)(q + 4) = 0; // Magic Number (not supported)
+			*(uint32_t *)(q + 4) = session[s].ppp.lcp == Opened ? htonl(session[s].magic) : 0; // Magic Number
 
 			LOG(4, s, session[s].tunnel, "No data in %d seconds, sending LCP ECHO\n",
 					(int)(time_now - session[s].last_packet));

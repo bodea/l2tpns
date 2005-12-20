@@ -1,3 +1,6 @@
+* Tue Dec 20 2005 Brendan O'Dea <bod@optus.net> 2.1.16
+- Send configured magic-no in LCP EchoReq when LCP is opened.
+
 * Mon Dec 19 2005 Brendan O'Dea <bod@optus.net> 2.1.15
 - Drop backtrace.
 - Reduce logging of LCP EchoReply packets.
