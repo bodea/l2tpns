@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.93 2006-01-19 21:06:39 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.94 2006-01-19 21:31:25 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -582,6 +582,7 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 						if (mru >= MINMTU)
 						{
 							session[s].mru = mru;
+							cluster_send_session(s);
 							break;
 						}
 
@@ -796,6 +797,7 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 						session[s].magic = ntohl(*(uint32_t *)(o + 2));
 						LOG(3, s, t, "    Remote requested magic-no %x\n", session[s].magic);
 						if (!session[s].magic) session[s].magic = time_now; // Netgear DG814 sends zero??
+						cluster_send_session(s);
 						break;
 					}
 					// ConfigRej: fallthrough
