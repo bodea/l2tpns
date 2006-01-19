@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.91 2005-12-15 14:23:03 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.92 2006-01-19 21:00:24 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -793,6 +793,16 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 					}
 
 					break;
+
+				case 5: // Magic-Number
+					if (*p == ConfigNak)
+					{
+						session[s].magic = ntohl(*(uint32_t *)(o + 2));
+						LOG(3, s, t, "    Remote requested magic-no %x\n", session[s].magic);
+						if (!session[s].magic) session[s].magic = time_now; // Netgear DG814 sends zero??
+						break;
+					}
+					// ConfigRej: fallthrough
 
 				default:
 				    	LOG(2, s, t, "LCP: remote sent %s for type %u?\n", ppp_code(*p), type);
