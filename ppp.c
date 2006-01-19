@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.92 2006-01-19 21:00:24 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.93 2006-01-19 21:06:39 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -475,7 +475,6 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 {
 	uint8_t b[MAXETHER];
 	uint8_t *q = NULL;
-	uint32_t magicno = 0;
 	uint16_t hl;
 
 	CSTAT(processlcp);
@@ -649,11 +648,8 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 					}
 					break;
 
-				case 5: // Magic-Number
-					magicno = ntohl(*(uint32_t *)(o + 2));
-					break;
-
 				case 4: // Quality-Protocol
+				case 5: // Magic-Number
 				case 7: // Protocol-Field-Compression
 				case 8: // Address-And-Control-Field-Compression
 					break;
@@ -807,7 +803,7 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 				default:
 				    	LOG(2, s, t, "LCP: remote sent %s for type %u?\n", ppp_code(*p), type);
 					sessionshutdown(s, "Unable to negotiate LCP.", 3, 0);
-					break;
+					return;
 			}
 			x -= length;
 			o += length;
