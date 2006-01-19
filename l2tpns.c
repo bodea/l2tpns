@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.154 2005-12-20 04:57:16 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.155 2006-01-19 20:55:03 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -3949,7 +3949,7 @@ static void initippool()
 		else
 		{
 			// It's a single ip address
-			add_to_ip_pool(inet_addr(pool), 0);
+			add_to_ip_pool(ntohl(inet_addr(pool)), 0);
 		}
 	}
 	fclose(f);
