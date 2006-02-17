@@ -4,6 +4,7 @@
 - Handle LCP NAK of magic-number.
 - Ensure session changes from LCP ConfigReq/ConfigNak are sent to cluster.
 - Verify that RADIUS packets come from a configured server (Jonathan Yarden).
+- Avoid endless loop in processipcp, processipv6cp.
 
 * Mon Dec 19 2005 Brendan O'Dea <bod@optus.net> 2.1.15
 - Drop backtrace.

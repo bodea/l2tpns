@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.94 2006-01-19 21:31:25 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.95 2006-02-17 14:35:54 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -1014,11 +1014,13 @@ void processipcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 
 		while (length > 2)
 		{
+			if (!o[1] || o[1] > length) return;
+
 			switch (*o)
 			{
 			case 3: // ip address
 				gotip++; // seen address
-				if (o[1] != 6 || o[1] > length) return;
+				if (o[1] != 6) return;
 
 				addr = htonl(session[s].ip);
 				if (memcmp(o + 2, &addr, (sizeof addr)))
@@ -1035,7 +1037,7 @@ void processipcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 				break;
 
 			case 129: // primary DNS
-				if (o[1] != 6 || o[1] > length) return;
+				if (o[1] != 6) return;
 
 				addr = htonl(session[s].dns1);
 				if (memcmp(o + 2, &addr, (sizeof addr)))
@@ -1047,7 +1049,7 @@ void processipcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 				break;
 
 			case 131: // secondary DNS
-				if (o[1] != 6 || o[1] > length) return;
+				if (o[1] != 6) return;
 
 				addr = htonl(session[s].dns2);
 				if (memcmp(o + 2, &addr, sizeof(addr)))
@@ -1239,11 +1241,13 @@ void processipv6cp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 
 		while (length > 2)
 		{
+			if (!o[1] || o[1] > length) return;
+
 			switch (*o)
 			{
 			case 1: // interface identifier
 				gotip++; // seen address
-				if (o[1] != 10 || o[1] > length) return;
+				if (o[1] != 10) return;
 
 				*(uint32_t *) ident = htonl(session[s].ip);
 				*(uint32_t *) (ident + 4) = 0;
