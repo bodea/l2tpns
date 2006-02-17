@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.155 2006-01-19 20:55:03 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.156 2006-02-17 13:27:07 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -3301,9 +3301,17 @@ static void mainloop(void)
 					break;
 
 				case FD_TYPE_RADIUS: // RADIUS response
-					s = recv(radfds[d->index], buf, sizeof(buf), 0);
+					alen = sizeof(addr);
+					s = recvfrom(radfds[d->index], buf, sizeof(buf), MSG_WAITALL, (void *) &addr, &alen);
 					if (s >= 0 && config->cluster_iam_master)
-						processrad(buf, s, d->index);
+					{
+						if (addr.sin_addr.s_addr == config->radiusserver[0] ||
+						    addr.sin_addr.s_addr == config->radiusserver[1])
+							processrad(buf, s, d->index);
+						else
+							LOG(3, 0, 0, "Dropping RADIUS packet from unknown source %s\n",
+								fmtaddr(addr.sin_addr.s_addr, 0));
+					}
 
 					n--;
 					break;
