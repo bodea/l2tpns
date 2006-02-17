@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.95 2006-02-17 14:35:54 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.96 2006-02-17 15:05:14 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -747,6 +747,7 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 				case 1: // Maximum-Receive-Unit
 					if (*p == ConfigNak)
 					{
+						if (length < 4) break;
 						sess_local[s].ppp_mru = ntohs(*(uint16_t *)(o + 2));
 						LOG(3, s, t, "    Remote requested MRU of %u\n", sess_local[s].ppp_mru);
 					}
@@ -764,14 +765,18 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 
 					if (*p == ConfigNak)
 					{
-						int proto = ntohs(*(uint16_t *)(o + 2));
+						int proto;
+
+						if (length < 4) break;
+						proto = ntohs(*(uint16_t *)(o + 2));
+
 						if (proto == PPPPAP)
 						{
 							authtype = config->radius_authtypes & AUTHPAP;
 							LOG(3, s, t, "    Remote requested PAP authentication...%sing\n",
 								authtype ? "accept" : "reject");
 						}
-						else if (proto == PPPCHAP && *(o + 4) == 5)
+						else if (proto == PPPCHAP && length > 4 && *(o + 4) == 5)
 						{
 							authtype = config->radius_authtypes & AUTHCHAP;
 							LOG(3, s, t, "    Remote requested CHAP authentication...%sing\n",
@@ -792,15 +797,20 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 					break;
 
 				case 5: // Magic-Number
+					session[s].magic = 0;
 					if (*p == ConfigNak)
 					{
+						if (length < 6) break;
 						session[s].magic = ntohl(*(uint32_t *)(o + 2));
-						LOG(3, s, t, "    Remote requested magic-no %x\n", session[s].magic);
-						if (!session[s].magic) session[s].magic = time_now; // Netgear DG814 sends zero??
-						cluster_send_session(s);
-						break;
 					}
-					// ConfigRej: fallthrough
+
+					if (session[s].magic)
+						LOG(3, s, t, "    Remote requested magic-no %x\n", session[s].magic);
+					else
+						LOG(3, s, t, "    Remote rejected magic-no\n");
+
+					cluster_send_session(s);
+					break;
 
 				default:
 				    	LOG(2, s, t, "LCP: remote sent %s for type %u?\n", ppp_code(*p), type);
@@ -1764,7 +1774,6 @@ void sendchap(sessionidt s, tunnelidt t)
 }
 
 // fill in a L2TP message with a PPP frame,
-// copies existing PPP message and changes magic number if seen
 // returns start of PPP frame
 uint8_t *makeppp(uint8_t *b, int size, uint8_t *p, int l, sessionidt s, tunnelidt t, uint16_t mtype)
 {
@@ -1829,7 +1838,7 @@ static int add_lcp_auth(uint8_t *b, int size, int authtype)
 	return len;
 }
 
-// Send initial LCP ConfigReq for MRU, authentication type and magic no
+// Send LCP ConfigReq for MRU, authentication type and magic no
 void sendlcp(sessionidt s, tunnelidt t)
 {
 	uint8_t b[500], *q, *l;
@@ -1858,9 +1867,12 @@ void sendlcp(sessionidt s, tunnelidt t)
 	if (authtype)
 		l += add_lcp_auth(l, sizeof(b) - (l - b), authtype);
 
-	*l++ = 5; *l++ = 6; // Magic-Number (length 6)
-	*(uint32_t *) l = htonl(session[s].magic);
-	l += 4;
+	if (session[s].magic)
+	{
+		*l++ = 5; *l++ = 6; // Magic-Number (length 6)
+		*(uint32_t *) l = htonl(session[s].magic);
+		l += 4;
+	}
 
 	*(uint16_t *)(q + 2) = htons(l - q); // Length
 

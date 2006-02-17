@@ -1,10 +1,11 @@
 * Sat Feb 18 2006 Brendan O'Dea <bod@optus.net> 2.1.16
 - Send configured magic-no in LCP EchoReq when LCP is opened.
 - Correct addition of single IP to pool (Jonathan Yarden).
-- Handle LCP NAK of magic-number.
 - Ensure session changes from LCP ConfigReq/ConfigNak are sent to cluster.
 - Verify that RADIUS packets come from a configured server (Jonathan Yarden).
 - Avoid endless loop in processipcp, processipv6cp.
+- Additional length checks in processlcp.
+- Allow peer to request a new magic-number, or to disable magic-numbers.
 
 * Mon Dec 19 2005 Brendan O'Dea <bod@optus.net> 2.1.15
 - Drop backtrace.
