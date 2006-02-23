@@ -9,7 +9,7 @@
 
 /* walled garden */
 
-char const *cvs_id = "$Id: garden.c,v 1.24 2005-10-11 09:04:53 bodea Exp $";
+char const *cvs_id = "$Id: garden.c,v 1.25 2006-02-23 01:07:23 bodea Exp $";
 
 int plugin_api_version = PLUGIN_API_VERSION;
 static struct pluginfuncs *f = 0;
@@ -23,7 +23,8 @@ char *up_commands[] = {
     "iptables -t nat -N garden_users >/dev/null 2>&1",		// Empty chain, users added/removed by garden_session
     "iptables -t nat -F garden_users",
     "iptables -t nat -A PREROUTING -j garden_users",		// DNAT any users on the garden_users chain
-    "sysctl -w net.ipv4.ip_conntrack_max=512000 >/dev/null",	// lots of entries
+    "sysctl -w net.ipv4.netfilter.ip_conntrack_max=512000"	// lots of entries
+    	     " net.ipv4.netfilter.ip_conntrack_tcp_timeout_established=18000 >/dev/null", // 5hrs
     NULL,
 };
 
