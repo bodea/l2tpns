@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.96 2006-02-17 15:05:14 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.97 2006-03-27 03:01:08 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -967,7 +967,7 @@ void processipcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 	CSTAT(processipcp);
 
 	LOG_HEX(5, "IPCP", p, l);
-	if (l < 5)
+	if (l < 4)
 	{
 		LOG(1, s, t, "Short IPCP %d bytes\n", l);
 		STAT(tunnel_rx_errors);
