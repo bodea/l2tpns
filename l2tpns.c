@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.156 2006-02-17 13:27:07 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.157 2006-04-05 01:45:57 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -200,7 +200,7 @@ static void initplugins(void);
 static int add_plugin(char *plugin_name);
 static int remove_plugin(char *plugin_name);
 static void plugins_done(void);
-static void processcontrol(uint8_t *buf, int len, struct sockaddr_in *addr, int alen);
+static void processcontrol(uint8_t *buf, int len, struct sockaddr_in *addr, int alen, struct in_addr *local);
 static tunnelidt new_tunnel(void);
 static void unhide_value(uint8_t *value, size_t len, uint16_t type, uint8_t *vector, size_t vec_len);
 
@@ -3248,6 +3248,7 @@ static void mainloop(void)
 		if (n)
 		{
 			struct sockaddr_in addr;
+			struct in_addr local;
 			socklen_t alen;
 			int c, s;
 			int udp_ready = 0;
@@ -3264,6 +3265,7 @@ static void mainloop(void)
 			for (c = n, i = 0; i < c; i++)
 			{
 				struct event_data *d = events[i].data.ptr;
+
 				switch (d->type)
 				{
 				case FD_TYPE_CLI: // CLI connections
@@ -3290,19 +3292,21 @@ static void mainloop(void)
 
 				case FD_TYPE_CONTROL: // nsctl commands
 					alen = sizeof(addr);
-					processcontrol(buf, recvfrom(controlfd, buf, sizeof(buf), MSG_WAITALL, (void *) &addr, &alen), &addr, alen);
+					s = recvfromto(controlfd, buf, sizeof(buf), MSG_WAITALL, (struct sockaddr *) &addr, &alen, &local);
+					if (s > 0) processcontrol(buf, s, &addr, alen, &local);
 					n--;
 					break;
 
 				case FD_TYPE_DAE: // DAE requests
 					alen = sizeof(addr);
-					processdae(buf, recvfrom(daefd, buf, sizeof(buf), MSG_WAITALL, (void *) &addr, &alen), &addr, alen);
+					s = recvfrom(daefd, buf, sizeof(buf), MSG_WAITALL, (struct sockaddr *) &addr, &alen);
+					if (s > 0) processdae(buf, s, &addr, alen);
 					n--;
 					break;
 
 				case FD_TYPE_RADIUS: // RADIUS response
 					alen = sizeof(addr);
-					s = recvfrom(radfds[d->index], buf, sizeof(buf), MSG_WAITALL, (void *) &addr, &alen);
+					s = recvfrom(radfds[d->index], buf, sizeof(buf), MSG_WAITALL, (struct sockaddr *) &addr, &alen);
 					if (s >= 0 && config->cluster_iam_master)
 					{
 						if (addr.sin_addr.s_addr == config->radiusserver[0] ||
@@ -4883,7 +4887,7 @@ static void plugins_done()
 		run_plugin_done(p);
 }
 
-static void processcontrol(uint8_t *buf, int len, struct sockaddr_in *addr, int alen)
+static void processcontrol(uint8_t *buf, int len, struct sockaddr_in *addr, int alen, struct in_addr *local)
 {
 	struct nsctl request;
 	struct nsctl response;
@@ -5041,7 +5045,7 @@ static void processcontrol(uint8_t *buf, int len, struct sockaddr_in *addr, int 
 	r = pack_control(buf, NSCTL_MAX_PKT_SZ, response.type, response.argc, response.argv);
 	if (r > 0)
 	{
-		sendto(controlfd, buf, r, 0, (const struct sockaddr *) addr, alen);
+		sendtofrom(controlfd, buf, r, 0, (const struct sockaddr *) addr, alen, local);
 		if (log_stream && config->debug >= 4)
 		{
 			LOG(4, 0, 0, "Sent [%s] ", fmtaddr(addr->sin_addr.s_addr, 0));
