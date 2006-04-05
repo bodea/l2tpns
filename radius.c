@@ -1,6 +1,6 @@
 // L2TPNS Radius Stuff
 
-char const *cvs_id_radius = "$Id: radius.c,v 1.47 2005-12-19 06:18:13 bodea Exp $";
+char const *cvs_id_radius = "$Id: radius.c,v 1.48 2006-04-05 02:13:48 bodea Exp $";
 
 #include <time.h>
 #include <stdio.h>
@@ -785,7 +785,7 @@ void radiusretry(uint16_t r)
 
 extern int daefd;
 
-void processdae(uint8_t *buf, int len, struct sockaddr_in *addr, int alen)
+void processdae(uint8_t *buf, int len, struct sockaddr_in *addr, int alen, struct in_addr *local)
 {
 	int i, r_code, r_id, length, attribute_length;
 	uint8_t *packet, attribute;
@@ -1063,6 +1063,6 @@ void processdae(uint8_t *buf, int len, struct sockaddr_in *addr, int alen)
 	LOG(3, 0, 0, "Sending DAE %s, id=%d\n", radius_code(r_code), r_id);
 
 	// send DAE response
-	if (sendto(daefd, buf, len, MSG_DONTWAIT | MSG_NOSIGNAL, (struct sockaddr *) addr, alen) < 0)
+	if (sendtofrom(daefd, buf, len, MSG_DONTWAIT | MSG_NOSIGNAL, (struct sockaddr *) addr, alen, local) < 0)
 		LOG(0, 0, 0, "Error sending DAE response packet: %s\n", strerror(errno));
 }

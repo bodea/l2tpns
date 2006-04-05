@@ -1,6 +1,8 @@
-* Fri Mar 31 2006 Brendan O'Dea <bod@optus.net> 2.1.17
+* Wed Apr 5 2006 Brendan O'Dea <bod@optus.net> 2.1.17
 - Fix IPCP length test to allow Terminate-Request (4 bytes).
 - Send nsctl responses back using the correct source address (thanks ltd).
+- Similarly set the source for DAE responses; use bind_address when
+  handling forwarded packets on the master.
 
 * Thu Feb 23 2006 Brendan O'Dea <bod@optus.net> 2.1.16
 - Send configured magic-no in LCP EchoReq when LCP is opened.

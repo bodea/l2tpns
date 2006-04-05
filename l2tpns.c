@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.158 2006-04-05 01:50:33 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.159 2006-04-05 02:13:48 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -647,6 +647,7 @@ static void initudp(void)
 	addr.sin_port = htons(config->radius_dae_port);
 	daefd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 	setsockopt(daefd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
+	setsockopt(daefd, SOL_IP, IP_PKTINFO, &on, sizeof(on)); // recvfromto
 	if (bind(daefd, (void *) &addr, sizeof(addr)) < 0)
 	{
 		LOG(0, 0, 0, "Error in DAE bind: %s\n", strerror(errno));
@@ -3300,8 +3301,8 @@ static void mainloop(void)
 
 				case FD_TYPE_DAE: // DAE requests
 					alen = sizeof(addr);
-					s = recvfrom(daefd, buf, sizeof(buf), MSG_WAITALL, (struct sockaddr *) &addr, &alen);
-					if (s > 0) processdae(buf, s, &addr, alen);
+					s = recvfromto(daefd, buf, sizeof(buf), MSG_WAITALL, (struct sockaddr *) &addr, &alen, &local);
+					if (s > 0) processdae(buf, s, &addr, alen, &local);
 					n--;
 					break;
 

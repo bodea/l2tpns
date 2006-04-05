@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.110 2006-03-27 03:01:08 bodea Exp $
+// $Id: l2tpns.h,v 1.111 2006-04-05 02:13:48 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -703,7 +703,7 @@ void processrad(uint8_t *buf, int len, char socket_index);
 void radiusretry(uint16_t r);
 uint16_t radiusnew(sessionidt s);
 void radiusclear(uint16_t r, sessionidt s);
-void processdae(uint8_t *buf, int len, struct sockaddr_in *addr, int alen);
+void processdae(uint8_t *buf, int len, struct sockaddr_in *addr, int alen, struct in_addr *local);
 
 
 // l2tpns.c

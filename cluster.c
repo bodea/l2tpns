@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.49 2005-12-05 14:10:42 bodea Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.50 2006-04-05 02:13:48 bodea Exp $";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -1655,7 +1655,11 @@ int processcluster(uint8_t *data, int size, in_addr_t addr)
 
 			STAT(recv_forward);
 			if (type == C_FORWARD_DAE)
-				processdae(p, s, &a, sizeof(a));
+			{
+				struct in_addr local;
+				local.s_addr = config->bind_address ? config->bind_address : my_address;
+				processdae(p, s, &a, sizeof(a), &local);
+			}
 			else
 				processudp(p, s, &a);
 
