@@ -1,6 +1,6 @@
 // L2TPNS Radius Stuff
 
-char const *cvs_id_radius = "$Id: radius.c,v 1.48 2006-04-05 02:13:48 bodea Exp $";
+char const *cvs_id_radius = "$Id: radius.c,v 1.49 2006-04-13 11:14:35 bodea Exp $";
 
 #include <time.h>
 #include <stdio.h>
@@ -158,7 +158,7 @@ void radiussend(uint16_t r, uint8_t state)
 		if (s)
 		{
 			if (state == RADIUSAUTH)
-				sessionshutdown(s, "RADIUS timeout.", 3, 0);
+				sessionshutdown(s, "RADIUS timeout.", CDN_ADMIN_DISC, TERM_REAUTHENTICATION_FAILURE);
 			else
 			{
 				LOG(1, s, session[s].tunnel, "RADIUS timeout, but in state %s so don't timeout session\n",
@@ -248,8 +248,8 @@ void radiussend(uint16_t r, uint8_t state)
 			p += p[1];
 		}
 	}
-	else if (state == RADIUSSTART || state == RADIUSSTOP || state == RADIUSINTERIM)
-	{			// accounting
+	else // accounting
+	{
 		*p = 40;	// accounting type
 		p[1] = 6;
 		*(uint32_t *) (p + 2) = htonl(state - RADIUSSTART + 1); // start=1, stop=2, interim=3
@@ -304,6 +304,24 @@ void radiussend(uint16_t r, uint8_t state)
 				p[1] = 6;
 				*(uint32_t *) (p + 2) = htonl(session[s].cout_wrap);
 				p += p[1];
+
+				if (state == RADIUSSTOP && radius[r].term_cause)
+				{
+				    	*p = 49; // acct-terminate-cause
+					p[1] = 6;
+					*(uint32_t *) (p + 2) = htonl(radius[r].term_cause);
+					p += p[1];
+
+					if (radius[r].term_msg)
+					{
+						*p = 26;				// vendor-specific
+						*(uint32_t *) (p + 2) = htonl(9);	// Cisco
+						p[6] = 1;				// Cisco-AVPair
+						p[7] = 2 + sprintf((char *) p + 8, "disc-cause-ext=%s", radius[r].term_msg);
+						p[1] = p[7] + 6;
+						p += p[1];
+					}
+				}
 			}
 
 			{
@@ -994,7 +1012,7 @@ void processdae(uint8_t *buf, int len, struct sockaddr_in *addr, int alen, struc
 		LOG(3, s, t, "    DAE Disconnect %d (%s)\n", s, session[s].user);
 		r_code = DisconnectACK;
 
-		sessionshutdown(s, "Requested by PoD", 3, 0); // disconnect session
+		sessionshutdown(s, "Requested by PoD", CDN_ADMIN_DISC, TERM_ADMIN_RESET); // disconnect session
 		break;
 
 	case CoARequest: // Change of Authorization

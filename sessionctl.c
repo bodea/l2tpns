@@ -5,7 +5,7 @@
 
 /* session control */
 
-char const *cvs_id = "$Id: sessionctl.c,v 1.4 2005-10-11 09:04:53 bodea Exp $";
+char const *cvs_id = "$Id: sessionctl.c,v 1.5 2006-04-13 11:14:35 bodea Exp $";
 
 int plugin_api_version = PLUGIN_API_VERSION;
 static struct pluginfuncs *f = 0;
@@ -58,7 +58,7 @@ int plugin_control(struct param_control *data)
 	reason = "Requested by administrator.";
 
     if (data->argv[0][0] == 'd')
-	f->sessionshutdown(session, reason, 3, 0);
+	f->sessionshutdown(session, reason, CDN_ADMIN_DISC, TERM_ADMIN_RESET);
     else
 	f->sessionkill(session, reason);
 

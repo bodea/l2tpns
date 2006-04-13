@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.97 2006-03-27 03:01:08 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.98 2006-04-13 11:14:35 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -40,7 +40,7 @@ void processpap(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 	{
 		LOG(1, s, t, "Short PAP %u bytes\n", l);
 		STAT(tunnel_rx_errors);
-		sessionshutdown(s, "Short PAP packet.", 3, 0);
+		sessionshutdown(s, "Short PAP packet.", CDN_ADMIN_DISC, TERM_USER_ERROR);
 		return;
 	}
 
@@ -48,7 +48,7 @@ void processpap(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 	{
 		LOG(1, s, t, "Length mismatch PAP %u/%u\n", hl, l);
 		STAT(tunnel_rx_errors);
-		sessionshutdown(s, "PAP length mismatch.", 3, 0);
+		sessionshutdown(s, "PAP length mismatch.", CDN_ADMIN_DISC, TERM_USER_ERROR);
 		return;
 	}
 	l = hl;
@@ -57,7 +57,7 @@ void processpap(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 	{
 		LOG(1, s, t, "Unexpected PAP code %d\n", *p);
 		STAT(tunnel_rx_errors);
-		sessionshutdown(s, "Unexpected PAP code.", 3, 0);
+		sessionshutdown(s, "Unexpected PAP code.", CDN_ADMIN_DISC, TERM_USER_ERROR);
 		return;
 	}
 
@@ -110,7 +110,7 @@ void processpap(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 		else
 		{
 			LOG(1, s, t, "No RADIUS session available to authenticate session...\n");
-			sessionshutdown(s, "No free RADIUS sessions.", 4, 0);
+			sessionshutdown(s, "No free RADIUS sessions.", CDN_UNAVAILABLE, TERM_SERVICE_UNAVAILABLE);
 		}
 	}
 	else
@@ -152,7 +152,7 @@ void processchap(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 	{
 		LOG(1, s, t, "Short CHAP %u bytes\n", l);
 		STAT(tunnel_rx_errors);
-		sessionshutdown(s, "Short CHAP packet.", 3, 0);
+		sessionshutdown(s, "Short CHAP packet.", CDN_ADMIN_DISC, TERM_USER_ERROR);
 		return;
 	}
 
@@ -160,7 +160,7 @@ void processchap(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 	{
 		LOG(1, s, t, "Length mismatch CHAP %u/%u\n", hl, l);
 		STAT(tunnel_rx_errors);
-		sessionshutdown(s, "CHAP length mismatch.", 3, 0);
+		sessionshutdown(s, "CHAP length mismatch.", CDN_ADMIN_DISC, TERM_USER_ERROR);
 		return;
 	}
 	l = hl;
@@ -169,7 +169,7 @@ void processchap(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 	{
 		LOG(1, s, t, "Unexpected CHAP response code %d\n", *p);
 		STAT(tunnel_rx_errors);
-		sessionshutdown(s, "CHAP length mismatch.", 3, 0);
+		sessionshutdown(s, "CHAP length mismatch.", CDN_ADMIN_DISC, TERM_USER_ERROR);
 		return;
 	}
 
@@ -190,7 +190,7 @@ void processchap(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 	{
 		LOG(1, s, t, "Wrong CHAP response ID %d (should be %d) (%d)\n", p[1], radius[r].id, r);
 		STAT(tunnel_rx_errors);
-		sessionshutdown(s, "Unexpected CHAP response ID.", 3, 0);
+		sessionshutdown(s, "Unexpected CHAP response ID.", CDN_ADMIN_DISC, TERM_USER_ERROR);
 		return;
 	}
 
@@ -198,7 +198,7 @@ void processchap(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 	{
 		LOG(1, s, t, "Bad CHAP response length %d\n", l < 5 ? -1 : p[4]);
 		STAT(tunnel_rx_errors);
-		sessionshutdown(s, "Bad CHAP response length.", 3, 0);
+		sessionshutdown(s, "Bad CHAP response length.", CDN_ADMIN_DISC, TERM_USER_ERROR);
 		return;
 	}
 
@@ -208,7 +208,7 @@ void processchap(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 	{
 		LOG(1, s, t, "CHAP user too long %d\n", l - 16);
 		STAT(tunnel_rx_errors);
-		sessionshutdown(s, "CHAP username too long.", 3, 0);
+		sessionshutdown(s, "CHAP username too long.", CDN_ADMIN_DISC, TERM_USER_ERROR);
 		return;
 	}
 
@@ -814,7 +814,7 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 
 				default:
 				    	LOG(2, s, t, "LCP: remote sent %s for type %u?\n", ppp_code(*p), type);
-					sessionshutdown(s, "Unable to negotiate LCP.", 3, 0);
+					sessionshutdown(s, "Unable to negotiate LCP.", CDN_ADMIN_DISC, TERM_USER_ERROR);
 					return;
 			}
 			x -= length;
@@ -823,7 +823,7 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 
 		if (!authtype)
 		{
-			sessionshutdown(s, "Unsupported authentication.", 3, 0);
+			sessionshutdown(s, "Unsupported authentication.", CDN_ADMIN_DISC, TERM_USER_ERROR);
 			return;
 		}
 
@@ -878,11 +878,11 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 		if (config->debug > 3) dumplcp(q, l);
 
 		tunnelsend(b, l + (q - b), t); // send it
-		sessionshutdown(s, "Remote end closed connection.", 3, 0);
+		sessionshutdown(s, "Remote end closed connection.", CDN_ADMIN_DISC, TERM_USER_REQUEST);
 	}
 	else if (*p == TerminateAck)
 	{
-		sessionshutdown(s, "Connection closed.", 3, 0);
+		sessionshutdown(s, "Connection closed.", CDN_ADMIN_DISC, TERM_NAS_REQUEST);
 	}
 	else if (*p == ProtocolRej)
 	{
@@ -1039,7 +1039,7 @@ void processipcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 					q = ppp_conf_nak(s, b, sizeof(b), PPPIPCP, &response, q, p, o, (uint8_t *) &addr, sizeof(addr));
 					if (!q || (q != oq && *response == ConfigRej))
 					{
-						sessionshutdown(s, "Can't negotiate IPCP.", 3, 0);
+						sessionshutdown(s, "Can't negotiate IPCP.", CDN_ADMIN_DISC, TERM_USER_ERROR);
 						return;
 					}
 				}
@@ -1757,7 +1757,7 @@ void sendchap(sessionidt s, tunnelidt t)
 	radius[r].retry = backoff(radius[r].try++);
 	if (radius[r].try > 5)
 	{
-		sessionshutdown(s, "CHAP timeout.", 3, 0);
+		sessionshutdown(s, "CHAP timeout.", CDN_ADMIN_DISC, TERM_REAUTHENTICATION_FAILURE);
 		STAT(tunnel_tx_errors);
 		return ;
 	}

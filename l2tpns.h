@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.111 2006-04-05 02:13:48 bodea Exp $
+// $Id: l2tpns.h,v 1.112 2006-04-13 11:14:35 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -345,7 +345,7 @@ typedef struct
 }
 tunnelt;
 
-// 160 bytes per radius session
+// 164 bytes per radius session
 typedef struct			// outstanding RADIUS requests
 {
 	sessionidt session;	// which session this applies to
@@ -356,6 +356,8 @@ typedef struct			// outstanding RADIUS requests
 	uint8_t try;		// which try we are on
 	uint8_t state;		// state of radius requests
 	uint8_t chap;		// set if CHAP used (is CHAP identifier)
+	uint8_t term_cause;	// Stop record: Acct-Terminate-Cause
+	char const *term_msg;	//   terminate reason
 }
 radiust;
 
@@ -674,6 +676,36 @@ typedef struct
 	int used;		// session ref count
 } ip_filtert;
 
+// CDN result/error codes
+#define CDN_NONE			0, 0
+#define CDN_TRY_ANOTHER			2, 7
+#define CDN_ADMIN_DISC			3, 0
+#define CDN_UNAVAILABLE			4, 0
+
+// RADIUS Acct-Terminate-Cause values
+#define TERM_USER_REQUEST		1
+#define TERM_LOST_CARRIER		2
+#define TERM_LOST_SERVICE		3
+#define TERM_IDLE_TIMEOUT		4
+#define TERM_SESSION_TIMEOUT		5
+#define TERM_ADMIN_RESET		6
+#define TERM_ADMIN_REBOOT		7
+#define TERM_PORT_ERROR			8
+#define TERM_NAS_ERROR			9
+#define TERM_NAS_REQUEST		10
+#define TERM_NAS_REBOOT			11
+#define TERM_PORT_UNNEEDED		12
+#define TERM_PORT_PREEMPTED		13
+#define TERM_PORT_SUSPENDED		14
+#define TERM_SERVICE_UNAVAILABLE	15
+#define TERM_CALLBACK			16
+#define TERM_USER_ERROR			17
+#define TERM_HOST_REQUEST		18
+#define TERM_SUPPLICANT_RESTART		19
+#define TERM_REAUTHENTICATION_FAILURE	20
+#define TERM_PORT_REINIT		21
+#define TERM_PORT_DISABLED		22
+
 // arp.c
 void sendarp(int ifr_idx, const unsigned char* mac, in_addr_t ip);
 
@@ -716,7 +748,7 @@ sessionidt sessionbyuser(char *username);
 void increment_counter(uint32_t *counter, uint32_t *wrap, uint32_t delta);
 void random_data(uint8_t *buf, int len);
 void sessionkill(sessionidt s, char *reason);
-void sessionshutdown(sessionidt s, char *reason, int result, int error);
+void sessionshutdown(sessionidt s, char const *reason, int cdn_result, int cdn_error, int term_cause);
 void filter_session(sessionidt s, int filter_in, int filter_out);
 void send_garp(in_addr_t ip);
 void tunnelsend(uint8_t *buf, uint16_t l, tunnelidt t);

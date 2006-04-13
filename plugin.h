@@ -1,7 +1,7 @@
 #ifndef __PLUGIN_H__
 #define __PLUGIN_H__
 
-#define PLUGIN_API_VERSION	6
+#define PLUGIN_API_VERSION	7
 #define MAX_PLUGIN_TYPES	30
 
 enum
@@ -37,7 +37,7 @@ struct pluginfuncs
     uint16_t (*radiusnew)(sessionidt s);
     void (*radiussend)(uint16_t r, uint8_t state);
     void *(*getconfig)(char *key, enum config_typet type);
-    void (*sessionshutdown)(sessionidt s, char *reason, int result, int error);
+    void (*sessionshutdown)(sessionidt s, char const *reason, int result, int error, int term_cause);
     void (*sessionkill)(sessionidt s, char *reason);
     void (*throttle)(sessionidt s, int rate_in, int rate_out);
     int (*session_changed)(int sid);

@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.159 2006-04-05 02:13:48 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.160 2006-04-13 11:14:35 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -1559,7 +1559,7 @@ void filter_session(sessionidt s, int filter_in, int filter_out)
 }
 
 // start tidy shutdown of session
-void sessionshutdown(sessionidt s, char *reason, int result, int error)
+void sessionshutdown(sessionidt s, char const *reason, int cdn_result, int cdn_error, int term_cause)
 {
 	int walled_garden = session[s].walled_garden;
 
@@ -1587,7 +1587,11 @@ void sessionshutdown(sessionidt s, char *reason, int result, int error)
 		{
 			// stop, if not already trying
 			if (radius[r].state != RADIUSSTOP)
+			{
+				radius[r].term_cause = term_cause;
+				radius[r].term_msg = reason;
 				radiussend(r, RADIUSSTOP);
+			}
 		}
 		else
 			LOG(1, s, session[s].tunnel, "No free RADIUS sessions for Stop message\n");
@@ -1627,18 +1631,18 @@ void sessionshutdown(sessionidt s, char *reason, int result, int error)
 	if (session[s].throttle_in || session[s].throttle_out) // Unthrottle if throttled.
 		throttle_session(s, 0, 0);
 
-	if (result)
+	if (cdn_result)
 	{                            // Send CDN
 		controlt *c = controlnew(14); // sending CDN
-		if (error)
+		if (cdn_error)
 		{
 			uint8_t buf[4];
-			*(uint16_t *) buf     = htons(result);
-			*(uint16_t *) (buf+2) = htons(error);
+			*(uint16_t *) buf     = htons(cdn_result);
+			*(uint16_t *) (buf+2) = htons(cdn_error);
 			controlb(c, 1, buf, 4, 1);
 		}
 		else
-			control16(c, 1, result, 1);
+			control16(c, 1, cdn_result, 1);
 
 		control16(c, 14, s, 1);   // assigned session (our end)
 		controladd(c, session[s].far, session[s].tunnel); // send the message
@@ -1744,7 +1748,7 @@ void sessionkill(sessionidt s, char *reason)
 	}
 
 	session[s].die = TIME;
-	sessionshutdown(s, reason, 3, 0);  // close radius/routes, etc.
+	sessionshutdown(s, reason, CDN_ADMIN_DISC, TERM_ADMIN_RESET);  // close radius/routes, etc.
 	if (sess_local[s].radius)
 		radiusclear(sess_local[s].radius, s); // cant send clean accounting data, session is killed
 
@@ -1809,7 +1813,7 @@ static void tunnelshutdown(tunnelidt t, char *reason, int result, int error, cha
 	// close session
 	for (s = 1; s <= config->cluster_highest_sessionid ; ++s)
 		if (session[s].tunnel == t)
-			sessionshutdown(s, reason, 0, 0);
+			sessionshutdown(s, reason, CDN_NONE, TERM_ADMIN_RESET);
 
 	tunnel[t].state = TUNNELDIE;
 	tunnel[t].die = TIME + 700; // Clean up in 70 seconds
@@ -2048,6 +2052,12 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 			int error = 0;
 			char *msg = 0;
 
+			// default disconnect cause/message on receipt
+			// of CDN (set to more specific value from
+			// attribute 46 if present below).
+			int disc_cause = TERM_NAS_REQUEST;
+			char const *disc_reason = "Closed (Received CDN).";
+
 			// process AVPs
 			while (l && !(fatal & 0x80)) // 0x80 = mandatory AVP
 			{
@@ -2055,6 +2065,7 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 				uint8_t *b = p;
 				uint8_t flags = *p;
 				uint16_t mtype;
+
 				if (n > l)
 				{
 					LOG(1, s, t, "Invalid length in AVP\n");
@@ -2191,17 +2202,13 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 					}
 					break;
 				case 3:     // framing capabilities
-//					LOG(4, s, t, "Framing capabilities\n");
 					break;
 				case 4:     // bearer capabilities
-//					LOG(4, s, t, "Bearer capabilities\n");
 					break;
 				case 5:		// tie breaker
 					// We never open tunnels, so we don't care about tie breakers
-//					LOG(4, s, t, "Tie breaker\n");
 					continue;
 				case 6:     // firmware revision
-//					LOG(4, s, t, "Firmware revision\n");
 					break;
 				case 7:     // host name
 					memset(tunnel[t].hostname, 0, sizeof(tunnel[t].hostname));
@@ -2356,6 +2363,84 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 					memcpy(session[s].random_vector, b, n);
 					session[s].random_vector_length = n;
 					break;
+				case 46:    // ppp disconnect cause
+					if (n >= 5)
+					{
+						uint16_t code = ntohs(*(uint16_t *) b);
+						uint16_t proto = ntohs(*(uint16_t *) (b + 2));
+						uint8_t dir = *(b + 4);
+
+						LOG(4, s, t, "   PPP disconnect cause "
+							"(code=%u, proto=%04X, dir=%u, msg=\"%.*s\")\n",
+							code, proto, dir, n - 5, b + 5);
+
+						switch (code)
+						{
+						case 1: // admin disconnect
+							disc_cause = TERM_ADMIN_RESET;
+							disc_reason = "Administrative disconnect";
+							break;
+						case 3: // lcp terminate
+							if (dir != 1) break; // 1=peer, 2=local
+							disc_cause = TERM_USER_REQUEST;
+							disc_reason = "Normal disconnection";
+							break;
+						case 4: // compulsory encryption unavailable
+							if (dir != 2) break; // 1=refused by peer, 2=local
+							disc_cause = TERM_USER_ERROR;
+							disc_reason = "Compulsory encryption refused";
+							break;
+						case 5: // lcp: fsm timeout
+							disc_cause = TERM_PORT_ERROR;
+							disc_reason = "LCP: FSM timeout";
+							break;
+						case 6: // lcp: no recognisable lcp packets received
+							disc_cause = TERM_PORT_ERROR;
+							disc_reason = "LCP: no recognisable LCP packets";
+							break;
+						case 7: // lcp: magic-no error (possibly looped back)
+							disc_cause = TERM_PORT_ERROR;
+							disc_reason = "LCP: magic-no error (possible loop)";
+							break;
+						case 8: // lcp: echo request timeout
+							disc_cause = TERM_PORT_ERROR;
+							disc_reason = "LCP: echo request timeout";
+							break;
+						case 13: // auth: fsm timeout
+							disc_cause = TERM_SERVICE_UNAVAILABLE;
+							disc_reason = "Authentication: FSM timeout";
+							break;
+						case 15: // auth: unacceptable auth protocol
+							disc_cause = TERM_SERVICE_UNAVAILABLE;
+							disc_reason = "Unacceptable authentication protocol";
+							break;
+						case 16: // auth: authentication failed
+							disc_cause = TERM_SERVICE_UNAVAILABLE;
+							disc_reason = "Authentication failed";
+							break;
+						case 17: // ncp: fsm timeout
+							disc_cause = TERM_SERVICE_UNAVAILABLE;
+							disc_reason = "NCP: FSM timeout";
+							break;
+						case 18: // ncp: no ncps available
+							disc_cause = TERM_SERVICE_UNAVAILABLE;
+							disc_reason = "NCP: no NCPs available";
+							break;
+						case 19: // ncp: failure to converge on acceptable address
+							disc_cause = TERM_SERVICE_UNAVAILABLE;
+							disc_reason = (dir == 1)
+								? "NCP: too many Configure-Naks received from peer"
+								: "NCP: too many Configure-Naks sent to peer";
+							break;
+						case 20: // ncp: user not permitted to use any address
+							disc_cause = TERM_SERVICE_UNAVAILABLE;
+							disc_reason = (dir == 1)
+								? "NCP: local link address not acceptable to peer"
+								: "NCP: remote link address not acceptable";
+							break;
+						}
+					}
+					break;
 				default:
 					{
 						static char e[] = "unknown AVP 0xXXXX";
@@ -2477,7 +2562,7 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 
 				case 14:      // CDN
 					controlnull(t); // ack
-					sessionshutdown(s, "Closed (Received CDN).", 0, 0);
+					sessionshutdown(s, disc_reason, CDN_NONE, disc_cause);
 					break;
 				case 0xFFFF:
 					LOG(1, s, t, "Missing message type\n");
@@ -2807,7 +2892,7 @@ static void regular_cleanups(double period)
 				}
 				else
 				{
-					sessionshutdown(s, "No response to LCP ConfigReq.", 3, 0);
+					sessionshutdown(s, "No response to LCP ConfigReq.", CDN_ADMIN_DISC, TERM_LOST_SERVICE);
 					STAT(session_timeout);
 				}
 
@@ -2836,7 +2921,7 @@ static void regular_cleanups(double period)
 				}
 				else
 				{
-					sessionshutdown(s, "No response to IPCP ConfigReq.", 3, 0);
+					sessionshutdown(s, "No response to IPCP ConfigReq.", CDN_ADMIN_DISC, TERM_LOST_SERVICE);
 					STAT(session_timeout);
 				}
 
@@ -2902,7 +2987,7 @@ static void regular_cleanups(double period)
 		// Drop sessions who have not responded within IDLE_TIMEOUT seconds
 		if (session[s].last_packet && (time_now - session[s].last_packet >= IDLE_TIMEOUT))
 		{
-			sessionshutdown(s, "No response to LCP ECHO requests.", 3, 0);
+			sessionshutdown(s, "No response to LCP ECHO requests.", CDN_ADMIN_DISC, TERM_LOST_SERVICE);
 			STAT(session_timeout);
 			s_actions++;
 			continue;
@@ -2938,7 +3023,7 @@ static void regular_cleanups(double period)
 			if (a & CLI_SESS_KILL)
 			{
 				LOG(2, s, session[s].tunnel, "Dropping session by CLI\n");
-				sessionshutdown(s, "Requested by administrator.", 3, 0);
+				sessionshutdown(s, "Requested by administrator.", CDN_ADMIN_DISC, TERM_ADMIN_RESET);
 				a = 0; // dead, no need to check for other actions
 				s_actions++;
 			}
@@ -4502,7 +4587,7 @@ int sessionsetup(sessionidt s, tunnelidt t)
 		if (!session[s].ip)
 		{
 			LOG(0, s, t, "   No IP allocated.  The IP address pool is FULL!\n");
-			sessionshutdown(s, "No IP addresses available.", 2, 7); // try another
+			sessionshutdown(s, "No IP addresses available.", CDN_TRY_ANOTHER, TERM_SERVICE_UNAVAILABLE);
 			return 0;
 		}
 		LOG(3, s, t, "   No IP allocated.  Assigned %s from pool\n",
