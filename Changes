@@ -1,3 +1,6 @@
+* Tue Apr 18 2006 Brendan O'Dea <bod@optus.net> 2.1.18
+- Don't shutdown on TerminateReq, wait for CDN.
+
 * Thu Apr 13 2006 Brendan O'Dea <bod@optus.net> 2.1.17
 - Fix IPCP length test to allow Terminate-Request (4 bytes).
 - Send nsctl responses back using the correct source address (thanks ltd).

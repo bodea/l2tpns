@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.98 2006-04-13 11:14:35 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.99 2006-04-18 06:00:08 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -870,7 +870,29 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 	}
 	else if (*p == TerminateReq)
 	{
-		*p = TerminateAck;	// close
+		switch (session[s].ppp.lcp)
+		{
+		case Closed:
+		case Stopped:
+		case Closing:
+		case Stopping:
+		case RequestSent:
+		case AckReceived:
+		case AckSent:
+		    	break;
+
+		case Opened:
+		    	lcp_restart(s);
+		    	zero_restart_count(s, lcp);
+			change_state(s, lcp, Closing);
+			break;
+
+		default:
+		    	LOG(2, s, t, "LCP: ignoring %s in state %s\n", ppp_code(*p), ppp_state(session[s].ppp.lcp));
+			return;
+		}
+
+		*p = TerminateAck;	// send ack
 		q = makeppp(b, sizeof(b),  p, l, s, t, PPPLCP);
 		if (!q) return;
 
@@ -878,11 +900,6 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 		if (config->debug > 3) dumplcp(q, l);
 
 		tunnelsend(b, l + (q - b), t); // send it
-		sessionshutdown(s, "Remote end closed connection.", CDN_ADMIN_DISC, TERM_USER_REQUEST);
-	}
-	else if (*p == TerminateAck)
-	{
-		sessionshutdown(s, "Connection closed.", CDN_ADMIN_DISC, TERM_NAS_REQUEST);
 	}
 	else if (*p == ProtocolRej)
 	{
@@ -1153,12 +1170,33 @@ void processipcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 	}
 	else if (*p == TerminateReq)
 	{
-		*p = TerminateAck;
-		q = makeppp(b, sizeof(b), p, l, s, t, PPPIPCP);
+		switch (session[s].ppp.ipcp)
+		{
+		case Closed:
+		case Stopped:
+		case Closing:
+		case Stopping:
+		case RequestSent:
+		case AckReceived:
+		case AckSent:
+		    	break;
+
+		case Opened:
+		    	zero_restart_count(s, ipcp);
+			change_state(s, ipcp, Closing);
+			break;
+
+		default:
+		    	LOG(2, s, t, "IPCP: ignoring %s in state %s\n", ppp_code(*p), ppp_state(session[s].ppp.ipcp));
+			return;
+		}
+
+		*p = TerminateAck;	// send ack
+		q = makeppp(b, sizeof(b),  p, l, s, t, PPPIPCP);
 		if (!q) return;
+
 		LOG(3, s, t, "IPCP: send %s\n", ppp_code(*q));
-		tunnelsend(b, l + (q - b), t);
-		change_state(s, ipcp, Stopped);
+		tunnelsend(b, l + (q - b), t); // send it
 	}
 	else if (*p != CodeRej)
 	{
@@ -1353,12 +1391,33 @@ void processipv6cp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 	}
 	else if (*p == TerminateReq)
 	{
-		*p = TerminateAck;
+		switch (session[s].ppp.ipv6cp)
+		{
+		case Closed:
+		case Stopped:
+		case Closing:
+		case Stopping:
+		case RequestSent:
+		case AckReceived:
+		case AckSent:
+		    	break;
+
+		case Opened:
+		    	zero_restart_count(s, ipv6cp);
+			change_state(s, ipv6cp, Closing);
+			break;
+
+		default:
+		    	LOG(2, s, t, "IPV6CP: ignoring %s in state %s\n", ppp_code(*p), ppp_state(session[s].ppp.ipv6cp));
+			return;
+		}
+
+		*p = TerminateAck;	// send ack
 		q = makeppp(b, sizeof(b),  p, l, s, t, PPPIPV6CP);
 		if (!q) return;
+
 		LOG(3, s, t, "IPV6CP: send %s\n", ppp_code(*q));
-		tunnelsend(b, l + (q - b), t);
-		change_state(s, ipv6cp, Stopped);
+		tunnelsend(b, l + (q - b), t); // send it
 	}
 	else if (*p != CodeRej)
 	{

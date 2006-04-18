@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.112 2006-04-13 11:14:35 bodea Exp $
+// $Id: l2tpns.h,v 1.113 2006-04-18 06:00:08 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -14,7 +14,7 @@
 #include <sys/types.h>
 #include <libcli.h>
 
-#define VERSION	"2.1.17"
+#define VERSION	"2.1.18"
 
 // Limits
 #define MAXTUNNEL	500		// could be up to 65535
@@ -147,7 +147,16 @@ enum {
 
 // reset state machine counters
 #define initialise_restart_count(_s, _fsm)			\
-	sess_local[_s]._fsm.conf_sent = sess_local[_s]._fsm.nak_sent = 0
+	sess_local[_s]._fsm.conf_sent =				\
+	sess_local[_s]._fsm.nak_sent = 0
+
+// no more attempts
+#define zero_restart_count(_s, _fsm) ({				\
+	sess_local[_s]._fsm.conf_sent =				\
+		config->ppp_max_configure;			\
+	sess_local[_s]._fsm.restart =				\
+		time_now + config->ppp_restart_time;		\
+})
 
 // increment ConfReq counter and reset timer
 #define restart_timer(_s, _fsm) ({				\
