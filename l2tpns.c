@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.160 2006-04-13 11:14:35 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.161 2006-04-18 06:00:46 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -2381,12 +2381,12 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 							disc_reason = "Administrative disconnect";
 							break;
 						case 3: // lcp terminate
-							if (dir != 1) break; // 1=peer, 2=local
+							if (dir != 2) break; // 1=peer (LNS), 2=local (LAC)
 							disc_cause = TERM_USER_REQUEST;
 							disc_reason = "Normal disconnection";
 							break;
 						case 4: // compulsory encryption unavailable
-							if (dir != 2) break; // 1=refused by peer, 2=local
+							if (dir != 1) break; // 1=refused by peer, 2=local
 							disc_cause = TERM_USER_ERROR;
 							disc_reason = "Compulsory encryption refused";
 							break;
