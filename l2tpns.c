@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.161 2006-04-18 06:00:46 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.162 2006-04-23 23:18:31 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -3255,9 +3255,12 @@ static void mainloop(void)
 		e.events = EPOLLIN;
 		i = 0;
 
-		d[i].type = FD_TYPE_CLI;
-		e.data.ptr = &d[i++];
-		epoll_ctl(epollfd, EPOLL_CTL_ADD, clifd, &e);
+		if (clifd >= 0)
+		{
+			d[i].type = FD_TYPE_CLI;
+			e.data.ptr = &d[i++];
+			epoll_ctl(epollfd, EPOLL_CTL_ADD, clifd, &e);
+		}
 
 		d[i].type = FD_TYPE_CLUSTER;
 		e.data.ptr = &d[i++];

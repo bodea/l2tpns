@@ -1,3 +1,6 @@
+* Mon Apr 24 2006 Brendan O'Dea <bod@optus.net> 2.1.19
+- Only poll clifd if successfully bound.
+
 * Tue Apr 18 2006 Brendan O'Dea <bod@optus.net> 2.1.18
 - Don't shutdown on TerminateReq, wait for CDN.
 - Interpret "local" direction correctly (as LAC) in disconnect AVPs.
