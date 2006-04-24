@@ -1,0 +1,912 @@
+<?xml version="1.0"?>
+<!DOCTYPE article PUBLIC "-//OASIS//DTD DocBook XML V4.4//EN"
+    "http://docbook.org/xml/4.4/docbookx.dtd">
+
+<article>
+  <articleinfo>
+    <title>Practical VPNs</title>
+    <subtitle>Implementing Full-scale VPNs</subtitle>
+
+    <author>
+      <firstname>Liran</firstname>
+      <surname>Tal</surname>
+      <affiliation>
+	<address>
+	  <email>liran@enginx.com</email>
+	</address>
+      </affiliation>
+    </author>
+
+    <othercredit>
+      <firstname>Yakov</firstname>
+      <surname>Shtutz</surname>
+      <contrib>Testing and feedback</contrib>
+    </othercredit>
+
+    <othercredit>
+      <firstname>Shahar</firstname>
+      <surname>Fermon</surname>
+      <contrib>Testing and feedback</contrib>
+    </othercredit>
+
+    <abstract>
+      <para>This document was compiled from the administrator's point of
+	view, to explain what are VPNs, how they are deployed today
+	and to detail the necessary steps and tools to achieve and
+	create a fully working VPN solution, integrated with RADIUS
+	systems for AAA.</para>
+
+      <para>I will not dwell in this document on how to compile source
+	packages or kernel patching, and with the same tone I'm
+	assuming the reader is an exprerienced Linux user.</para>
+
+      <para>VPNs have their share amount of gossip for being a very
+	complex thing, and in some cases this may be true as they tend
+	to be more security intenssive which require adding more and
+	more layers to the scheme.  With this said, we'll take a look
+	at how fairly straight-forward it is to setup VPNs and
+	maintain them with varius Open-Source tools.</para>
+    </abstract>
+  </articleinfo>
+
+  <sect1 id="overview">
+    <title>Overview of VPNs and IPsec</title>
+    <sect2 id="vpns">
+      <title>Virtual Private Networks</title>
+      <para>The purpose of a VPN is to create a secure channel ontop of an
+	un-secure medium, where a computer or a device are put in each
+	end-point in order to establish communication, each of these
+	end-points are often reffered to as Point of Presense, or POP. 
+	This kind of a communication allows the capability of creating
+	a Virtual Private Network, which is accesable over a medium
+	such as the Internet and thus, extend the physical boundaries
+	of an existing local network.</para>
+
+      <para>VPNs have three forms:
+	<variablelist>
+	  <varlistentry>
+	    <term>Site-To-Site VPNs</term>
+	    <listitem>
+	      <para>
+		these setups exist in order to extend the local network
+		to create a much bigger LAN over the Internet.
+	      </para>
+	    </listitem>
+	  </varlistentry>
+
+	  <varlistentry>
+	    <term>Network-To-Host or Remote access VPNs</term>
+	    <listitem>
+	      <para>
+		where a central VPN server is able to achieve multiple
+		connections, often reffered to as RoadWarrior VPNs. 
+		(This setup is very common among ISPs)
+	      </para>
+	    </listitem>
+	  </varlistentry>
+
+	  <varlistentry>
+	    <term>Network-To-Network</term>
+	    <listitem>
+	      <para>
+		extranet VPNs allow secure connections within branches
+		and business partners, they are an extension of a
+		Site-To-Site VPNs.
+	      </para>
+	    </listitem>
+	  </varlistentry>
+	</variablelist>
+      </para>
+
+      <para><xref linkend="site-to-site"/> shows a Site-To-Site VPN diagram.
+	<figure id="site-to-site" float="1">
+	  <title>Site to Site VPN</title>
+	  <mediaobject>
+	    <imageobject>
+	      <imagedata fileref="site-to-site-vpn.png"/>
+	    </imageobject>
+	  </mediaobject>
+	</figure>
+      </para>
+
+      <para>IP/VPNs are connections which are based upon IP tunnels.  A
+	tunnel is a way to encapsulate an IP packet inside another IP
+	packet or some other type of packet.  Why do we need
+	tunneling?  A Virtual Private Network is identified by IANA's
+	private IP assignments and so such packet can not go beyond
+	the uplink Internet interface.</para>
+
+      <para><xref linkend="tunneling-process"/> shows the tunneling process.
+	<figure id="tunneling-process" float="1">
+	  <title>Tunneling Process</title>
+	  <mediaobject>
+	    <imageobject>
+	      <imagedata fileref="tunneling-process.png"/>
+	    </imageobject>
+	  </mediaobject>
+	</figure>
+      </para>
+
+      <para>Several tunneling protocols are available for manifesting
+        VPNs.
+
+	<variablelist>
+	  <varlistentry>
+	    <term>L2F</term>
+	    <listitem>
+	      <para>Layer 2 Forwarding, an older implementation which assume
+		position at the link layer of the OSI.  It has no
+		encryption capabilities and hence, deprecated.</para>
+	    </listitem>
+	  </varlistentry>
+
+	  <varlistentry>
+	    <term>L2TP</term>
+	    <listitem>
+	      <para>Layer 2 Tunneling Protocol, still no encryption
+	        capabilities.</para>
+	    </listitem>
+	  </varlistentry>
+
+	  <varlistentry>
+	    <term>PPTP</term>
+	    <listitem>
+	      <para>Point-to-Point Tunneling Protocol, and yet again, no
+	        encryption.</para>
+	    </listitem>
+	  </varlistentry>
+	</variablelist>
+      </para>
+
+      <para>As seen, the requirement of encryption enhancement is
+	urgent in order to assure authentication, data integrity and
+	privacy.  IPsec solves this by providing a suite of security
+	measures implemented at layer 3.</para>
+    </sect2>
+
+    <sect2 id="ipsec">
+      <title>IP Security Suite (IPsec)</title>
+      <para>VPN Security is now appearing, this complex things.  How so? 
+	VPN tunnels by themselves are easily maintained by
+	single-standalone tools like pppd, l2tpns, stunnel and others. 
+	Involving security with VPNs though requires more:
+
+	<itemizedlist>
+	  <listitem>
+	    <para>authentication, data integrity and privacy</para>
+	  </listitem>
+
+	  <listitem>
+	    <para>keying management</para>
+	  </listitem>
+	</itemizedlist>
+      </para>
+
+      <note>
+	<para>Keys are secrets being shared by two end-points to provide a
+	  secure mean of communication against a third-party connection
+	  from sniffing the actual data.</para>
+      </note>
+
+      <para>Different ways to handle key management include RADIUS (Remote
+	Authentication Dial In User Service) systems which provide AAA
+	(Authentication, Authorization and Accounting).  Another
+	solution is ISAKMP/Oackly - Internet Security Association and
+	Key Management Protocol.  This solution requires you to posess
+	one of the following:
+
+	<itemizedlist>
+	  <listitem>
+	    <para>something you have</para>
+	  </listitem>
+
+	  <listitem>
+	    <para>something you know</para>
+	  </listitem>
+
+	  <listitem>
+	    <para>something you are</para>
+	  </listitem>
+	</itemizedlist>
+      </para>
+
+      <para>The more requirements you meet the more secure is the
+	medium, once established.  Let's review, something we have is
+	like a certificate, it proves who we are.  Something we know,
+	is a key, a secret password which we were told in a whisper,
+	and something we are is our-fingerprint which identifies
+	ourselves from other individuals.</para>
+
+      <sect3 id="ipsec-in-depth">
+	<title>IPsec in Depth</title>
+	<para>IPsec consists of two main protocols, an Authentication
+	  Header and Encapsulation Security Payload, also known as AH
+	  and ESP.  Although it is not bound to these and can be
+	  extended (and often is) to other standarts such as
+
+	  <itemizedlist>
+	    <listitem>
+	      <para>Data Encryption Standart (DES and 3DES)</para>
+	    </listitem>
+
+	    <listitem>
+	      <para>Diffie-Hellman (DH)</para>
+	    </listitem>
+
+	    <listitem>
+	      <para>Secure Hash Algorithm-1 (SHA1)</para>
+	    </listitem>
+
+	    <listitem>
+	      <para>Message Digest 5 (MD5)</para>
+	    </listitem>
+
+	    <listitem>
+	      <para>Internet Key Exchange (IKE)</para>
+	    </listitem>
+
+	    <listitem>
+	      <para>Certification Authorities (CA)</para>
+	    </listitem>
+	  </itemizedlist>
+	</para>
+
+	<para>We'll be deploying an IKE daemon to handle the key
+	  management, which uses the Diffie- Hellman cryptography
+	  protocol in order to allow two parties to establish a
+	  connection based upon a shared secret key that both parties
+	  posess.  (Authentication within IKE is handled by MD5
+	  hashing)</para>
+
+	<para>IKE is responsible for authentication of two IPsec parties,
+	  negotiation of keys for encryption algorithms and security
+	  associations.  This process is commonly regarded as two
+	  phases:
+
+	  <variablelist>
+	    <varlistentry>
+	      <term>Phase 1: IKE Security Association</term>
+	      <listitem>
+		<para>The IKE daemon authenticates against the peers in
+		  order to achieve a secure channel, according to the
+		  Diffie-Hellman key agreement.</para>
+	      </listitem>
+	    </varlistentry>
+
+	    <varlistentry>
+	      <term>Phase 2: IKE IPsec Negotiation</term>
+	      <listitem>
+		<para>After achieving an authenticated channel, the
+		  parties now negotiate a secure transform (the way to
+		  encrypt and secure the medium) where the sender is
+		  offering his/hers transform set after which the
+		  receiver decides upon one.  An IPsec session can now
+		  safely begin.</para>
+	      </listitem>
+	    </varlistentry>
+	  </variablelist>
+	</para>
+
+	<para>Just to be clear, a Security Association is an agreed
+	  relation between two parties which describes how they will
+	  use security services (from IPsec) to communicate.</para>
+      </sect3>
+
+      <sect3 id="ipsec-modes">
+	<title>IPsec Modes</title>
+	<para>IPsec can operate in two different modes:
+
+	  <variablelist>
+	    <varlistentry>
+	      <term>Transport mode</term>
+	      <listitem>
+		<para>takes place when two devices (like a station and a
+		  gateway (now considered a host)) are establishing a
+		  connection which upon they both support IPsec.</para>
+	      </listitem>
+	    </varlistentry>
+
+	    <varlistentry>
+	      <term>Tunnel mode</term>
+	      <listitem>
+		<para>we require tunnel mode when we proxy IPsec
+		  connetions between two stations behind the IPsec
+		  gateway.  For example, in a Site-to-Site VPN a
+		  tunnel mode lives, since it exists in order to
+		  provide the stations behind these gateways runing
+		  the VPN/IPsec to communicate securely.  In this
+		  situation, both end-points are runing an IPsec
+		  software.</para>
+	      </listitem>
+	    </varlistentry>
+	  </variablelist>
+	</para>
+
+	<para>In definition, a tunnel mode IPsec is better secured than
+	  transport.  Without going too deep into the ins-and-outs of
+	  the technical side, transport mode doesn't encapsulate the
+	  actual IP layer but only the tcp/udp (Transport layer of the
+	  OSI) where-as a tunnel mode encapsulate both the Transport
+	  layer and the IP layer into a new IP packet.</para>
+	
+	<para>To summarize, we need VPNs for data-exchange methods and a
+	  set of IPsec tools for security reasons.</para>
+      </sect3>
+    </sect2>
+  </sect1>
+
+  <sect1 id="deployment">
+    <title>VPN Deployment</title>
+    <para>I've assembled another diagram to view the actual VPN setup. 
+      <xref linkend="vpn-deployment"/> gives a general description of
+      how the network will be layed out in real-world scenario.
+
+      <figure id="vpn-deployment" float="1">
+	<title>VPN Deployment</title>
+	<mediaobject>
+	  <imageobject>
+	    <imagedata fileref="vpn-deployment.png"/>
+	  </imageobject>
+	</mediaobject>
+      </figure>
+    </para>
+
+    <para>We notice that a single Linux box is acting as a Gateway and
+      has all the services included with it.  This is a bad idea from a
+      security prespective but it's easy to just deploy the FreeRADIUS
+      and MySQL servers on another machine.  Of course the L2TPns and
+      the rest of the IPsec tools suite would have to remain on the
+      Gateway box (not necessarily the Firewall).</para>
+
+    <para><xref linkend="vpn-process"/> attempts to explain the actual
+      process that the VPN takes and to detail the place that each of
+      that application-in-charge takes place.
+
+      <figure id="vpn-process" float="1">
+	<title>VPN Process</title>
+	<mediaobject>
+	  <imageobject>
+	    <imagedata fileref="vpn-process.png"/>
+	  </imageobject>
+	</mediaobject>
+      </figure>
+    </para>
+
+    <sect2 id="deployment-requirements">
+      <title>Requirements</title>
+      <sect3 id="deployment-requirements-toolbox">
+	<title>The Toolbox</title>
+	<para>Following is a description of the requirements you will
+	  have to meet:
+
+	  <variablelist>
+	    <varlistentry>
+	      <term>A Linux box</term>
+	      <listitem>
+		<para>preferably a 2.4.27 kernel or higher.</para>
+		<para>Debian is the chosen distribution which means we'll
+		  be using apt-get for installation, but I'll also focus
+		  on basic source tarballs installation.</para>
+
+		<para>Dependencies:
+
+		  <itemizedlist>
+		    <listitem>
+		      <para>ipsec configuration in the kernel</para>
+		    </listitem>
+		  </itemizedlist>
+		</para>
+	      </listitem>
+	    </varlistentry>
+
+	    <varlistentry>
+	      <term>L2TPns</term>
+	      <listitem>
+		<para>an L2TP PPP Termination tool.</para>
+		<para>
+		  Dependencies:
+
+		  <itemizedlist>
+		    <listitem>
+		      <para>libcli 1.8.0 or greater</para>
+		    </listitem>
+
+		    <listitem>
+		      <para>tun/tap interface compiled in the kernel or
+		        as a module</para>
+		    </listitem>
+		  </itemizedlist>
+		</para>
+	      </listitem>
+	    </varlistentry>
+
+	    <varlistentry>
+	      <term>FreeRADIUS</term>
+	      <listitem>
+		<para>For authentication, and accounting.</para>
+	      </listitem>
+	    </varlistentry>
+
+	    <varlistentry>
+	      <term>MySQL</term>
+	      <listitem>
+		<para>To act as a back-end database for the RADIUS.</para>
+	      </listitem>
+	    </varlistentry>
+
+	    <varlistentry>
+	      <term>OpenSwan</term>
+	      <listitem>
+		<para>Provides the ipsec suite package.</para>
+	      </listitem>
+	    </varlistentry>
+	  </variablelist>
+	</para>
+      </sect3>
+
+      <sect3 id="deployment-requirements-kernel">
+	<title>Kernel Support</title>
+	<para>Debian stock kernel 2.4.27 and up are ipsec compatible
+	  although if you think otherwise check for the
+	  kernel-patch-openswan package.</para>
+      </sect3>
+    </sect2>
+
+    <sect2 id="deployment-installation">
+      <title>Installation</title>
+      <sect3 id="deployment-installation-l2tpns">
+        <title>L2TPns</title>
+	<sect4 id="deployment-installation-l2tpns-install">
+	  <title>Installation</title>
+	  <blockquote>
+	    <para>L2TPns is a layer 2 tunneling protocol network server
+	      (LNS).  It supports up to 65535 concurrent sessions per
+	      server/cluster plus ISP features such as rate limiting,
+	      walled garden, usage accounting, and more.</para>
+	  </blockquote>
+
+	  <para>In a personal note - L2TPns is highly configurable for
+	    many cases, and extremely reliable for
+	    production/commerical use.</para>
+
+	  <para>
+	    <variablelist>
+	      <varlistentry>
+		<term>Step 1:</term>
+		<listitem>
+		  <para>Make sure you have libcli-1.8 development
+		    package installed:
+		    <screen># apt-cache search libcli
+libcli-dev - emulates a cisco style telnet command-line interface (dev files)
+libcli1 - emulates a cisco style telnet command-line interface
+# apt-get install libcli-dev</screen>
+		  </para>
+		</listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+		<term>Step 2:</term>
+		<listitem>
+		  <para>Download the source from
+		    <ulink url="http://sourceforge.net/projects/l2tpns/">
+		    SourceForge</ulink>.</para>
+		</listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+		<term>Step 3:</term>
+		<listitem>
+		  <para>Build and install:
+		    <code>make &amp;&amp; make install</code></para>
+		</listitem>
+	      </varlistentry>
+	    </variablelist>
+	  </para>
+
+	  <note>
+	    <para>Alternately, you can skip these steps and simply
+	      <code>apt-get install l2tpns</code>.</para>
+	  </note>
+
+	  <note>
+	    <para>On RPM-based distributions, you should be able to make
+	      packages from the libcli and l2tpns source tarballs with
+	      <code>rpmbuild -ta</code>.</para>
+	  </note>
+
+	  <para>Once compiliation is done you will have l2tpns in
+	    <filename>/usr/sbin/l2tpns</filename>, and all
+	    configuration files can be found in
+	    <filename>/etc/l2tpns/</filename>.</para>
+	</sect4>
+
+	<sect4 id="deployment-installation-l2tpns-config">
+	  <title>Configuration</title>
+	  <para>The only configuration that L2TPns takes is
+	    centralized in the configuration file
+	    <filename>/etc/l2tpns/startup-config</filename>.
+	    <programlisting>set debug 2                               # Debugging level
+set log_file "/var/log/l2tpns"            # Log file: comment out to use stderr, use
+                                          # "syslog:facility" for syslog
+set pid_file "/var/run/l2tpns.pid"        # Write pid to this file
+set l2tp_secret <emphasis>"secret"</emphasis>                  # shared secret
+set primary_dns <emphasis>212.117.128.6</emphasis>             # Only 2 DNS server entries are allowed
+set secondary_dns <emphasis>212.117.129.3</emphasis>
+set primary_radius <emphasis>192.168.0.1</emphasis>            # Can have multiple radius server entries,
+                                          # but ony one radius secret
+set primary_radius_port 1812
+set radius_secret <emphasis>"radius_secret"</emphasis>
+set radius_accounting yes
+set radius_dae_port 3799
+set accounting_dir "/var/run/l2tpns/acct" # Write usage accounting files into specified
+					  # directory
+set peer_address <emphasis>192.168.0.1</emphasis>              # Gateway address given to clients
+load plugin "sessionctl"                  # Drop/kill sessions
+load plugin "autothrottle"                # Throttle/snoop based on RADIUS
+load plugin "throttlectl"                 # Control throttle/snoop with nsctl
+load plugin "snoopctl"</programlisting>
+	  </para>
+
+	  <para>This is the trimmed down version of probably most of
+	    the common configuration and even some extra options.</para>
+
+	  <para>Important configuration options are highlited and you
+	    should adjust these to meet your network needs.  We can
+	    deploy all of the environment into one box which is of
+	    course not a very good idea from a security point of view,
+	    but will function just fine.  Moreover, we will be using
+	    aliased IP addresses so once you've decided to move the
+	    FreeRADIUS daemon to another computer on the LAN it will
+	    be fairly easy and won't take too much configuration into
+	    it.</para>
+
+	  <para>Next, we need to setup the IP pool that L2TPns will
+	    provide to each VPN client.  The configuration file is
+	    located at <filename>/etc/l2tpns/ip_pool</filename> and
+	    should look like the following:
+	    <programlisting>172.16.21.0/24</programlisting>
+	  </para>
+
+	  <important>
+	    <para>Of course you can change this pool to anything else
+	      (IANA IPs assigned for private internets only) just make
+	      sure it is not conflicting with your current LAN network
+	      addresses.  This means that if you've assigned addresses
+	      of 192.168.0.1 and 192.168.0.2 to your LAN boxes you
+	      can't have a pool of 192.168.0.1/24 defined since L2TPns
+	      will try to route those addresses from the tun device,
+	      which is needless to say a bad idea...</para>
+	  </important>
+
+	  <para>Next up, creating the access-list for L2TPns.</para>
+
+	  <para>Add a username and password into
+	    <filename>/etc/l2tpns/users</filename>:
+	    <programlisting>admin:12345</programlisting>
+
+	    The password may either be plain-text as above, or
+	    encrypted with MD5 or DES (to distinguish DES from
+	    plain-text passwords, prefix the value with
+	    <code>{crypt}</code>).</para>
+
+	  <para>L2TPns utilizes a terminal connection on port 23 which you
+	    would feel very comfortable in if you have worked with
+	    routers and switches devices before.  The terminal
+	    provides control over the ppp termination which is why
+	    we've created an account to log on to.</para>
+	</sect4>
+      </sect3>
+
+      <sect3 id="deployment-installation-ipsec">
+        <title>IPsec</title>
+	<sect4 id="deployment-installation-ipsec-install">
+	  <title>Installation</title>
+	  <para>User-space IPsec tools for various IPsec implementations
+	    exist for linux, among them is the port of KAME's
+	    libipsec, setkey, and racoon.  Others are the OpenSWAN (a
+	    successor to the FreeSWAN project).</para>
+
+	  <para>Getting IPsec installed is fairly easy with Debian:
+	    <screen># apt-get install openswan</screen>
+	  </para>
+
+	  <para>The OpenSWAN project provides packages for RPM-based
+	    distributions.</para>
+
+	  <para>Alternately, you may download the
+	    <ulink url="http://www.openswan.org/code/">source</ulink>
+	    from the OpenSWAN project:
+
+	    <screen># tar xvzf openswan-2.4.4.tar.gz
+# cd openswan-2.4.4
+# ./configure &amp;&amp; make &amp;&amp; make install</screen>
+	  </para>
+	</sect4>
+
+	<sect4 id="deployment-installation-ipsec-config">
+	  <title>Configuration</title>
+	  <para>OpenSWAN acts as the IKE daemon (remember IKE?  it's
+	    job is to authenticate between the two peers and negotiate
+	    a secure medium).  We will be setting up the IKE daemon as
+	    a RoadWarrior configuration, a term for remote access
+	    VPNs.</para>
+
+	  <para>We desire this approach for compatibilty because after
+	    our VPN solution will be complete any user from a Windows
+	    machine will be easily ready to connect without any 3rd
+	    party applications, same for Linux.</para>
+	  
+	  <para>Configuration files are placed in
+	    <filename>/etc/ipsec.d/</filename>,
+	    <filename>/etc/ipsec.conf</filename> and
+	    <filename>/etc/ipsec.secrets</filename>.</para>
+	    
+	  <para>Let's start by choosing the remote client and it's PSK
+	    (Private Shared Key) <filename>/etc/ipsec.secrets</filename>:
+	    <programlisting>hostname_or_ipaddress %any : PSK "mysecretkeyisverylong"</programlisting>
+	  </para>
+
+	  <para>This is an IP/key pair.  The IP or FQDN defines the
+	    local peer (like a SOHO branch), then the remote host. 
+	    Here we defined %any for all hosts, though it's possible
+	    to define only a specific IP.  At last, we define the key
+	    associated with it.</para>
+
+	  <para>A better way to create a key is to utilize /dev/random
+	    for creating a unique key.
+	    <screen># dd if=/dev/random count=16 bs=1 2>/dev/null | xxd -ps</screen>
+	  </para>
+
+	  <para>Next, let's prepare the configuration file
+	    <filename>/etc/ipsec.conf</filename>:
+	    <programlisting>version 2.0
+config setup
+     nat_traversal=yes
+
+conn l2tp
+     authby=secret
+     pfs=no
+     keyingtries=3
+     left=real_ip_address
+     leftnexthop=%defaultroute
+     leftprotoport=17/%any
+     right=%any
+     rightprotoport=17/%any
+     auto=add
+
+include /etc/ipsec.d/examples/no_oe.conf</programlisting>
+	  </para>
+
+	  <para>In this file we have first defined version 2 which is
+	    a must, then enabled NAT Traversal.  To understand the
+	    importance of this feature think of the following
+	    scenario:  A remote user attempts to connect while he's
+	    behind a router and there-fore NATed.  The router has to
+	    de-encapsulate the packet, change things and then build
+	    it up again and send it.  IPsec doesn't like other people
+	    messing with it's packet.  That's why we solve this issue
+	    with NAT Traversal.</para>
+
+	  <para>Next up we configure authentication type (certificates,
+	    psk, rsa keys, etc) then the left and right peers.  The
+	    default mode OpenSWAN takes is tunnel unless told
+	    otherwise.  I won't go into in-depth explanation of every
+	    method, you can take a quick look at
+	    <filename>/etc/ipsec.d/examples</filename> for more
+	    explanation and other variations of working with RSA keys,
+	    Certificates, host-to-host, and more.</para>
+
+	  <para>In summary:
+	    <itemizedlist>
+	      <listitem>
+		<para>We've configured an almost complete IPsec VPN
+		  setup.</para>
+	      </listitem>
+
+	      <listitem>
+		<para>We've installed and configured a VPN server
+		  (L2TPns) and our IPsec security suite.</para>
+	      </listitem>
+
+	      <listitem>
+		<para>To control both of them we use: 
+		  <filename>/etc/init.d/l2tpns</filename> and
+		  <filename>/etc/init.d/racoon</filename> (location
+		  of start-up scripts may vary on non-Debian systems,
+		  or if you've installed from
+		  source).</para>
+	      </listitem>
+	    </itemizedlist>
+	  </para>
+	</sect4>
+      </sect3>
+
+      <sect3 id="deployment-installation-freeradius">
+        <title>FreeRADIUS</title>
+	<para>The VPN setup needs to authenticate against something,
+	  that is the users database which we chose to be a FreeRADIUS
+	  server backed with a MySQL database.</para>
+
+	<sect4 id="deployment-installation-freeradius-install">
+	  <title>Installation</title>
+	  <blockquote>
+	    <para>FreeRADIUS is the premiere open source RADIUS
+	    server.  While detailed statistics are not available, we
+	    believe that FreeRADIUS is well within the top 5 RADIUS
+	    servers world-wide, in terms of the number of people who
+	    use it daily for authentication.  It scales from embedded
+	    systems with small amounts of memory, to systems with
+	    millions of users.  It is fast, flexible, configurable,
+	    and supports more authentication protocols than many
+	    commercial servers.</para>
+	  </blockquote>
+
+	  <para>Installing on Debian:
+	    <screen># apt-get install freeradius freeradius-mysql</screen>
+	  </para>
+
+	  <para>From source:  Download the latest freeradius package from
+	    <ulink url="http://freeradius.org/getting.html">freeradius.org
+	    </ulink>
+	    <screen># tar xvzf freeradius.tar.gz
+# cd freeradius
+# ./configure &amp;&amp; make &amp;&amp; make install</screen>
+	  </para>
+	</sect4>
+
+	<sect4 id="deployment-installation-freeradius-config">
+	  <title>Configuration</title>
+	  <para>This will appear a bit complex but it isn't, it's just
+	    a lot of configuration.</para>
+
+	  <para>Following are the configurations you need to have in your
+	    <filename>/etc/freeradius/</filename> files.</para>
+
+	  <para>In this section I will not give you a dump of the
+	    configuration since they are very long and mostly default. 
+	    I'll just post which changes to make.</para>
+
+	  <para>We haven't yet configured MySQL, but it'll come
+	    afterwards, don't worry.</para>
+
+	  <para>Make the following changes to the file
+	    <filename>/etc/freeradius/sql.conf</filename>:
+	    <programlisting>server = "192.168.0.1"
+login = "radius"
+password = "12345678"</programlisting>
+	  </para>
+
+	  <para>Add the following to the file
+	    <filename>/etc/freeradius/clients.conf</filename>:
+	      <programlisting>client 192.168.0.1 {
+	secret	  = my_secret
+	shortname = localhost
+	nastype	  = other
+}</programlisting>
+	  </para>
+
+	  <para>Don't confuse the secret directive there with IPsec. 
+	    RADIUS server are using secret keys also to identify their
+	    allowed NAS (Network Access Servers), these are the
+	    clients that talk to the RADIUS server.</para>
+
+	  <para>Also, change the <code>client 127.0.0.1 {}</code>
+	    directive to hold the secret "my_secret" like we
+	    configured for 192.168.0.1 to avoid conflicts.</para>
+
+	  <para>Uncomment the <code>sql</code> directive in the
+	    <code>authorize</code>, <code>accounting</code>, and
+	    <code>session</code> sections of
+	    <filename>/etc/freeradius/radiusd.conf</filename>.</para>
+
+	  <para>Now for populating FreeRADIUS with MySQL.  If you
+	    don't know or haven't set root password for MySQL you can
+	    do it now with:
+	    <screen># mysqladmin -u root password password_here</screen>
+
+	    Then add the following to
+	    <filename>/root/.my.cnf</filename>:
+
+	    <programlisting>[mysqladmin]
+user = root
+password = password_here</programlisting>
+	  </para>
+
+	  <para>Create the <code>radius</code> database, using the
+	    schema given in
+	    <filename>/usr/share/doc/freeradius/examples/db_mysql.sql.gz
+	    </filename>.</para>
+
+	  <note>
+	    <para>It may be necessary to modify the column definition
+	      of <code>id</code> in the <code>nas</code> table,
+	      removing <code>DEFAULT '0'</code> such that the
+	      definition reads:
+
+	      <programlisting>id int(10) NOT NULL auto_increment,</programlisting>
+	    </para>
+	  </note>
+
+	  <screen># mysqladmin create radius
+# mysql radius
+mysql> source db_mysql.sql
+mysql> GRANT ALL ON * TO 'radius'@'localhost' IDENTIFIED BY 'radius_password';</screen>
+
+	  <para>All the configuration is now done.  Let's add a user
+	    to our VPN database.
+	    <screen># mysql radius
+mysql> INSERT INTO radcheck values (0, "test", "User-Password", "==", "1234");</screen>
+	  </para>
+
+	  <para>We have now created a user in the database of username
+	    <code>test</code> and password <code>1234</code>.</para>
+
+	  <para>Testing the RADIUS setup is simple using the radtest
+	    utility provided with it.
+	    <screen># radtest
+Usage: radtest user passwd radius-server[:port] nas-port-number secret [ppphint] [nasname]
+# radtest test 1234 192.168.0.1 1812 my_secret</screen>
+	  </para>
+
+	  <para>radtest sends an Access-Request to the RADIUS server
+	    and expects an Access-Accept back from it.  If you're not
+	    getting an Access-Accept from the RADIUS you're advised to
+	    check the configuration again and see what you might have
+	    missed.</para>
+	</sect4>
+      </sect3>
+
+      <sect3 id="deployment-installation-firewall">
+        <title>Firewall Configuration</title>
+	<para>We need to apply a few things to iptables configuration
+	  and kernel networking.</para>
+
+	<para>First off, we need to accept VPN-specific packets
+	  through the firewall.  Of course you will have to adjust the
+	  rules to fits you needs, in this case, ppp0 is the Internet
+	  interface.
+	  <screen># iptables --append INPUT --in-interface  ppp0 -p udp --dport 1701 -j ACCEPT
+# iptables --append INPUT --in-interface  ppp0 -p udp --dport 500 -j ACCEPT
+# iptables --append INPUT --in-interface  ppp0 -p udp --dport 4500 -j ACCEPT
+# iptables --append INPUT --in-interface  ppp0 -p 50 -j ACCEPT</screen>
+	</para>
+
+	<para>If you haven't setup your Linux box as a gateway yet
+	  then you have to allow forwarding/masqing for the boxes on
+	  the LAN (and therefore for the VPN clients):
+	  <screen># iptables --table nat --append POSTROUTING --out-interface ppp0 -j MASQUERADE
+# iptables --append FORWARD --in-interface eth0 -j ACCEPT
+# echo 1 > /proc/sys/net/ipv4/ip_forward</screen>
+	</para>
+      </sect3>
+    </sect2>
+  </sect1>
+
+  <sect1 id="references">
+    <title>References</title>
+    <variablelist>
+      <varlistentry>
+	<term>VPN Reference</term>
+	<listitem>
+	  <para>
+	    <ulink url="http://www.jacco2.dds.nl/networking/freeswan-l2tp.html"></ulink>
+	  </para>
+	</listitem>
+      </varlistentry>
+
+      <varlistentry>
+	<term>L2TPns Project</term>
+	<listitem>
+	  <para><ulink url="http://l2tpns.sourceforge.net"></ulink></para>
+	</listitem>
+      </varlistentry>
+
+      <varlistentry>
+	<term>OpenSWAN Project</term>
+	<listitem>
+	  <para><ulink url="http://www.openswan.org"></ulink></para>
+	</listitem>
+      </varlistentry>
+    </variablelist>
+  </sect1>
+</article>
