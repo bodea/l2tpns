@@ -1,6 +1,6 @@
 // L2TPNS Radius Stuff
 
-char const *cvs_id_radius = "$Id: radius.c,v 1.49 2006-04-13 11:14:35 bodea Exp $";
+char const *cvs_id_radius = "$Id: radius.c,v 1.50 2006-04-27 09:53:50 bodea Exp $";
 
 #include <time.h>
 #include <stdio.h>
@@ -537,7 +537,7 @@ void processrad(uint8_t *buf, int len, char socket_index)
 			if (radius[r].chap)
 			{
 				// CHAP
-				uint8_t *p = makeppp(b, sizeof(b), 0, 0, s, t, PPPCHAP);
+				uint8_t *p = makeppp(b, sizeof(b), 0, 0, s, t, PPPCHAP, 0, 0, 0);
 				if (!p) return;	// Abort!
 
 				*p = (r_code == AccessAccept) ? 3 : 4;     // ack/nak
@@ -551,7 +551,7 @@ void processrad(uint8_t *buf, int len, char socket_index)
 			else
 			{
 				// PAP
-				uint8_t *p = makeppp(b, sizeof(b), 0, 0, s, t, PPPPAP);
+				uint8_t *p = makeppp(b, sizeof(b), 0, 0, s, t, PPPPAP, 0, 0, 0);
 				if (!p) return;		// Abort!
 
 				// ack/nak
@@ -592,6 +592,19 @@ void processrad(uint8_t *buf, int len, char socket_index)
 						session[s].dns1 = ntohl(*(uint32_t *) (p + 2));
 						LOG(3, s, session[s].tunnel, "   Radius reply contains primary DNS address %s\n",
 							fmtaddr(htonl(session[s].dns1), 0));
+					}
+					else if (*p == 27)
+					{
+						// Session timeout
+					    	if (p[1] < 6) {
+							LOG(2, s, session[s].tunnel, "Error: Received Session timeout with length %d < 6\n", p[1]);
+							continue;
+						}
+
+						session[s].timeout = ntohl(*(uint32_t *) (p + 2));
+						LOG(3, s, session[s].tunnel, "   Radius reply contains Session timeout %d\n", session[s].timeout);
+						if (!session[s].timeout)
+							sessionshutdown(s, "Session timeout is zero", CDN_ADMIN_DISC, TERM_SESSION_TIMEOUT);
 					}
 					else if (*p == 136)
 					{

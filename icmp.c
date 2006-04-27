@@ -1,6 +1,6 @@
 // L2TPNS: icmp
 
-char const *cvs_id_icmp = "$Id: icmp.c,v 1.10 2005-08-10 11:25:56 bodea Exp $";
+char const *cvs_id_icmp = "$Id: icmp.c,v 1.11 2006-04-27 09:53:49 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -114,7 +114,7 @@ void send_ipv6_ra(sessionidt s, tunnelidt t, struct in6_addr *ip)
 	LOG(3, s, t, "Sending IPv6 RA\n");
 		
 	memset(b, 0, sizeof(b));
-	o = makeppp(b, sizeof(b), 0, 0, s, t, PPPIPV6);
+	o = makeppp(b, sizeof(b), 0, 0, s, t, PPPIPV6, 0, 0, 0);
 
 	if (!o)
 	{

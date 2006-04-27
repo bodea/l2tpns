@@ -2,7 +2,7 @@
 .de Id
 .ds Dt \\$4 \\$5
 ..
-.Id $Id: startup-config.5,v 1.15 2005-09-16 05:04:31 bodea Exp $
+.Id $Id: startup-config.5,v 1.16 2006-04-27 09:53:50 bodea Exp $
 .TH STARTUP-CONFIG 5 "\*(Dt" L2TPNS "File Formats and Conventions"
 .SH NAME
 startup\-config \- configuration file for l2tpns
@@ -122,6 +122,9 @@ requests (default: 3799).
 Allow multiple logins with the same username.  If false (the default),
 any prior session with the same username will be dropped when a new
 session is established.
+.TP
+.B guest_account
+Allow multiple logins matching this specific username.
 .TP
 .B bind_address
 When the tun interface is created, it is assigned the address

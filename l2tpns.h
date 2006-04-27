@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.114 2006-04-23 23:18:32 bodea Exp $
+// $Id: l2tpns.h,v 1.115 2006-04-27 09:53:50 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -14,10 +14,15 @@
 #include <sys/types.h>
 #include <libcli.h>
 
-#define VERSION	"2.1.19"
+#define VERSION	"2.2.0"
 
 // Limits
 #define MAXTUNNEL	500		// could be up to 65535
+#define MAXBUNDLE	300		// could be up to 65535
+#define MAXBUNDLESES	10		// Maximum number of member links in bundle
+#define MAXADDRESS	20		// Maximum length for the Endpoint Discrminiator address
+#define MAXFRAGNUM	1500		// Maximum number of Multilink fragment in a bundle
+#define MAXFRAGLEN      1000		// Maximum length for Multilink fragment
 #define MAXSESSION	60000		// could be up to 65535
 #define MAXTBFS		6000		// Maximum token bucket filters. Might need up to 2 * session.
 
@@ -43,9 +48,15 @@
 #define MAXIPPOOL	131072		// max number of ip addresses in pool
 #define RINGBUFFER_SIZE	10000		// Number of ringbuffer entries to allocate
 #define MAX_LOG_LENGTH	512		// Maximum size of log message
-#define ECHO_TIMEOUT	60		// Time between last packet sent and LCP ECHO generation
+#define ECHO_TIMEOUT	10		// Time between last packet sent and LCP ECHO generation
 #define IDLE_TIMEOUT	240		// Time between last packet sent and LCP ECHO generation
 #define BUSY_WAIT_TIME	3000		// 5 minutes in 1/10th seconds to wait for radius to cleanup on shutdown
+
+#define MP_BEGIN	0x80		// This value is used when (b)egin bit is set in MP header
+#define MP_END		0x40		// This value is used when (e)nd bit is set in MP header
+#define MP_BOTH_BITS	0xC0		// This value is used when both bits (begin and end) are set in MP header
+
+#define DEFAULT_EPDIS_ADDRESS	"L2TPNetServer"		// Company name may goes here!
 
 // Constants
 #ifndef ETCDIR
@@ -186,6 +197,7 @@ enum {
 
 // Types
 typedef uint16_t sessionidt;
+typedef uint16_t bundleidt;
 typedef uint16_t tunnelidt;
 typedef uint32_t clockt;
 typedef uint8_t hasht[16];
@@ -231,6 +243,17 @@ typedef struct controls		// control message
 }
 controlt;
 
+typedef struct {
+	uint8_t length;			// Endpoint Discriminator length
+	uint8_t addr_class;		// Endpoint Discriminator class
+	uint8_t address[MAXADDRESS];	// Endpoint Discriminator address
+} epdist;
+
+typedef struct {
+	uint16_t length;		// Fragment length
+	uint8_t data[MAXFRAGLEN];	// Fragment data
+} fragmentt;
+
 typedef struct
 {
 	sessionidt next;		// next session in linked list
@@ -273,6 +296,11 @@ typedef struct
 	char calling[MAXTEL];		// calling number
 	uint32_t tx_connect_speed;
 	uint32_t rx_connect_speed;
+	clockt timeout;			// Session timeout
+	uint32_t mrru;			// Multilink Max-Receive-Reconstructed-Unit
+	uint8_t mssf;			// Multilink Short Sequence Number Header Format
+	epdist epdis;			// Multilink Endpoint Discriminator
+	bundleidt bundle;		// Multilink Bundle Identifier
 	in_addr_t snoop_ip;		// Interception destination IP
 	uint16_t snoop_port;		// Interception destination port
 	uint8_t walled_garden;		// is this session gardened?
@@ -281,6 +309,33 @@ typedef struct
 	char reserved_3[11];		// Space to expand structure without changing HB_VERSION
 }
 sessiont;
+
+typedef struct
+{
+	int state;				// current state (bundlestate enum)
+	uint32_t seq_num_t;			// Sequence Number (transmission)
+	uint32_t seq_num_m;			// Last received frame sequence number (bearing B bit)
+	uint32_t offset;			// Offset between sequence number and array index
+	uint8_t pending_frag;			// Indicate that there is pending fragments to reassemble
+	uint8_t num_of_links;			// Number of links joint to this bundle
+	uint32_t online_time;			// The time this bundle is online
+	clockt last_check;			// Last time the timeout is checked
+	uint32_t mrru;				// Multilink Max-Receive-Reconstructed-Unit
+	uint8_t mssf;				// Multilink Short Sequence Number Header Format
+	epdist epdis;				// Multilink Endpoint Discriminator
+	char user[MAXUSER];			// Needed for matching member links
+	sessionidt current_ses;			// Current session to use for sending (used in RR load-balancing)
+	sessionidt members[MAXBUNDLESES];	// Array for member links sessions
+}
+bundlet;
+
+typedef struct
+{
+	fragmentt fragment[MAXFRAGNUM];
+	uint8_t reassembled_frame[MAXETHER];	// The reassembled frame
+	uint16_t re_frame_len;			// The reassembled frame length
+}
+fragmentationt;
 
 #define AUTHPAP		1	// allow PAP
 #define AUTHCHAP	2	// allow CHAP
@@ -310,6 +365,15 @@ typedef struct
 
 	// our MRU
 	uint16_t ppp_mru;
+
+	// our MRRU
+	uint16_t mp_mrru;
+
+	// our mssf
+	uint16_t mp_mssf;
+
+	// our Endpoint Discriminator
+	in_addr_t mp_epdis;
 
 	// DoS prevention
 	clockt last_packet_out;
@@ -405,6 +469,23 @@ enum
 	TUNNELDIE,		// Currently closing
 	TUNNELOPENING,		// Busy opening
 	TUNNELUNDEF,		// Undefined
+};
+
+enum
+{
+	BUNDLEFREE,		// Not in use
+	BUNDLEOPEN,		// Active bundle
+	BUNDLEUNDEF,		// Undefined
+};
+
+enum
+{
+	NULLCLASS = 0,		//End Point Discriminator classes
+	LOCALADDR,
+	IPADDR,
+	IEEEMACADDR,
+	PPPMAGIC,
+	PSNDN,
 };
 
 enum
@@ -561,6 +642,7 @@ typedef struct
 	int		radius_authprefer;
 
 	int		allow_duplicate_users;		// allow multiple logins with the same username
+	char		guest_user[MAXUSER];		// allow multiple logins to guest account username
 
 	in_addr_t	default_dns1, default_dns2;
 
@@ -583,6 +665,7 @@ typedef struct
 	int		lock_pages;			// Lock pages into memory.
 	int		icmp_rate;			// Max number of ICMP unreachable per second to send
 	int		max_packets;			// DoS prevention: per session limit of packets/0.1s
+	char		epdis_addr[20];			// MP Endpoint Discriminator address
 
 	in_addr_t	cluster_address;		// Multicast address of cluster.
 							// Send to this address to have everyone hear.
@@ -594,8 +677,10 @@ typedef struct
 	int		cluster_seq_number;		// Sequence number of the next heartbeat we'll send out
 							// (or the seq number we're next expecting if we're a slave).
 	int		cluster_undefined_sessions;	// How many sessions we're yet to receive from the master.
+	int		cluster_undefined_bundles;	// How many bundles we're yet to receive from the master.
 	int		cluster_undefined_tunnels;	// How many tunnels we're yet to receive from the master.
 	int		cluster_highest_sessionid;
+	int		cluster_highest_bundleid;
 	int		cluster_highest_tunnelid;
 	clockt		cluster_last_hb;		// Last time we saw a heartbeat from the master.
 	int		cluster_last_hb_ver;		// Heartbeat version last seen from master
@@ -605,12 +690,10 @@ typedef struct
 	int		cluster_hb_interval;		// How often to send a heartbeat.
 	int		cluster_hb_timeout;		// How many missed heartbeats trigger an election.
 	uint64_t	cluster_table_version;		// # state changes processed by cluster
-
-	struct in6_addr ipv6_prefix;			// Our IPv6 network pool.
-
-
 	int		cluster_master_min_adv;		// Master advertises routes while the number of up to date
 							// slaves is less than this value.
+
+	struct in6_addr ipv6_prefix;			// Our IPv6 network pool.
 
 #ifdef BGP
 #define BGP_NUM_PEERS	2
@@ -727,14 +810,17 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l);
 void processipcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l);
 void processipv6cp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l);
 void processipin(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l);
+void processmpin(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l);
+void processmpframe(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l, uint8_t extra);
 void processipv6in(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l);
 void processccp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l);
 void sendchap(sessionidt s, tunnelidt t);
-uint8_t *makeppp(uint8_t *b, int size, uint8_t *p, int l, sessionidt s, tunnelidt t, uint16_t mtype);
+uint8_t *makeppp(uint8_t *b, int size, uint8_t *p, int l, sessionidt s, tunnelidt t, uint16_t mtype, uint8_t prio, bundleidt bid, uint8_t mp_bits);
 void sendlcp(sessionidt s, tunnelidt t);
 void send_ipin(sessionidt s, uint8_t *buf, int len);
 void sendccp(sessionidt s, tunnelidt t);
 void protoreject(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l, uint16_t proto);
+int join_bundle(sessionidt s);
 
 
 // radius.c
@@ -802,6 +888,7 @@ void host_unreachable(in_addr_t destination, uint16_t id, in_addr_t source, uint
 
 
 extern tunnelt *tunnel;
+extern bundlet *bundle;
 extern sessiont *session;
 extern sessionlocalt *sess_local;
 extern ippoolt *ip_address_pool;

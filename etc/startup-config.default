@@ -41,6 +41,9 @@ set radius_secret "secret"
 # Allow multiple logins for the same username
 #set allow_duplicate_users no
 
+# Allow multiple logins for specific username
+#set guest_account ""
+
 # Write usage accounting files into specified directory
 set accounting_dir "/var/run/l2tpns/acct"
 
@@ -95,6 +98,9 @@ set accounting_dir "/var/run/l2tpns/acct"
 
 # Minimum number of slaves before master withdraws routes
 #set cluster_master_min_adv 1
+
+# IPv6 address prefix
+#set ipv6_prefix ::
 
 # Drop/kill sessions
 #load plugin "sessionctl"

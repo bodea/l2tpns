@@ -1,5 +1,5 @@
 // L2TPNS Clustering Stuff
-// $Id: cluster.h,v 1.14 2005-07-31 10:04:10 bodea Exp $
+// $Id: cluster.h,v 1.15 2006-04-27 09:53:49 bodea Exp $
 
 #ifndef __CLUSTER_H__
 #define __CLUSTER_H__
@@ -21,6 +21,8 @@
 #define C_GARDEN		14	// Gardened packet
 #define C_MASTER		15	// Tell a slave the address of the master.
 #define C_FORWARD_DAE		16	// A DAE packet for the master to handle
+#define C_BUNDLE		17	// Bundle structure.
+#define C_CBUNDLE		18	// Compressed bundle structure.
 
 #define HB_VERSION		5	// Protocol version number..
 #define HB_MAX_SEQ		(1<<30)	// Maximum sequence number. (MUST BE A POWER OF 2!)
@@ -43,9 +45,11 @@ typedef struct {
 
 	uint32_t highsession;	// Id of the highest in-use session.
 	uint32_t freesession;	// Id of the first free session.
+	uint32_t highbundle;	// Id of the highest used bundle.
 	uint32_t hightunnel;	// Id of the highest used tunnel.
 	uint32_t size_sess;	// Size of the session structure.
 
+	uint32_t size_bund;	// size of the bundle structure.
 	uint32_t size_tunn;	// size of the tunnel structure.
 	uint32_t interval;	// ping/heartbeat interval
 	uint32_t timeout;	// heartbeat timeout
@@ -74,6 +78,7 @@ typedef struct {
 int cluster_init(void);
 int processcluster(uint8_t *buf, int size, in_addr_t addr);
 int cluster_send_session(int sid);
+int cluster_send_bundle(int bid);
 int cluster_send_tunnel(int tid);
 int master_forward_packet(uint8_t *data, int size, in_addr_t addr, int port);
 int master_forward_dae_packet(uint8_t *data, int size, in_addr_t addr, int port);

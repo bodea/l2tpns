@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.71 2005-12-06 09:43:42 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.72 2006-04-27 09:53:49 bodea Exp $";
 
 #include <stdio.h>
 #include <stddef.h>
@@ -36,6 +36,7 @@ char const *cvs_id_cli = "$Id: cli.c,v 1.71 2005-12-06 09:43:42 bodea Exp $";
 #endif
 
 extern tunnelt *tunnel;
+extern bundlet *bundle;
 extern sessiont *session;
 extern radiust *radius;
 extern ippoolt *ip_address_pool;
@@ -426,6 +427,14 @@ static int cmd_show_session(struct cli_def *cli, char *command, char **argv, int
 			cli_print(cli, "\tOpened:\t\t%u seconds", session[s].opened ? abs(time_now - session[s].opened) : 0);
 			cli_print(cli, "\tIdle time:\t%u seconds", session[s].last_packet ? abs(time_now - session[s].last_packet) : 0);
 			cli_print(cli, "\tBytes In/Out:\t%u/%u", session[s].cout, session[s].cin);
+			if (session[s].timeout)
+			{
+				cli_print(cli, "\tRemaing time:\t%u",
+					(session[s].bundle && bundle[session[s].bundle].num_of_links > 1)
+					? (unsigned) (session[s].timeout - bundle[session[s].bundle].online_time)
+					: (unsigned) (session[s].timeout - (time_now - session[s].opened)));
+			}
+
 			cli_print(cli, "\tPkts In/Out:\t%u/%u", session[s].pout, session[s].pin);
 			cli_print(cli, "\tMRU:\t\t%d", session[s].mru);
 			cli_print(cli, "\tRx Speed:\t%u", session[s].rx_connect_speed);
@@ -492,7 +501,7 @@ static int cmd_show_session(struct cli_def *cli, char *command, char **argv, int
 	}
 
 	// Show Summary
-	cli_print(cli, "%5s %4s %-32s %-15s %s %s %s %s %10s %10s %10s %4s %-15s %s",
+	cli_print(cli, "%5s %4s %-32s %-15s %s %s %s %s %10s %10s %10s %4s %10s %-15s %s",
 			"SID",
 			"TID",
 			"Username",
@@ -505,13 +514,20 @@ static int cmd_show_session(struct cli_def *cli, char *command, char **argv, int
 			"downloaded",
 			"uploaded",
 			"idle",
+			"Rem.Time",
 			"LAC",
 			"CLI");
 
 	for (i = 1; i < MAXSESSION; i++)
 	{
+		uint32_t rem_time;
 		if (!session[i].opened) continue;
-		cli_print(cli, "%5d %4d %-32s %-15s %s %s %s %s %10u %10lu %10lu %4u %-15s %s",
+		if (session[i].bundle && bundle[session[i].bundle].num_of_links > 1)
+			rem_time = session[i].timeout ? (session[i].timeout - bundle[session[i].bundle].online_time) : 0;
+		else
+			rem_time = session[i].timeout ? (session[i].timeout - (time_now-session[i].opened)) : 0;
+
+		cli_print(cli, "%5d %4d %-32s %-15s %s %s %s %s %10u %10lu %10lu %4u %10lu %-15s %s",
 				i,
 				session[i].tunnel,
 				session[i].user[0] ? session[i].user : "*",
@@ -524,6 +540,7 @@ static int cmd_show_session(struct cli_def *cli, char *command, char **argv, int
 				(unsigned long)session[i].cout,
 				(unsigned long)session[i].cin,
 				abs(time_now - (session[i].last_packet ? session[i].last_packet : time_now)),
+				(unsigned long)(rem_time),
 				fmtaddr(htonl(tunnel[ session[i].tunnel ].ip), 1),
 				session[i].calling[0] ? session[i].calling : "*");
 	}
