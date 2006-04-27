@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.115 2006-04-27 09:53:50 bodea Exp $
+// $Id: l2tpns.h,v 1.116 2006-04-27 14:37:28 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -654,7 +654,6 @@ typedef struct
 	in_addr_t	peer_address;
 	int		send_garp;			// Set to true to garp for vip address on startup
 
-	int		target_uid;
 	int		dump_speed;
 	char		plugins[64][MAXPLUGINS];
 	char		old_plugins[64][MAXPLUGINS];

@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.163 2006-04-27 09:53:49 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.164 2006-04-27 14:37:27 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -134,7 +134,6 @@ config_descriptt config_values[] = {
 	CONFIG("throttle_speed", rl_rate, UNSIGNED_LONG),
 	CONFIG("throttle_buckets", num_tbfs, INT),
 	CONFIG("accounting_dir", accounting_dir, STRING),
-	CONFIG("setuid", target_uid, INT),
 	CONFIG("dump_speed", dump_speed, BOOL),
 	CONFIG("multi_read_count", multi_read_count, INT),
 	CONFIG("scheduler_fifo", scheduler_fifo, BOOL),
@@ -4471,10 +4470,6 @@ int main(int argc, char *argv[])
 		else
 			LOG(0, 0, 0, "Can't lock pages: %s\n", strerror(errno));
 	}
-
-	// Drop privileges here
-	if (config->target_uid > 0 && geteuid() == 0)
-		setuid(config->target_uid);
 
 	mainloop();
 
