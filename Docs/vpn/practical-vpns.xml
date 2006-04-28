@@ -913,7 +913,8 @@ include /etc/ipsec.d/examples/no_oe.conf
 <programlisting>
 server = "192.168.0.1"
 login = "radius"
-password = "12345678"</programlisting>
+password = "12345678"
+</programlisting>
 	  </para>
 
 	  <para>
