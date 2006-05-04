@@ -1,10 +1,10 @@
 // L2TP Network Server
 // Adrian Kennard 2002
-// Copyright (c) 2003, 2004, 2005 Optus Internet Engineering
+// Copyright (c) 2003, 2004, 2005, 2006 Optus Internet Engineering
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.164 2006-04-27 14:37:27 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.165 2006-05-04 01:01:56 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -4399,7 +4399,7 @@ int main(int argc, char *argv[])
 	init_tbf(config->num_tbfs);
 
 	LOG(0, 0, 0, "L2TPNS version " VERSION "\n");
-	LOG(0, 0, 0, "Copyright (c) 2003, 2004, 2005 Optus Internet Engineering\n");
+	LOG(0, 0, 0, "Copyright (c) 2003, 2004, 2005, 2006 Optus Internet Engineering\n");
 	LOG(0, 0, 0, "Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced\n");
 	{
 		struct rlimit rlim;
