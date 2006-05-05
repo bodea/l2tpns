@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.72 2006-04-27 09:53:49 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.73 2006-05-05 08:10:18 bodea Exp $";
 
 #include <stdio.h>
 #include <stddef.h>
@@ -269,7 +269,7 @@ void init_cli(char *hostname)
 	}
 
 	memset(&addr, 0, sizeof(addr));
-	clifd = socket(PF_INET, SOCK_STREAM, 6);
+	clifd = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
 	setsockopt(clifd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
 	{
 		int flags;
