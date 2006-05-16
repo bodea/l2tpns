@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.165 2006-05-04 01:01:56 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.166 2006-05-16 06:46:37 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -1079,7 +1079,7 @@ void processmpframe(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l, uint8_t e
 	{
 		if (session[s].die)
 		{
-			LOG(4, s, t, "MPPP: Session %d is closing.  Don't process PPP packets\n", s);
+			LOG(4, s, t, "MPPP: Session %u is closing.  Don't process PPP packets\n", s);
 			return;              // closing session, PPP not processed
 		}
 		session[s].last_packet = time_now;
@@ -1089,7 +1089,7 @@ void processmpframe(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l, uint8_t e
 	{
 		if (session[s].die)
 		{
-			LOG(4, s, t, "MPPP: Session %d is closing.  Don't process PPP packets\n", s);
+			LOG(4, s, t, "MPPP: Session %u is closing.  Don't process PPP packets\n", s);
 			return;              // closing session, PPP not processed
 		}
 
@@ -1242,7 +1242,7 @@ static void processipout(uint8_t *buf, int len)
 		{
 			bid = session[s].bundle;
 			s = bundle[bid].members[bundle[bid].current_ses = ++bundle[bid].current_ses % bundle[bid].num_of_links];
-			LOG(4, s, t, "MPPP: (1)Session number becomes: %d\n", s);
+			LOG(4, s, t, "MPPP: (1)Session number becomes: %u\n", s);
 			if (len > 256)
 			{
 				// Partition the packet to 2 fragments
@@ -1254,7 +1254,7 @@ static void processipout(uint8_t *buf, int len)
 				if (!p) return;
 				tunnelsend(b1, frag1len + (p-b1), t); // send it...
 				s = bundle[bid].members[bundle[bid].current_ses = ++bundle[bid].current_ses % bundle[bid].num_of_links];
-				LOG(4, s, t, "MPPP: (2)Session number becomes: %d\n", s);
+				LOG(4, s, t, "MPPP: (2)Session number becomes: %u\n", s);
 				q = makeppp(b2, sizeof(b2), buf+frag1len, frag2len, s, t, PPPIP, 0, bid, MP_END);
 				if (!q) return;
 				tunnelsend(b2, frag2len + (q-b2), t); // send it...
@@ -1359,7 +1359,7 @@ static void processipv6out(uint8_t * buf, int len)
 	{
 		bundleidt bid = session[s].bundle;
 		s = bundle[bid].members[bundle[bid].current_ses = ++bundle[bid].current_ses % bundle[bid].num_of_links];
-		LOG(3, s, session[s].tunnel, "MPPP: Session number becomes: %d\n", s);
+		LOG(3, s, session[s].tunnel, "MPPP: Session number becomes: %u\n", s);
 	}
 	t = session[s].tunnel;
 	sp = &session[s];
@@ -1663,7 +1663,7 @@ void sessionshutdown(sessionidt s, char const *reason, int cdn_result, int cdn_e
 	if (!session[s].die)
 	{
 		struct param_kill_session data = { &tunnel[session[s].tunnel], &session[s] };
-		LOG(2, s, session[s].tunnel, "Shutting down session %d: %s\n", s, reason);
+		LOG(2, s, session[s].tunnel, "Shutting down session %u: %s\n", s, reason);
 		run_plugins(PLUGIN_KILL_SESSION, &data);
 	}
 
@@ -1832,7 +1832,7 @@ void sessionkill(sessionidt s, char *reason)
 
 	if (session[s].next)
 	{
-		LOG(0, s, session[s].tunnel, "Tried to kill a session with next pointer set (%d)\n", session[s].next);
+		LOG(0, s, session[s].tunnel, "Tried to kill a session with next pointer set (%u)\n", session[s].next);
 		return;
 	}
 
@@ -1841,16 +1841,16 @@ void sessionkill(sessionidt s, char *reason)
 	if (sess_local[s].radius)
 		radiusclear(sess_local[s].radius, s); // cant send clean accounting data, session is killed
 
-	LOG(2, s, session[s].tunnel, "Kill session %d (%s): %s\n", s, session[s].user, reason);
+	LOG(2, s, session[s].tunnel, "Kill session %u (%s): %s\n", s, session[s].user, reason);
 	if ((b = session[s].bundle))
 	{
 		// This session was part of a bundle
 		bundle[b].num_of_links--;
-		LOG(3, s, 0, "MPPP: Dropping member link: %d from bundle %d\n",s,b);
+		LOG(3, s, 0, "MPPP: Dropping member link: %u from bundle %u\n", s, b);
 		if (bundle[b].num_of_links == 0)
 		{
 			bundleclear(b);
-			LOG(3, s, 0, "MPPP: Kill bundle: %d (No remaing member links)\n",b);
+			LOG(3, s, 0, "MPPP: Kill bundle: %u (No remaing member links)\n", b);
 		}
 		else
 		{
@@ -1918,7 +1918,7 @@ static void tunnelkill(tunnelidt t, char *reason)
 
 	// free tunnel
 	tunnelclear(t);
-	LOG(1, 0, t, "Kill tunnel %d: %s\n", t, reason);
+	LOG(1, 0, t, "Kill tunnel %u: %s\n", t, reason);
 	cli_tunnel_actions[t].action = 0;
 	cluster_send_tunnel(t);
 }
@@ -1936,7 +1936,7 @@ static void tunnelshutdown(tunnelidt t, char *reason, int result, int error, cha
 		tunnelkill(t, reason);
 		return;
 	}
-	LOG(1, 0, t, "Shutting down tunnel %d (%s)\n", t, reason);
+	LOG(1, 0, t, "Shutting down tunnel %u (%s)\n", t, reason);
 
 	// close session
 	for (s = 1; s <= config->cluster_highest_sessionid ; ++s)
@@ -1999,7 +1999,7 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 	}
 	if ((buf[1] & 0x0F) != 2)
 	{
-		LOG(1, 0, 0, "Bad L2TP ver %d\n", (buf[1] & 0x0F) != 2);
+		LOG(1, 0, 0, "Bad L2TP ver %d\n", buf[1] & 0x0F);
 		STAT(tunnel_rx_errors);
 		return;
 	}
@@ -2096,7 +2096,7 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 			}
 		}
 
-		LOG(3, s, t, "Control message (%d bytes): (unacked %d) l-ns %d l-nr %d r-ns %d r-nr %d\n",
+		LOG(3, s, t, "Control message (%d bytes): (unacked %d) l-ns %u l-nr %u r-ns %u r-nr %u\n",
 			l, tunnel[t].controlc, tunnel[t].ns, tunnel[t].nr, ns, nr);
 
 		// if no tunnel specified, assign one
@@ -2113,7 +2113,7 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 			tunnel[t].port = ntohs(addr->sin_port);
 			tunnel[t].window = 4; // default window
 			STAT(tunnel_created);
-			LOG(1, 0, t, "   New tunnel from %s:%u ID %d\n",
+			LOG(1, 0, t, "   New tunnel from %s:%u ID %u\n",
 				fmtaddr(htonl(tunnel[t].ip), 0), tunnel[t].port, t);
 		}
 
@@ -2127,7 +2127,7 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 		{
 			// is this the sequence we were expecting?
 			STAT(tunnel_rx_errors);
-			LOG(1, 0, t, "   Out of sequence tunnel %d, (%d is not the expected %d)\n",
+			LOG(1, 0, t, "   Out of sequence tunnel %u, (%u is not the expected %u)\n",
 				t, ns, tunnel[t].nr);
 
 			if (l)	// Is this not a ZLB?
@@ -2214,7 +2214,7 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 				b += 2;
 				if (*(uint16_t *) (b))
 				{
-					LOG(2, s, t, "Unknown AVP vendor %d\n", ntohs(*(uint16_t *) (b)));
+					LOG(2, s, t, "Unknown AVP vendor %u\n", ntohs(*(uint16_t *) (b)));
 					fatal = flags;
 					result = 2; // general error
 					error = 6; // generic vendor-specific error
@@ -2279,7 +2279,7 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 					n = orig_len;
 				}
 
-				LOG(4, s, t, "   AVP %d (%s) len %d%s%s\n", mtype, l2tp_avp_name(mtype), n,
+				LOG(4, s, t, "   AVP %u (%s) len %d%s%s\n", mtype, l2tp_avp_name(mtype), n,
 					flags & 0x40 ? ", hidden" : "", flags & 0x80 ? ", mandatory" : "");
 
 				switch (mtype)
@@ -2287,7 +2287,7 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 				case 0:     // message type
 					message = ntohs(*(uint16_t *) b);
 					mandatory = flags & 0x80;
-					LOG(4, s, t, "   Message type = %d (%s)\n", *b, l2tp_code(message));
+					LOG(4, s, t, "   Message type = %u (%s)\n", *b, l2tp_code(message));
 					break;
 				case 1:     // result code
 					{
@@ -2302,11 +2302,11 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 							resdesc = l2tp_cdn_result_code(rescode);
 						}
 
-						LOG(4, s, t, "   Result Code %d: %s\n", rescode, resdesc);
+						LOG(4, s, t, "   Result Code %u: %s\n", rescode, resdesc);
 						if (n >= 4)
 						{
 							uint16_t errcode = ntohs(*(uint16_t *)(b + 2));
-							LOG(4, s, t, "   Error Code %d: %s\n", errcode, l2tp_error_code(errcode));
+							LOG(4, s, t, "   Error Code %u: %s\n", errcode, l2tp_error_code(errcode));
 						}
 						if (n > 4)
 							LOG(4, s, t, "   Error String: %.*s\n", n-4, b+4);
@@ -2317,7 +2317,7 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 				case 2:     // protocol version
 					{
 						version = ntohs(*(uint16_t *) (b));
-						LOG(4, s, t, "   Protocol version = %d\n", version);
+						LOG(4, s, t, "   Protocol version = %u\n", version);
 						if (version && version != 0x0100)
 						{   // allow 0.0 and 1.0
 							LOG(1, s, t, "   Bad protocol version %04X\n", version);
@@ -2351,13 +2351,13 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 					break;
 				case 9:     // assigned tunnel
 					tunnel[t].far = ntohs(*(uint16_t *) (b));
-					LOG(4, s, t, "   Remote tunnel id = %d\n", tunnel[t].far);
+					LOG(4, s, t, "   Remote tunnel id = %u\n", tunnel[t].far);
 					break;
 				case 10:    // rx window
 					tunnel[t].window = ntohs(*(uint16_t *) (b));
 					if (!tunnel[t].window)
 						tunnel[t].window = 1; // window of 0 is silly
-					LOG(4, s, t, "   rx window = %d\n", tunnel[t].window);
+					LOG(4, s, t, "   rx window = %u\n", tunnel[t].window);
 					break;
 				case 11:	// Challenge
 					{
@@ -2372,17 +2372,17 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 
 				case 14:    // assigned session
 					asession = session[s].far = ntohs(*(uint16_t *) (b));
-					LOG(4, s, t, "   assigned session = %d\n", asession);
+					LOG(4, s, t, "   assigned session = %u\n", asession);
 					break;
 				case 15:    // call serial number
-					LOG(4, s, t, "   call serial number = %d\n", ntohl(*(uint32_t *)b));
+					LOG(4, s, t, "   call serial number = %u\n", ntohl(*(uint32_t *)b));
 					break;
 				case 18:    // bearer type
-					LOG(4, s, t, "   bearer type = %d\n", ntohl(*(uint32_t *)b));
+					LOG(4, s, t, "   bearer type = %u\n", ntohl(*(uint32_t *)b));
 					// TBA - for RADIUS
 					break;
 				case 19:    // framing type
-					LOG(4, s, t, "   framing type = %d\n", ntohl(*(uint32_t *)b));
+					LOG(4, s, t, "   framing type = %u\n", ntohl(*(uint32_t *)b));
 					// TBA
 					break;
 				case 21:    // called number
@@ -2436,7 +2436,7 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 				case 29:    // Proxy Authentication Type
 					{
 						uint16_t atype = ntohs(*(uint16_t *)b);
-						LOG(4, s, t, "   Proxy Auth Type %d (%s)\n", atype, ppp_auth_type(atype));
+						LOG(4, s, t, "   Proxy Auth Type %u (%s)\n", atype, ppp_auth_type(atype));
 						break;
 					}
 				case 30:    // Proxy Authentication Name
@@ -2456,7 +2456,7 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 				case 32:    // Proxy Authentication ID
 					{
 						uint16_t authid = ntohs(*(uint16_t *)(b));
-						LOG(4, s, t, "   Proxy Auth ID (%d)\n", authid);
+						LOG(4, s, t, "   Proxy Auth ID (%u)\n", authid);
 						break;
 					}
 				case 33:    // Proxy Authentication Response
@@ -2572,7 +2572,7 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 				default:
 					{
 						static char e[] = "unknown AVP 0xXXXX";
-						LOG(2, s, t, "   Unknown AVP type %d\n", mtype);
+						LOG(2, s, t, "   Unknown AVP type %u\n", mtype);
 						fatal = flags;
 						result = 2; // general error
 						error = 8; // unknown mandatory AVP
@@ -2643,7 +2643,7 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 						session[s].tunnel = t;
 						session[s].far = asession;
 						session[s].last_packet = time_now;
-						LOG(3, s, t, "New session (%d/%d)\n", tunnel[t].far, session[s].far);
+						LOG(3, s, t, "New session (%u/%u)\n", tunnel[t].far, session[s].far);
 						control16(c, 14, s, 1); // assigned session
 						controladd(c, asession, t); // send the reply
 
@@ -2705,7 +2705,7 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 					if (mandatory)
 						tunnelshutdown(t, "Unknown message type", 2, 6, "unknown message type");
 					else
-						LOG(1, s, t, "Unknown message type %d\n", message);
+						LOG(1, s, t, "Unknown message type %u\n", message);
 					break;
 				}
 			if (chapresponse) free(chapresponse);
@@ -2799,7 +2799,7 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 		{
 			if (session[s].die)
 			{
-				LOG(4, s, t, "Session %d is closing.  Don't process PPP packets\n", s);
+				LOG(4, s, t, "Session %u is closing.  Don't process PPP packets\n", s);
 				return;              // closing session, PPP not processed
 			}
 
@@ -2816,7 +2816,7 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 		{
 			if (session[s].die)
 			{
-				LOG(4, s, t, "Session %d is closing.  Don't process PPP packets\n", s);
+				LOG(4, s, t, "Session %u is closing.  Don't process PPP packets\n", s);
 				return;              // closing session, PPP not processed
 			}
 
@@ -2833,7 +2833,7 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 		{
 			if (session[s].die)
 			{
-				LOG(4, s, t, "Session %d is closing.  Don't process PPP packets\n", s);
+				LOG(4, s, t, "Session %u is closing.  Don't process PPP packets\n", s);
 				return;              // closing session, PPP not processed
 			}
 
@@ -3219,7 +3219,7 @@ static void regular_cleanups(double period)
 			}
 			else if (a & CLI_SESS_SNOOP)
 			{
-				LOG(2, s, session[s].tunnel, "Snooping session by CLI (to %s:%d)\n",
+				LOG(2, s, session[s].tunnel, "Snooping session by CLI (to %s:%u)\n",
 				    fmtaddr(cli_session_actions[s].snoop_ip, 0),
 				    cli_session_actions[s].snoop_port);
 
@@ -3362,7 +3362,7 @@ static int still_busy(void)
 
 		if (last_talked != TIME)
 		{
-			LOG(2, 0, 0, "Tunnel %d still has un-acked control messages.\n", i);
+			LOG(2, 0, 0, "Tunnel %u still has un-acked control messages.\n", i);
 			last_talked = TIME;
 		}
 		return 1;
@@ -3384,7 +3384,7 @@ static int still_busy(void)
 
 		if (last_talked != TIME)
 		{
-			LOG(2, 0, 0, "Radius session %d is still busy (sid %d)\n", i, radius[i].session);
+			LOG(2, 0, 0, "Radius session %u is still busy (sid %u)\n", i, radius[i].session);
 			last_talked = TIME;
 		}
 		return 1;
@@ -4107,7 +4107,7 @@ void rebuild_address_pool(void)
 			if (ipid < 1)			// Not found in the pool either? good.
 				continue;
 
-			LOG(0, i, 0, "Session %d has an IP address (%s) that was marked static, but is in the pool (%d)!\n",
+			LOG(0, i, 0, "Session %u has an IP address (%s) that was marked static, but is in the pool (%d)!\n",
 				i, fmtaddr(session[i].ip, 0), ipid);
 
 			// Fall through and process it as part of the pool.
@@ -4116,7 +4116,7 @@ void rebuild_address_pool(void)
 
 		if (ipid > MAXIPPOOL || ipid < 0)
 		{
-			LOG(0, i, 0, "Session %d has a pool IP that's not found in the pool! (%d)\n", i, ipid);
+			LOG(0, i, 0, "Session %u has a pool IP that's not found in the pool! (%d)\n", i, ipid);
 			ipid = -1;
 			session[i].ip_pool_index = ipid;
 			continue;
@@ -4264,7 +4264,7 @@ void snoop_send_packet(uint8_t *packet, uint16_t size, in_addr_t destination, ui
 	snoop_addr.sin_addr.s_addr = destination;
 	snoop_addr.sin_port = ntohs(port);
 
-	LOG(5, 0, 0, "Snooping %d byte packet to %s:%d\n", size,
+	LOG(5, 0, 0, "Snooping %d byte packet to %s:%u\n", size,
 		fmtaddr(snoop_addr.sin_addr.s_addr, 0),
 		htons(snoop_addr.sin_port));
 
@@ -4979,13 +4979,13 @@ int load_session(sessionidt s, sessiont *new)
 	// check filters
 	if (new->filter_in && (new->filter_in > MAXFILTER || !ip_filters[new->filter_in - 1].name[0]))
 	{
-		LOG(2, s, session[s].tunnel, "Dropping invalid input filter %d\n", (int) new->filter_in);
+		LOG(2, s, session[s].tunnel, "Dropping invalid input filter %u\n", (int) new->filter_in);
 		new->filter_in = 0;
 	}
 
 	if (new->filter_out && (new->filter_out > MAXFILTER || !ip_filters[new->filter_out - 1].name[0]))
 	{
-		LOG(2, s, session[s].tunnel, "Dropping invalid output filter %d\n", (int) new->filter_out);
+		LOG(2, s, session[s].tunnel, "Dropping invalid output filter %u\n", (int) new->filter_out);
 		new->filter_out = 0;
 	}
 
@@ -5369,7 +5369,7 @@ static tunnelidt new_tunnel()
 	{
 		if (tunnel[i].state == TUNNELFREE)
 		{
-			LOG(4, 0, i, "Assigning tunnel ID %d\n", i);
+			LOG(4, 0, i, "Assigning tunnel ID %u\n", i);
 			if (i > config->cluster_highest_tunnelid)
 				config->cluster_highest_tunnelid = i;
 			return i;
