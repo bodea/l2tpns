@@ -9,11 +9,11 @@
  * lcp:interface-config#2=service-policy output N
  *
  * throttle=N
- * throttle=yes (use throttle_rate from config)
+ * throttle=yes (use throttle_speed from config)
  * throttle=no
  */
 
-char const *cvs_id = "$Id: autothrottle.c,v 1.16 2005-10-11 09:04:53 bodea Exp $";
+char const *cvs_id = "$Id: autothrottle.c,v 1.17 2006-05-18 14:40:31 bodea Exp $";
 
 int plugin_api_version = PLUGIN_API_VERSION;
 static struct pluginfuncs *f = 0;
