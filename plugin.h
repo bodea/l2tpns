@@ -60,35 +60,9 @@ struct param_post_auth
     int protocol;
 };
 
-struct param_packet_rx
-{
-    tunnelt *t;
-    sessiont *s;
-    char *buf;
-    int len;
-};
-
-struct param_packet_tx
-{
-    tunnelt *t;
-    sessiont *s;
-    char *buf;
-    int len;
-};
-
 struct param_timer
 {
     time_t time_now;
-};
-
-struct param_control
-{
-    int iam_master;
-    int argc;
-    char **argv;
-    // output
-    int response;
-    char *additional;
 };
 
 struct param_new_session
@@ -101,6 +75,16 @@ struct param_kill_session
 {
     tunnelt *t;
     sessiont *s;
+};
+
+struct param_control
+{
+    int iam_master;
+    int argc;
+    char **argv;
+    // output
+    int response;
+    char *additional;
 };
 
 struct param_radius_response
