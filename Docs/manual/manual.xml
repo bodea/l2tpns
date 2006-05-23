@@ -1,0 +1,2150 @@
+<?xml version="1.0"?>
+<!DOCTYPE article PUBLIC "-//OASIS//DTD DocBook XML V4.4//EN"
+    "http://docbook.org/xml/4.4/docbookx.dtd">
+
+<article>
+  <articleinfo>
+    <title>L2TPNS Manual</title>
+  </articleinfo>
+
+  <sect1 id="overview">
+    <title>Overview</title>
+    <para>
+      <command>l2tpns</command> is half of a complete L2TP
+      implementation.  It supports only the LNS side of the
+      connection.
+    </para>
+
+    <para>
+      L2TP (Layer 2 Tunneling Protocol) is designed to allow any layer
+      2 protocol (e.g.  Ethernet, PPP) to be tunneled over an IP
+      connection.  <command>l2tpns</command> implements PPP over L2TP
+      only.
+    </para>
+
+    <para>
+      There are a couple of other L2TP implementations, of which
+      <ulink url="http://sourceforge.net/projects/l2tpd">l2tpd</ulink>
+      is probably the most popular.  l2tpd also will handle being
+      either end of a tunnel, and is a lot more configurable than
+      <command>l2tpns</command>.  However, due to the way it works, it
+      is nowhere near as scalable.
+    </para>
+
+    <para>
+      <command>l2tpns</command> uses the TUN/TAP interface provided by
+      the Linux kernel to receive and send packets.  Using some packet
+      manipulation it doesn't require a single interface per
+      connection, as l2tpd does.
+    </para>
+
+    <para>
+      This allows it to scale extremely well to very high loads and
+      very high numbers of connections.
+    </para>
+
+    <para>
+      It also has a plugin architecture which allows custom code to be
+      run during processing.  An example of this is in the walled
+      garden module included.
+    </para>
+  </sect1>
+
+  <sect1 id="installation">
+    <title>Installation</title>
+    <sect2 id="installation-requirements">
+      <title>Requirements</title>
+      <itemizedlist>
+	<listitem>
+	  <para>
+	    Linux kernel version 2.4 or above, with the Tun/Tap
+	    interface either compiled in, or as a module.
+	  </para>
+	</listitem>
+
+	<listitem>
+	  <para>
+	    libcli 1.8.5 or greater.  You can get this from
+	    <ulink url="http://sourceforge.net/projects/libcli">
+	    SourceForge</ulink>
+	  </para>
+	</listitem>
+      </itemizedlist>
+    </sect2>
+
+    <sect2 id="installation-compile">
+      <title>Compiling</title>
+      <para>
+	You can generally get away with just running
+	<command>make</command> from the source directory.  This will
+	compile the daemon, associated tools and any modules shipped
+	with the distribution.
+      </para>
+    </sect2>
+
+    <sect2 id="installation-install">
+      <title>Installing</title>
+      <para>
+	After you have successfully compiled everything, run
+	<userinput>make install</userinput> to install it.  By
+	default, the binaries are installed into
+	<filename>/usr/sbin</filename>, the configuration into
+	<filename>/etc/l2tpns</filename>, and the modules into
+	<filename>/usr/lib/l2tpns</filename>.
+      </para>
+
+      <para>
+	You will definately need to edit the configuration files
+	before you start.  See <xref linkend="configuration"/> for
+	more information.
+      </para>
+    </sect2>
+
+    <sect2 id="installation-run">
+      <title>Running</title>
+      <para>
+	You only need to run <filename>/usr/sbin/l2tpns</filename> as
+	root to start it.  It does not normally detach to a daemon
+	process (see the <option>-d</option> option), so you should
+	perhaps run it from <command>init</command>.
+      </para>
+
+      <para>
+	By default there is no log destination set, so all log
+	messages will go to stdout.
+      </para>
+    </sect2>
+  </sect1>
+
+  <sect1 id="configuration">
+    <title>Configuration</title>
+    <para>
+      All configuration of the software is done from the files
+      installed into <filename>/etc/l2tpns</filename>.
+    </para>
+
+    <sect2 id="config-startup">
+      <title><filename>startup-config</filename></title>
+      <para>
+	This is the main configuration file for
+	<command>l2tpns</command>.  The format of the file is a list
+	of commands that can be run through the command-line
+	interface.  This file can also be written directly by the
+	<command>l2tpns</command> process if a user runs the
+	<userinput>write memory</userinput> command, so any comments
+	will be lost.  However if your policy is not to write the
+	config by the program, then feel free to comment the file with
+	a <literal>#</literal> or <literal>!</literal> at the
+	beginning of the line.
+      </para>
+
+      <para>
+	A list of the possible configuration directives follows.  Each
+	of these should be set by a line like:
+<synopsis>
+set configstring "value"
+set ipaddress 192.168.1.1
+set boolean true
+</synopsis>
+      </para>
+
+      <variablelist>
+	<varlistentry>
+	  <term><literal>debug</literal> (int)</term>
+	  <listitem>
+	    <para>
+	      Sets the level of messages that will be written to the
+	      log file.  The value should be between 0 and 5, with 0
+	      being no debugging, and 5 being the highest.  A rough
+	      description of the levels is:
+
+	      <variablelist>
+		<varlistentry>
+		  <term><constant>0</constant>: Critical Errors</term>
+		  <listitem>
+		    <para>Things are probably broken</para>
+		  </listitem>
+		</varlistentry>
+
+		<varlistentry>
+		  <term><constant>1</constant>: Errors</term>
+		  <listitem>
+		    <para>
+		      Things might have gone wrong, but probably will
+		      recover
+		    </para>
+		  </listitem>
+		</varlistentry>
+
+		<varlistentry>
+		  <term><constant>2</constant>: Warnings</term>
+		  <listitem>
+		    <para>
+		      Just in case you care what is not quite perfect
+		    </para>
+		  </listitem>
+		</varlistentry>
+
+		<varlistentry>
+		  <term><constant>3</constant>: Information</term>
+		  <listitem>
+		    <para>Parameters of control packets</para>
+		  </listitem>
+		</varlistentry>
+
+		<varlistentry>
+		  <term><constant>4</constant>: Calls</term>
+		  <listitem>
+		    <para>For tracing the execution of the code</para>
+		  </listitem>
+		</varlistentry>
+
+		<varlistentry>
+		  <term><constant>5</constant>: Packets</term>
+		  <listitem>
+		    <para>
+		      Everything, including a hex dump of all packets
+		      processed...  probably twice
+		    </para>
+		  </listitem>
+		</varlistentry>
+	      </variablelist>
+	    </para>
+
+	    <para>
+	      Note that the higher you set the debugging level, the
+	      slower the program will run.  Also, at level 5 a
+	      <emphasis>lot</emphasis> of information will be logged.
+	      This should only ever be used for working out why it
+	      doesn't work at all.
+	    </para>
+	  </listitem>
+	</varlistentry>
+
+	<varlistentry>
+	  <term><literal>log_file</literal> (string)</term>
+	  <listitem>
+	    <para>
+	      This will be where all logging and debugging information
+	      is written to.  This may be either a filename, such as
+	      <filename>/var/log/l2tpns</filename>, or the special
+	      magic string
+	      <literal>syslog:</literal><replaceable>facility</replaceable>,
+	      where <replaceable>facility</replaceable> is any one of
+	      the syslog logging facilities, such as
+	      <literal>local5</literal>.
+	    </para>
+	  </listitem>
+	</varlistentry>
+
+	<varlistentry>
+	  <term><literal>pid_file</literal> (string)</term>
+	  <listitem>
+	    <para>
+	      If set, the process id will be written to the specified
+	      file.  The value must be an absolute path.
+	    </para>
+	  </listitem>
+	</varlistentry>
+
+	<varlistentry>
+	  <term><literal>random_device</literal> (string)</term>
+	  <listitem>
+	    <para>
+	      Path to random data source (default
+	      <filename>/dev/urandom</filename>).  Use "" to use the
+	      rand() library function.
+	    </para>
+	  </listitem>
+	</varlistentry>
+
+	<varlistentry>
+	  <term><literal>l2tp_secret</literal> (string)</term>
+	  <listitem>
+	    <para>
+	      The secret used by <command>l2tpns</command> for
+	      authenticating tunnel request.  Must be the same as the
+	      LAC, or authentication will fail.  Only actually be used
+	      if the LAC requests authentication.
+	    </para>
+	  </listitem>
+	</varlistentry>
+
+	<varlistentry>
+	  <term><literal>l2tp_mtu</literal> (int)</term>
+	  <listitem>
+	    <para>
+	      MTU of interface for L2TP traffic (default:
+	      <literal>1500</literal>).  Used to set link MRU and
+	      adjust TCP MSS.
+	    </para>
+	  </listitem>
+	</varlistentry>
+
+	<varlistentry>
+	  <term><literal>ppp_restart_time</literal> (int)</term>
+	  <term><literal>ppp_max_configure</literal> (int)</term>
+	  <term><literal>ppp_max_failure</literal> (int)</term>
+	  <listitem>
+	    <para>
+	      PPP counter and timer values, as described in &sect;4.1
+	      of <ulink url="ftp://ftp.rfc-editor.org/in-notes/rfc1661.txt">
+	      RFC1661</ulink>.
+	    </para>
+	  </listitem>
+	</varlistentry>
+
+	<varlistentry>
+	  <term><literal>primary_dns</literal> (ip address)</term>
+	  <term><literal>econdary_dns</literal> (ip address)</term>
+	  <listitem>
+	    <para>
+	      Whenever a PPP connection is established, DNS servers
+	      will be sent to the user, both a primary and a
+	      secondary.  If either is set to 0.0.0.0, then that one
+	      will not be sent.
+	    </para>
+	  </listitem>
+	</varlistentry>
+
+	<varlistentry>
+	  <term><literal>primary_radius</literal> (ip address)</term>
+	  <term><literal>secondary_radius</literal> (ip address)</term>
+	  <listitem>
+	    <para>
+	      Sets the RADIUS servers used for both authentication and
+	      accounting.  If the primary server does not respond,
+	      then the secondary RADIUS server will be tried.
+
+	      <note>
+		<para>
+		  In addition to the source IP address and identifier,
+		  the RADIUS server <emphasis>must</emphasis> include
+		  the source port when detecting duplicates to supress
+		  (in order to cope with a large number of sessions
+		  comming on-line simultaneously
+		  <command>l2tpns</command> uses a set of udp sockets,
+		  each with a seperate identifier).
+		</para>
+	      </note>
+	    </para>
+	  </listitem>
+	</varlistentry>
+
+	<varlistentry>
+	  <term><literal>primary_radius_port</literal> (short)</term>
+	  <term><literal>secondary_radius_port</literal> (short)</term>
+	  <listitem>
+	    <para>
+	      Sets the authentication ports for the primary and
+	      secondary RADIUS servers.  The accounting port is one
+	      more than the authentication port.  If no RADIUS ports
+	      are given, the authentication port defaults to 1645, and
+	      the accounting port to 1646.
+	    </para>
+	  </listitem>
+	</varlistentry>
+
+	<varlistentry>
+	  <term><literal>radius_accounting</literal> (boolean)</term>
+	  <listitem>
+	    <para>
+	      If set to true, then RADIUS accounting packets will be
+	      sent.  This means that a Start record will be sent when
+	      the session is successfully authenticated, and a Stop
+	      record will be sent when the session is closed.
+	    </para>
+	  </listitem>
+	</varlistentry>
+
+	<varlistentry>
+	  <term><literal>radius_interim</literal> (int)</term>
+	  <listitem>
+	    <para>
+	      If <literal>radius_accounting</literal> is on, defines
+	      the interval between sending of RADIUS interim
+	      accounting records (in seconds).
+	    </para>
+	  </listitem>
+	</varlistentry>
+
+	<varlistentry>
+	  <term><literal>radius_secret</literal> (string)</term>
+	  <listitem>
+	    <para>
+	      This secret will be used in all RADIUS queries.  If this
+	      is not set then RADIUS queries will fail.
+	    </para>
+	  </listitem>
+	</varlistentry>
+
+	<varlistentry>
+	  <term><literal>radius_authtypes</literal> (string)</term>
+	  <listitem>
+	    <para>
+	      A comma separated list of supported RADIUS
+	      authentication methods (<literal>pap</literal> or
+	      <literal>chap</literal>), in order of preference
+	      (default <literal>pap</literal>).
+	    </para>
+	  </listitem>
+	</varlistentry>
+
+	<varlistentry>
+	  <term><literal>radius_dae_port</literal> (short)</term>
+	  <listitem>
+	    <para>
+	      Port for DAE RADIUS (Packet of Death/Disconnect, Change
+	      of Authorization) requests (default:
+	      <literal>3799</literal>).
+	    </para>
+	  </listitem>
+	</varlistentry>
+
+	<varlistentry>
+	  <term><literal>allow_duplicate_users</literal> (boolean)</term>
+	  <listitem>
+	    <para>
+	      Allow multiple logins with the same username.  If false
+	      (the default), any prior session with the same username
+	      will be dropped when a new session is established.
+	    </para>
+	  </listitem>
+	</varlistentry>
+
+	<varlistentry>
+	  <term><literal>guest_account</literal> (string)</term>
+	  <listitem>
+	    <para>
+	      Allow multiple logins matching this specific username.
+	    </para>
+	  </listitem>
+	</varlistentry>
+
+	<varlistentry>
+	  <term><literal>bind_address</literal> (ip address)</term>
+	  <listitem>
+	    <para>
+	      When the tun interface is created, it is assigned the
+	      address specified here.  If no address is given, 1.1.1.1
+	      is used.  Packets containing user traffic should be
+	      routed via this address if given, otherwise the primary
+	      address of the machine.
+	    </para>
+	  </listitem>
+	</varlistentry>
+
+	<varlistentry>
+	  <term><literal>peer_address</literal> (ip address)</term>
+	  <listitem>
+	    <para>Address to send to clients as the default gateway.</para>
+	  </listitem>
+	</varlistentry>
+
+	<varlistentry>
+	  <term><literal>send_garp</literal> (boolean)</term>
+	  <listitem>
+	    <para>
+	      Determines whether or not to send a gratuitous ARP for
+	      the bind_address when the server is ready to handle
+	      traffic (default:  <literal>true</literal>).  This value
+	      is ignored if BGP is configured.
+	    </para>
+	  </listitem>
+	</varlistentry>
+
+	<varlistentry>
+	  <term><literal>throttle_speed</literal> (int)</term>
+	  <listitem>
+	    <para>
+	      Sets the default speed (in kbits/s) which sessions will
+	      be limited to.  If this is set to 0, then throttling
+	      will not be used at all.  Note:  You can set this by the
+	      CLI, but changes will not affect currently connected
+	      users.
+	    </para>
+	  </listitem>
+	</varlistentry>
+
+	<varlistentry>
+	  <term><literal>throttle_buckets</literal> (int)</term>
+	  <listitem>
+	    <para>
+	      Number of token buckets to allocate for throttling.
+	      Each throttled session requires two buckets (in and
+	      out).
+	    </para>
+	  </listitem>
+	</varlistentry>
+
+	<varlistentry>
+	  <term><literal>accounting_dir</literal> (string)</term>
+	  <listitem>
+	    <para>
+	      If set to a directory, then every 5 minutes the current
+	      usage for every connected use will be dumped to a file
+	      in this directory.  Each file dumped begins with a
+	      header, where each line is prefixed by <code>#</code>.
+	      Following the header is a single line for every
+	      connected user, fields separated by a space.
+	    </para>
+
+	    <para>
+	      The fields are username, ip, qos, uptxoctets,
+	      downrxoctets.  The qos field is 1 if a standard user,
+	      and 2 if the user is throttled.
+	    </para>
+	  </listitem>
+	</varlistentry>
+
+	<varlistentry>
+	  <term><literal>dump_speed</literal> (boolean)</term>
+	  <listitem>
+	    <para>
+	      If set to true, then the current bandwidth utilization
+	      will be logged every second.  Even if this is disabled,
+	      you can see this information by running the
+	      <userinput>uptime</userinput> command on the CLI.
+	    </para>
+	  </listitem>
+	</varlistentry>
+
+	<varlistentry>
+	  <term><literal>multi_read_count</literal> (int)</term>
+	  <listitem>
+	    <para>
+	      Number of packets to read off each of the UDP and TUN
+	      fds when returned as readable by select (default:  10).
+	      Avoids incurring the unnecessary system call overhead of
+	      select on busy servers.
+	    </para>
+	  </listitem>
+	</varlistentry>
+
+	<varlistentry>
+	  <term><literal>scheduler_fifo</literal> (boolean)</term>
+	  <listitem>
+	    <para>
+	      Sets the scheduling policy for the
+	      <command>l2tpns</command> process to
+	      <constant>SCHED_FIFO</constant>.  This causes the kernel
+	      to immediately preempt any currently running
+	      <constant>SCHED_OTHER</constant> (normal) process in
+	      favour of <command>l2tpns</command> when it becomes
+	      runnable.  Ignored on uniprocessor systems.
+	    </para>
+	  </listitem>
+	</varlistentry>
+
+	<varlistentry>
+	  <term><literal>lock_pages</literal> (boolean)</term>
+	  <listitem>
+	    <para>
+	      Keep all pages mapped by the <command>l2tpns</command>
+	      process in memory.
+	    </para>
+	  </listitem>
+	</varlistentry>
+
+	<varlistentry>
+	  <term><literal>icmp_rate</literal> (int)</term>
+	  <listitem>
+	    <para>
+	      Maximum number of host unreachable ICMP packets to send
+	      per second.
+	    </para>
+	  </listitem>
+	</varlistentry>
+
+	<varlistentry>
+	  <term><literal>packet_limit</literal> (int)</term>
+	  <listitem>
+	    <para>
+	      Maximum number of packets of downstream traffic to be
+	      handled each tenth of a second per session.  If zero, no
+	      limit is applied (default:  0).  Intended as a DoS
+	      prevention mechanism and not a general throttling
+	      control (packets are dropped, not queued).
+	    </para>
+	  </listitem>
+	</varlistentry>
+
+	<varlistentry>
+	  <term><literal>cluster_address</literal> (ip address)</term>
+	  <listitem>
+	    <para>
+	      Multicast cluster address (default: 239.192.13.13).
+	      See <xref linkend="clustering"/> for more information.
+	    </para>
+	  </listitem>
+	</varlistentry>
+
+	<varlistentry>
+	  <term><literal>cluster_interface</literal> (string)</term>
+	  <listitem>
+	    <para>Interface for cluster packets (default: eth0)</para>
+	  </listitem>
+	</varlistentry>
+
+	<varlistentry>
+	  <term><literal>cluster_mcast_ttl</literal> (int)</term>
+	  <listitem>
+	    <para>TTL for multicast packets (default: 1).</para>
+	  </listitem>
+	</varlistentry>
+
+	<varlistentry>
+	  <term><literal>cluster_hb_interval</literal> (int)</term>
+	  <listitem>
+	    <para>
+	      Interval in tenths of a second between cluster
+	      heartbeat/pings.
+	    </para>
+	  </listitem>
+	</varlistentry>
+
+	<varlistentry>
+	  <term><literal>cluster_hb_timeout</literal> (int)</term>
+	  <listitem>
+	    <para>
+	      Cluster heartbeat timeout in tenths of a second.  A new
+	      master will be elected when this interval has been
+	      passed without seeing a heartbeat from the master.
+	    </para>
+	  </listitem>
+	</varlistentry>
+
+	<varlistentry>
+	  <term><literal>cluster_master_min_adv</literal> (int)</term>
+	  <listitem>
+	    <para>
+	      Determines the minumum number of up to date slaves
+	      required before the master will drop routes (default: 1).
+	    </para>
+	  </listitem>
+	</varlistentry>
+
+	<varlistentry>
+	  <term><literal>ipv6_prefix</literal> (ipv6 address)</term>
+	  <listitem>
+	    <para>
+	      Enable negotiation of IPv6.  This forms the the first 64
+	      bits of the client allocated address.  The remaining 64
+	      come from the allocated IPv4 address and 4 bytes of 0s.
+	    </para>
+	  </listitem>
+	</varlistentry>
+      </variablelist>
+
+      <sect3 id="config-startup-bgp">
+	<title>BGP</title>
+	<para>
+	  BGP routing configuration is entered by the command:
+	  <synopsis>router bgp <replaceable>as</replaceable></synopsis>
+	  where <replaceable>as</replaceable> specifies the local AS
+	  number.
+	</para>
+
+	<para>
+	  Subsequent lines prefixed with
+	  <synopsis>neighbour <replaceable>peer</replaceable></synopsis>
+	  define the attributes of BGP neighhbours.  Valid commands
+	  are:
+<synopsis>
+neighbour <replaceable>peer</replaceable> remote-as <replaceable>as</replaceable>
+neighbour <replaceable>peer</replaceable> timers <replaceable>keepalive hold</replaceable>
+</synopsis>
+	</para>
+
+	<para>
+	  Where <replaceable>peer</replaceable> specifies the BGP
+	  neighbour as either a hostname or IP address,
+	  <replaceable>as</replaceable> is the remote AS number and
+	  <replaceable>keepalive</replaceable>,
+	  <replaceable>hold</replaceable> are the timer values in
+	  seconds.
+	</para>
+      </sect3>
+
+      <sect3 id="config-startup-acl">
+	<title>Access Lists</title>
+	<para>
+	  Named access-lists are configured using one of the commands:
+<synopsis>
+ip access-list standard <replaceable>name</replaceable>
+ip access-list extended <replaceable>name</replaceable>
+</synopsis>
+	</para>
+
+	<para>
+	  Subsequent lines prefixed with <literal>permit</literal> or
+	  <literal>deny</literal> define the body of the access-list.
+	  Standard access-list syntax:
+	</para>
+
+	<para role="hanging-indent">
+	  {<literal>permit</literal>|<literal>deny</literal>}
+	  {<replaceable>host</replaceable>|<replaceable>source
+	  source-wildcard</replaceable>|<literal>any</literal>}
+	  [{<replaceable>host</replaceable>|<replaceable>destination
+	  destination-wildcard</replaceable>|<literal>any</literal>}]
+	</para>
+
+	<para>Extended access-lists:</para>
+	<para role="hanging-indent">
+	  {<literal>permit</literal>|<literal>deny</literal>}
+	  <literal>ip</literal>
+	  {<replaceable>host</replaceable>|<replaceable>source
+	  source-wildcard</replaceable>|<literal>any</literal>}
+	  {<replaceable>host</replaceable>|<replaceable>destination
+	  destination-wildcard</replaceable>|<literal>any</literal>}
+	  [<literal>fragments</literal>]
+	</para>
+
+	<para role="hanging-indent">
+	  {<literal>permit</literal>|<literal>deny</literal>}
+	  <literal>udp</literal>
+	  {<replaceable>host</replaceable>|<replaceable>source
+	  source-wildcard</replaceable>|<literal>any</literal>}
+	  [{<literal>eq</literal>|<literal>neq</literal>|<literal>gt</literal>|<literal>lt</literal>}
+	  <replaceable>port</replaceable>|<literal>range</literal>
+	  <replaceable>from</replaceable>
+	  <replaceable>to</replaceable>]
+	  {<replaceable>host</replaceable>|<replaceable>destination
+	  destination-wildcard</replaceable>|<literal>any</literal>}
+	  [{<literal>eq</literal>|<literal>neq</literal>|<literal>gt</literal>|<literal>lt</literal>}
+	  <replaceable>port</replaceable>|<literal>range</literal>
+	  <replaceable>from</replaceable>
+	  <replaceable>to</replaceable>]
+	  [<literal>fragments</literal>]
+	</para>
+
+	<para role="hanging-indent">
+	  {<literal>permit</literal>|<literal>deny</literal>}
+	  <literal>tcp</literal>
+	  {<replaceable>host</replaceable>|<replaceable>source
+	  source-wildcard</replaceable>|<literal>any</literal>}
+	  [{<literal>eq</literal>|<literal>neq</literal>|<literal>gt</literal>|<literal>lt</literal>}
+	  <replaceable>port</replaceable>|<literal>range</literal>
+	  <replaceable>from</replaceable>
+	  <replaceable>to</replaceable>]
+	  {<replaceable>host</replaceable>|<replaceable>destination
+	  destination-wildcard</replaceable>|<literal>any</literal>}
+	  [{<literal>eq</literal>|<literal>neq</literal>|<literal>gt</literal>|<literal>lt</literal>}
+	  <replaceable>port</replaceable>|<literal>range</literal>
+	  <replaceable>from</replaceable>
+	  <replaceable>to</replaceable>]
+	  [{<literal>established</literal>|{<literal>match-any</literal>|<literal>match-all</literal>}
+	  {<literal>+</literal>|<literal>-</literal>}{<literal>fin</literal>|<literal>syn</literal>|<literal>rst</literal>|<literal>psh</literal>|<literal>ack</literal>|<literal>urg</literal>}
+	  ...|<literal>fragments</literal>]
+	</para>
+      </sect3>
+    </sect2>
+
+    <sect2 id="config-users">
+      <title><filename>users</filename></title>
+      <para>
+	Usernames and passwords for the command-line interface are
+	stored in this file.  The format is
+<synopsis>
+<replaceable>username</replaceable>:<replaceable>password</replaceable>
+</synopsis>
+	where <replaceable>password</replaceable> may either by plain
+	text, an MD5 digest (prefixed by
+	<literal>$1</literal><replaceable>salt</replaceable><literal>$</literal>)
+	or a DES password, distinguished from plain text by the prefix
+	<literal>{crypt}</literal>.
+      </para>
+
+      <para>
+	The username <literal>enable</literal> has a special meaning
+	and is used to set the enable password.
+      </para>
+
+      <important>
+	<para>
+	  If this file doesn't exist, then anyone who can get to port
+	  23 will be allowed access without a username or password.
+	</para>
+      </important>
+    </sect2>
+
+    <sect2 id="config-ip-pool">
+      <title><filename>ip_pool</filename></title>
+      <para>
+	This file is used to configure the IP address pool which user
+	addresses are assigned from.  This file should contain either
+	an IP address or a CIDR network per line.  e.g.:
+
+<programlisting>
+192.168.1.1
+192.168.1.2
+192.168.1.3
+192.168.4.0/24
+172.16.0.0/16
+10.0.0.0/8
+</programlisting>
+      </para>
+
+      <para>
+	Keep in mind that <command>l2tpns</command> can only handle
+	65535 connections per process, so don't put more than 65535 IP
+	addresses in the configuration file.  They will be
+	wasted.
+      </para>
+    </sect2>
+
+    <sect2 id="config-build-garden" xreflabel="build-garden">
+      <title><filename>build-garden</filename></title>
+      <para>
+	The garden plugin on startup creates a NAT table called
+	"garden" then sources the <filename>build-garden</filename>
+	script to populate that table.  All packets from gardened
+	users will be sent through this table.  Example:
+
+<programlisting>
+iptables -t nat -A garden -p tcp -m tcp --dport 25 -j DNAT --to 192.168.1.1
+iptables -t nat -A garden -p udp -m udp --dport 53 -j DNAT --to 192.168.1.1
+iptables -t nat -A garden -p tcp -m tcp --dport 53 -j DNAT --to 192.168.1.1
+iptables -t nat -A garden -p tcp -m tcp --dport 80 -j DNAT --to 192.168.1.1
+iptables -t nat -A garden -p tcp -m tcp --dport 110 -j DNAT --to 192.168.1.1
+iptables -t nat -A garden -p tcp -m tcp --dport 443 -j DNAT --to 192.168.1.1
+iptables -t nat -A garden -p icmp -m icmp --icmp-type echo-request -j DNAT --to 192.168.1.1
+iptables -t nat -A garden -p icmp -j ACCEPT
+iptables -t nat -A garden -j DROP
+</programlisting>
+      </para>
+    </sect2>
+  </sect1>
+
+  <sect1 id="operation">
+    <title>Operation</title>
+    <para>
+      A running l2tpns process can be controlled in a number of ways.
+      The primary method of control is by the Command-Line Interface
+      (CLI).
+    </para>
+
+    <para>
+      You can also remotely send commands to modules via the
+      <command>nsctl</command> client provided.
+    </para>
+
+    <para>
+      There are also a number of signals that l2tpns understands and
+      takes action when it receives them.
+    </para>
+
+    <sect2 id="operation-cli">
+      <title>Command-Line Interface</title>
+      <para>
+	You can access the command line interface by telneting to port
+	23.  There is no IP address restriction, so it's a good idea
+	to firewall this port off from anyone who doesn't need access
+	to it.  See <xref linkend="config-users"/> for information on
+	restricting access based on a username and password.
+      </para>
+
+      <para>
+	The CLI gives you real-time control over almost everything in
+	the process.  The interface is designed to look like a Cisco
+	device, and supports things like command history, line editing
+	and context sensitive help.  This is provided by linking with
+	the <ulink url="http://sourceforge.net/projects/libcli">
+	libcli</ulink> library.  Some general documentation of the
+	interface is <ulink
+	url="http://sourceforge.net/docman/display_doc.php?docid=20501&amp;group_id=79019">
+	here</ulink>.
+      </para>
+
+      <para>
+	After you have connected to the telnet port (and perhaps
+	logged in), you will be presented with a
+	<prompt><replaceable>hostname</replaceable>&gt;</prompt>
+	prompt.
+      </para>
+
+      <para>
+	Enter <userinput>help</userinput> to get a list of possible
+	commands, or press <userinput>?</userinput> for
+	context-specific help.
+      </para>
+
+      <para>
+	A brief overview of the more important commands
+	follows:
+
+	<variablelist>
+	  <varlistentry id="operation-cli-show-session"
+	      xreflabel="show session">
+	    <term>
+	      <userinput>show session [<replaceable>ID</replaceable>]
+	      </userinput>
+	    </term>
+
+	    <listitem>
+	      <para>
+		Detailed information for a specific session is
+		presented if you specify a session
+		<replaceable>ID</replaceable> argument.
+	      </para>
+
+	      <para>
+		If no <replaceable>ID</replaceable> is given, a
+		summary of all connected sessions is produced.  Note
+		that this summary list can be around 185 columns wide,
+		so you should probably use a wide
+		terminal.
+	      </para>
+
+	      <para>
+		The columns listed in the summary are:
+
+		<informaltable>
+		  <tgroup cols="3">
+		    <colspec colname="col"/>
+		    <colspec colname="desc"/>
+		    <colspec colname="extra"/>
+		    <tbody>
+		      <row>
+			<entry><literal>SID</literal></entry>
+			<entry namest="desc" nameend="extra">Session ID</entry>
+		      </row>
+		      <row>
+			<entry><literal>TID</literal></entry>
+			<entry>Tunnel ID</entry>
+			<entry>
+			  See also the <xref
+			  linkend="operation-cli-show-tunnel"/> CLI
+			  command.
+			</entry>
+		      </row>
+		      <row>
+			<entry><literal>Username</literal></entry>
+			<entry>
+			  The username given in the PPP authentication.
+			</entry>
+			<entry>
+			  If this is *, then LCP authentication has
+			  not completed.
+			</entry>
+		      </row>
+		      <row>
+			<entry><literal>IP</literal></entry>
+			<entry>The IP address given to the session.</entry>
+			<entry>
+			  If this is 0.0.0.0, IPCP negotiation has not
+			  completed
+			</entry>
+		      </row>
+		      <row>
+			<entry><literal>I</literal></entry>
+			<entry>Intercept</entry>
+			<entry>
+			  Y or N: indicates whether the session is
+			  being snooped.  See also the
+			  <xref linkend="operation-cli-snoop"/>
+			  CLI command.
+			</entry>
+		      </row>
+		      <row>
+			<entry><literal>T</literal></entry>
+			<entry>Throttled</entry>
+			<entry>
+			  Y or N: indicates whether the session is
+			  currently throttled.  See also the
+			  <xref linkend="operation-cli-throttle"/>
+			  CLI command.
+			</entry>
+		      </row>
+		      <row>
+			<entry><literal>G</literal></entry>
+			<entry>Walled Garden</entry>
+			<entry>
+			  Y or N:  indicates whether the user is
+			  trapped in the walled garden.  This field is
+			  present even if the garden module is not
+			  loaded.
+			</entry>
+		      </row>
+		      <row>
+			<entry><literal>6</literal></entry>
+			<entry>IPv6</entry>
+			<entry>
+			  Y or N:  indicates whether the session has
+			  IPv6 active (IPV6CP open)
+			</entry>
+		      </row>
+		      <row>
+			<entry><literal>opened</literal></entry>
+			<entry namest="desc" nameend="extra">
+			  The number of seconds since the
+			  session started
+			</entry>
+		      </row>
+		      <row>
+			<entry><literal>downloaded</literal></entry>
+			<entry namest="desc" nameend="extra">
+			  Number of bytes downloaded by the user
+			</entry>
+		      </row>
+		      <row>
+			<entry><literal>uploaded</literal></entry>
+			<entry namest="desc" nameend="extra">
+			  Number of bytes uploaded by the user
+			</entry>
+		      </row>
+		      <row>
+			<entry><literal>idle</literal></entry>
+			<entry namest="desc" nameend="extra">
+			  The number of seconds since traffic was
+			  detected on the session
+			</entry>
+		      </row>
+		      <row>
+			<entry><literal>LAC</literal></entry>
+			<entry namest="desc" nameend="extra">
+			  The IP address of the LAC the session is
+			  connected to.
+			</entry>
+		      </row>
+		      <row>
+			<entry><literal>CLI</literal></entry>
+			<entry namest="desc" nameend="extra">
+			  The Calling-Line-Identification field
+			  provided during the session setup.  This
+			  field is generated by the LAC.
+			</entry>
+		      </row>
+		    </tbody>
+		  </tgroup>
+		</informaltable>
+	      </para>
+	    </listitem>
+	  </varlistentry>
+
+	  <varlistentry id="operation-cli-show-user" xreflabel="show user">
+	    <term>
+	      <userinput>show users</userinput>
+	    </term>
+	    <term>
+	      <userinput>show user <replaceable>username</replaceable>
+	      </userinput>
+	    </term>
+
+	    <listitem>
+	      <para>
+		With no arguments, display a list of currently
+		connected users.  If an argument is given, the session
+		details for the given
+		<replaceable>username</replaceable> are displayed.
+	      </para>
+	    </listitem>
+	  </varlistentry>
+
+	  <varlistentry id="operation-cli-show-tunnel" xreflabel="show tunnel">
+	    <term>
+	      <userinput>show tunnel [<replaceable>ID</replaceable>]</userinput>
+	    </term>
+
+	    <listitem>
+	      <para>
+		Produce a summary list of all open tunnels, or detail
+		on a specific tunnel <replaceable>ID</replaceable>.
+	      </para>
+
+	      <para>
+		The columns listed in the summary are:
+
+		<informaltable>
+		  <tgroup cols="2">
+		    <tbody>
+		      <row>
+			<entry>TID</entry>
+			<entry>Tunnel ID</entry>
+		      </row>
+		      <row>
+			<entry>Hostname</entry>
+			<entry>
+			  The hostname for the tunnel as provided by
+			  the LAC.  This has no relation to DNS, it is
+			  just a text field.
+			</entry>
+		      </row>
+		      <row>
+			<entry>IP</entry>
+			<entry>The IP address of the LAC</entry>
+		      </row>
+		      <row>
+			<entry>State</entry>
+			<entry>
+			  Tunnel state: Free, Open, Dieing, Opening
+			</entry>
+		      </row>
+		      <row>
+			<entry>Sessions</entry>
+			<entry>The number of open sessions on the tunnel</entry>
+		      </row>
+		    </tbody>
+		  </tgroup>
+		</informaltable>
+	      </para>
+	    </listitem>
+	  </varlistentry>
+
+	  <varlistentry id="operation-cli-show-pool" xreflabel="show pool">
+	    <term><userinput>show pool</userinput></term>
+	    <listitem>
+	      <para>
+		Displays the current IP address pool allocation.  This
+		will only display addresses that are in use, or are
+		reserved for re-allocation to a disconnected user.
+	      </para>
+
+	      <para>
+		If an address is not currently in use, but has been
+		used, then in the User column the username will be
+		shown in square brackets, followed by the time since
+		the address was used:
+
+<screen>
+IP Address      Used  Session User
+192.168.100.6     N           [joe.user] 1548s
+</screen>
+	      </para>
+	    </listitem>
+	  </varlistentry>
+
+	  <varlistentry id="operation-cli-show-radius" xreflabel="show radius">
+	    <term><userinput>show radius</userinput></term>
+	    <listitem>
+	      <para>
+		Show a summary of the in-use RADIUS sessions.  This
+		list should not be very long, as RADIUS sessions
+		should be cleaned up as soon as they are used.  The
+		columns listed are:
+
+		<informaltable>
+		  <tgroup cols="2">
+		    <tbody>
+		      <row>
+			<entry>Radius</entry>
+			<entry>
+			  The ID of the RADIUS request.  This is sent
+			  in the packet to the RADIUS server for
+			  identification
+			</entry>
+		      </row>
+		      <row>
+			<entry>State</entry>
+			<entry>
+			  The state of the request:  WAIT, CHAP, AUTH,
+			  IPCP, START, STOP or NULL
+			</entry>
+		      </row>
+		      <row>
+			<entry>Session</entry>
+			<entry>
+			  The session ID that this RADIUS request is
+			  associated with
+			</entry>
+		      </row>
+		      <row>
+			<entry>Retry</entry>
+			<entry>
+			  If a response does not appear to the
+			  request, it will retry at this time.  This
+			  is a Unix timestamp
+			</entry>
+		      </row>
+		      <row>
+			<entry>Try</entry>
+			<entry>
+			  Retry count.  The RADIUS request is
+			  discarded after 3 retries
+			</entry>
+		      </row>
+		    </tbody>
+		  </tgroup>
+		</informaltable>
+	      </para>
+	    </listitem>
+	  </varlistentry>
+
+	  <varlistentry id="operation-cli-show-run" xreflabel="show run">
+	    <term><userinput>show running-config</userinput></term>
+	    <listitem>
+	      <para>
+		This will list the current running configuration.
+		This is in a format that can either be pasted into the
+		configuration file, or run directly at the command
+		line.
+	      </para>
+	    </listitem>
+	  </varlistentry>
+
+	  <varlistentry id="operation-cli-show-counters"
+	      xreflabel="show counters">
+	    <term><userinput>show counters</userinput></term>
+	    <listitem>
+	      <para>
+		Internally, counters are kept of key values, such as
+		bytes and packets transferred, as well as function
+		call counters.  This function displays all these
+		counters, and is probably only useful for debugging.
+	      </para>
+
+	      <para>
+		You can reset these counters by running
+		<userinput>clear counters</userinput>.
+	      </para>
+	    </listitem>
+	  </varlistentry>
+
+	  <varlistentry id="operation-cli-show-cluster"
+	      xreflabel="show cluster">
+	    <term><userinput>show cluster</userinput></term>
+	    <listitem>
+	      <para>
+		Show cluster status.  Shows the cluster state for this
+		server (Master/Slave), information about known peers
+		and (for slaves) the master IP address, last packet
+		seen and up-to-date status.  See
+		<xref linkend="clustering"/> for more information.
+	      </para>
+	    </listitem>
+	  </varlistentry>
+
+	  <varlistentry id="operation-cli-write-mem" xreflabel="write memory">
+	    <term><userinput>write memory</userinput></term>
+	    <listitem>
+	      <para>
+		This will write the current running configuration to
+		the config file <filename>startup-config</filename>,
+		which will be run on a restart.
+	      </para>
+	    </listitem>
+	  </varlistentry>
+
+	  <varlistentry id="operation-cli-snoop" xreflabel="snoop">
+	    <term>
+	      <userinput>snoop <replaceable>user</replaceable>
+		<replaceable>IP</replaceable>
+		<replaceable>port</replaceable></userinput>
+	    </term>
+	    <listitem>
+	      <para>
+		You must specify a username, IP address and port.  All
+		packets for the current session for that username will
+		be forwarded to the given host/port.  Specify
+		<userinput>no snoop
+		<replaceable>username</replaceable></userinput> to
+		disable interception for the session.
+	      </para>
+
+	      <para>
+		If you want interception to be permanent, you will
+		have to modify the RADIUS response for the user.  See
+		<xref linkend="interception"/>.
+	      </para>
+	    </listitem>
+	  </varlistentry>
+
+	  <varlistentry id="operation-cli-throttle" xreflabel="throttle">
+	    <term>
+	      <userinput>throttle <replaceable>user</replaceable>
+		[in|out] <replaceable>rate</replaceable></userinput>
+	    </term>
+	    <listitem>
+	      <para>
+		You must specify a username, which will be throttled
+		for the current session to
+		<replaceable>rate</replaceable> Kbps.  Prefix
+		<replaceable>rate</replaceable> with
+		<userinput>in</userinput> or
+		<userinput>out</userinput> to set different upstream
+		and downstream rates.
+	      </para>
+
+	      <para>
+		Specify <userinput>no throttle
+		<replaceable>username</replaceable></userinput> to
+		disable throttling for the current session.
+	      </para>
+
+	      <para>
+		If you want throttling to be permanent, you will have
+		to modify the RADIUS response for the user.  See <xref
+		linkend="throttling"/>.
+	      </para>
+	    </listitem>
+	  </varlistentry>
+
+	  <varlistentry id="operation-cli-drop-session"
+	      xreflabel="drop session">
+	    <term>
+	      <userinput>drop <replaceable>session</replaceable></userinput>
+	    </term>
+	    <listitem>
+	      <para>
+		This will cleanly disconnect the session specified by
+		<replaceable>session</replaceable> ID.
+	      </para>
+	    </listitem>
+	  </varlistentry>
+
+	  <varlistentry id="operation-cli-drop-tunnel" xreflabel="drop tunnel">
+	    <term>
+	      <userinput>drop <replaceable>tunnel</replaceable></userinput>
+	    </term>
+	    <listitem>
+	      <para>
+		This will cleanly disconnect the tunnel specified by
+		<replaceable>tunnel</replaceable> ID, as well as all
+		sessions on that tunnel.
+	      </para>
+	    </listitem>
+	  </varlistentry>
+
+	  <varlistentry id="operation-cli-uptime" xreflabel="uptime">
+	    <term><userinput>uptime</userinput></term>
+	    <listitem>
+	      <para>
+		This will show how long the <command>l2tpns</command>
+		process has been running, and the current bandwidth
+		utilization:
+
+<screen>
+17:10:35 up 8 days, 2212 users, load average: 0.21, 0.17, 0.16
+Bandwidth: UDP-ETH:6/6  ETH-UDP:13/13  TOTAL:37.6   IN:3033 OUT:2569
+</screen>
+
+		The bandwidth line contains 4 sets of values:
+
+		<informaltable>
+		  <tgroup cols="2">
+		    <tbody>
+		      <row>
+			<entry>UDP-ETH</entry>
+			<entry>
+			  The current bandwidth going from the LAC to
+			  the ethernet (user uploads), in mbits/sec.
+			</entry>
+		      </row>
+		      <row>
+			<entry>ETH-UDP</entry>
+			<entry>
+			  The current bandwidth going from ethernet to
+			  the LAC (user downloads).
+			</entry>
+		      </row>
+		      <row>
+			<entry>TOTAL</entry>
+			<entry>The total aggregate bandwidth in mbits/s.</entry>
+		      </row>
+		      <row>
+			<entry>IN and OUT</entry>
+			<entry>
+			  Packets/per-second going between UDP-ETH and
+			  ETH-UDP.
+			</entry>
+		      </row>
+		    </tbody>
+		  </tgroup>
+		</informaltable>
+
+		These counters are updated every second.
+	      </para>
+	    </listitem>
+	  </varlistentry>
+
+	  <varlistentry id="operation-cli-configure" xreflabel="configure">
+	    <term><userinput>configure terminal</userinput></term>
+	    <listitem>
+	      <para>
+		Enter configuration mode.  Use
+		<userinput>exit</userinput> or
+		<userinput>^Z</userinput> to exit this mode.
+	      </para>
+
+	      <para>
+		The following commands are valid in this mode:
+
+		<variablelist>
+		  <varlistentry id="operation-cli-conf-load">
+		    <term>
+		      <userinput>load plugin
+			<replaceable>name</replaceable></userinput>
+		    </term>
+		    <listitem>
+		      <para>
+			Load a plugin.  You must specify the plugin
+			name, and it will search in
+			<filename>/usr/lib/l2tpns</filename> for
+			<filename><replaceable>name</replaceable>.so</filename>.
+			You can unload a loaded plugin with
+			<userinput>remove plugin
+			<replaceable>name</replaceable></userinput>.
+		      </para>
+		    </listitem>
+		  </varlistentry>
+
+		  <varlistentry id="operation-cli-conf-set">
+		    <term><userinput>set</userinput> ...</term>
+		    <listitem>
+		      <para>
+			Set a configuration variable.  You must specify
+			the variable name, and the value.  If the value
+			contains any spaces, you should quote the value
+			with double (") or single (') quotes.
+		      </para>
+
+		      <para>
+			You can set any configuration value in this
+			way, although some may require a restart to
+			take effect.  See <xref
+			linkend="config-startup"/>.
+		      </para>
+		    </listitem>
+		  </varlistentry>
+
+		  <varlistentry id="operation-cli-conf-router">
+		    <term><userinput>router bgp</userinput> ...</term>
+		    <listitem>
+		      <para>
+			Configure BGP.  See <xref
+			linkend="config-startup-bgp"/>.
+		      </para>
+		    </listitem>
+		  </varlistentry>
+
+		  <varlistentry id="operation-cli-conf-acl">
+		    <term><userinput>ip access-list</userinput> ...</term>
+		    <listitem>
+		      <para>
+			Configure a named access list.  See <xref
+			linkend="config-startup-acl"/>.
+		      </para>
+		    </listitem>
+		  </varlistentry>
+		</variablelist>
+	      </para>
+	    </listitem>
+	  </varlistentry>
+	</variablelist>
+      </para>
+    </sect2>
+
+    <sect2 id="operation-nsctl">
+      <title>nsctl</title>
+      <para>
+	<command>nsctl</command> sends messages to a running
+	<command>l2tpns</command> instance to be control plugins.
+      </para>
+
+      <para>
+	Arguments are <userinput>command</userinput> and optional
+	<replaceable>args</replaceable>.  See
+	<literal>nsctl(8)</literal>.
+      </para>
+
+      <para>
+	Built-in command are <userinput>load_plugin</userinput>,
+	<userinput>unload_plugin</userinput> and
+	<userinput>help</userinput>.  Any other commands are passed to
+	plugins for processing by the
+	<literal>plugin_control</literal> function.
+      </para>
+    </sect2>
+
+    <sect2 id="operation-signals">
+      <title>Signals</title>
+      <para>
+	While the process is running, you can send it a few different
+	signals, using the <command>kill</command> command.
+
+<screen>
+killall -HUP l2tpns
+</screen>
+
+	The signals understood are:
+
+	<variablelist>
+	  <varlistentry>
+	    <term>SIGHUP</term>
+	    <listitem>
+	      <para>Reload the config from disk and re-open log file.</para>
+	    </listitem>
+	  </varlistentry>
+
+	  <varlistentry>
+	    <term>SIGTERM</term>
+	    <term>SIGINT</term>
+	    <listitem>
+	      <para>
+		Stop process.  Tunnels and sessions are not
+		terminated.  This signal should be used to stop
+		<command>l2tpns</command> on a cluster node where
+		there are other machines to continue handling traffic.
+		See <xref linkend="clustering"/>
+	      </para>
+	    </listitem>
+	  </varlistentry>
+
+	  <varlistentry>
+	    <term>SIGQUIT</term>
+	    <listitem>
+	      <para>
+		Shut down tunnels and sessions, exit process when
+		complete.
+	      </para>
+	    </listitem>
+	  </varlistentry>
+	</variablelist>
+      </para>
+    </sect2>
+  </sect1>
+
+  <sect1 id="throttling">
+    <title>Throttling</title>
+    <para>
+      <command>l2tpns</command> contains support for slowing down user
+      sessions to whatever speed you desire.  The global setting
+      <literal>throttle_speed</literal> defines the default throttle
+      rate.
+    </para>
+
+    <para>
+      To throttle a sesion permanently, add a
+      <literal>Cisco-AVPair</literal> RADIUS attribute.  The
+      <filename>autothrotle</filename> module interprets the following
+      attributes:
+
+      <informaltable>
+	<tgroup cols="2">
+	  <tbody>
+	    <row>
+	      <entry><literal>throttle=yes</literal></entry>
+	      <entry>
+		Throttle upstream/downstream traffic to the configured
+		<literal>throttle_speed</literal>.
+	      </entry>
+	    </row>
+
+	    <row>
+	      <entry>
+		<literal>throttle=<replaceable>rate</replaceable></literal>
+	      </entry>
+	      <entry>
+		Throttle upstream/downstream traffic to the specified
+		<replaceable>rate</replaceable> Kbps.
+	      </entry>
+	    </row>
+
+	    <row>
+	      <entry>
+		<literal>lcp:interface-config#1=service-policy input
+		  <replaceable>rate</replaceable></literal>
+	      </entry>
+
+	      <entry morerows="1">
+		Alternate (Cisco) format:  throttle
+		upstream/downstream to specified
+		<replaceable>rate</replaceable> Kbps.
+	      </entry>
+	    </row>
+
+	    <row>
+	      <entry>
+		<literal>lcp:interface-config#2=service-policy output
+		  <replaceable>rate</replaceable></literal>
+	      </entry>
+	    </row>
+	  </tbody>
+	</tgroup>
+      </informaltable>
+    </para>
+
+    <para>
+      You can also enable and disable throttling an active session
+      using the <xref linkend="operation-cli-throttle"/> CLI command.
+    </para>
+  </sect1>
+
+  <sect1 id="interception">
+    <title>Interception</title>
+    <para>
+      You may have to deal with legal requirements to be able to
+      intercept a user's traffic at any time.
+      <command>l2tpns</command> allows you to begin and end
+      interception on the fly, as well as at authentication time.
+    </para>
+
+    <para>
+      When a user is being intercepted, a copy of every packet they
+      send and receive will be sent wrapped in a UDP packet to a
+      specified host.
+    </para>
+
+    <para>
+      The UDP packet contains just the raw IP frame, with no extra
+      headers.  The script <filename>scripts/l2tpns-capture</filename>
+      may be used as the end-point for such intercepts, writing the
+      data in PCAP format (suitable for inspection with
+      <command>tcpdump</command>).
+    </para>
+
+    <para>
+      To enable or disable interception of a connected user, use the
+      <xref linkend="operation-cli-snoop"/> and <userinput>no
+      snoop</userinput> CLI commands.  These will enable interception
+      immediately.
+    </para>
+
+    <para>
+      If you wish the user to be intercepted whenever they reconnect,
+      you will need to modify the RADIUS response to include the
+      Vendor-Specific value
+      <literal>Cisco-AVPair="intercept=<replaceable>ip</replaceable>:<replaceable>port</replaceable>"</literal>.
+      For this feature to be enabled, you need to have the
+      <filename>autosnoop</filename> module loaded.
+    </para>
+  </sect1>
+
+  <sect1 id="plugins">
+    <title>Plugins</title>
+    <para>
+      So as to make <command>l2tpns</command> as flexible as possible,
+      a plugin API is include which you can use to hook into certain
+      events.
+    </para>
+
+    <para>
+      There are a some standard modules included which may be used as
+      examples:  <filename>autosnoop</filename>,
+      <filename>autothrottle</filename>, <filename>garden</filename>,
+      <filename>sessionctl</filename>,
+      <filename>setrxspeed</filename>, <filename>snoopctl</filename>,
+      <filename>stripdomain</filename> and
+      <filename>throttlectl</filename>.
+    </para>
+
+    <para>
+      When an event occurs that has a hook, <command>l2tpns</command>
+      looks for a predefined function name in every loaded module, and
+      runs them in the order the modules were loaded.
+    </para>
+
+    <para>
+      The function should return <code>PLUGIN_RET_OK</code> if it is
+      all OK.  If it returns <code>PLUGIN_RET_STOP</code>, then it is
+      assumed to have worked, but that no further modules should be
+      run for this event.
+    </para>
+
+    <para>
+      A return of <code>PLUGIN_RET_ERROR</code> means that this module
+      failed, and no further processing should be done for this event.
+      <note><para>Use this with care.</para></note>
+    </para>
+
+    <para>
+      Most event functions take a specific structure named
+      <code>param_<replaceable>event</replaceable></code>, which
+      varies in content with each event.  The function name for each
+      event will be
+      <code>plugin_<replaceable>event</replaceable></code>, so for the
+      event <replaceable>timer</replaceable>, the function declaration
+      should look like:
+
+<programlisting>
+int plugin_timer(struct param_timer *data);
+</programlisting>
+
+      A list of the available events follows, with a list of all the
+      fields in the supplied structure:
+
+      <informaltable>
+	<tgroup cols="4">
+	  <colspec colname="event"/>
+	  <colspec colname="event_desc"/>
+	  <colspec colname="member"/>
+	  <colspec colname="member_desc"/>
+	  <spanspec spanname="args" namest="member" nameend="member_desc"/>
+	  <thead>
+	    <row>
+	      <entry>Event</entry>
+	      <entry>Description</entry>
+	      <entry spanname="args">Arguments</entry>
+	    </row>
+	  </thead>
+
+	  <tbody>
+	    <row>
+	      <entry morerows="1"><code>plugin_init</code></entry>
+	      <entry morerows="1">
+		<para>
+		  Called when the plugin is loaded.  A pointer to a
+		  struct containing function pointers is passed as the
+		  only argument, allowing the plugin to call back into
+		  the main code.
+		</para>
+		<para>
+		  Prior to loading the plugin, <command>l2tpns</command>
+		  checks the API version the plugin was compiled
+		  against.  All plugins should contain:
+<programlisting>
+int plugin_api_version = PLUGIN_API_VERSION;
+</programlisting>
+		</para>
+	      </entry>
+	      <entry spanname="args"><code>struct pluginfuncs *</code></entry>
+	    </row>
+	    <row>
+	      <entry spanname="args">
+		See <code>pluginfuncs</code> structure in
+		<code>plugin.h</code> for available functions.
+	      </entry>
+	    </row>
+
+	    <row>
+	      <entry morerows="1"><code>plugin_done</code></entry>
+	      <entry morerows="1">
+		Called when the plugin is unloaded or
+		<command>l2tpns</command> is shutdown.
+	      </entry>
+	      <entry spanname="args"><code>void</code></entry>
+	    </row>
+	    <row>
+	      <entry spanname="args">No arguments.</entry>
+	    </row>
+
+	    <row>
+	      <entry morerows="6"><code>plugin_pre_auth</code></entry>
+	      <entry morerows="6">
+		Called after a RADIUS response has been received, but
+		before it has been processed by the code.  This will
+		allow you to modify the response in some way.
+	      </entry>
+	      <entry spanname="args">
+		<code>struct plugin param_pre_auth *</code>
+	      </entry>
+	    </row>
+	    <row>
+	      <entry><code>tunnelt *t</code></entry>
+	      <entry>Tunnel.</entry>
+	    </row>
+	    <row>
+	      <entry><code>sessiont *s</code></entry>
+	      <entry>Session.</entry>
+	    </row>
+	    <row>
+	      <entry><code>char *username</code></entry>
+	      <entry>User name.</entry>
+	    </row>
+	    <row>
+	      <entry><code>char *password</code></entry>
+	      <entry>Password.</entry>
+	    </row>
+	    <row>
+	      <entry><code>int protocol</code></entry>
+	      <entry>
+		Authentication protocol: <literal>0xC023</literal> for PAP,
+		<literal>0xC223</literal> for CHAP.
+	      </entry>
+	    </row>
+	    <row>
+	      <entry><code>int continue_auth</code></entry>
+	      <entry>Set to 0 to stop processing authentication modules.</entry>
+	    </row>
+
+	    <row>
+	      <entry morerows="5"><code>plugin_post_auth</code></entry>
+	      <entry morerows="5">
+		Called after a RADIUS response has been received, and
+		the basic checks have been performed.  This is what
+		the <filename>garden</filename> module uses to force
+		authentication to be accepted.
+	      </entry>
+	      <entry spanname="args">
+		<code>struct plugin param_post_auth *</code>
+	      </entry>
+	    </row>
+	    <row>
+	      <entry><code>tunnelt *t</code></entry>
+	      <entry>Tunnel.</entry>
+	    </row>
+	    <row>
+	      <entry><code>sessiont *s</code></entry>
+	      <entry>Session.</entry>
+	    </row>
+	    <row>
+	      <entry><code>char *username</code></entry>
+	      <entry>User name.</entry>
+	    </row>
+	    <row>
+	      <entry><code>short auth_allowed</code></entry>
+	      <entry>
+		Initially true or false depending on whether
+		authentication has been allowed so far.  You can
+		set this to 1 or 0 to force authentication to be
+		accepted or rejected.
+	      </entry>
+	    </row>
+	    <row>
+	      <entry><code>int protocol</code></entry>
+	      <entry>
+		Authentication protocol: <literal>0xC023</literal> for PAP,
+		<literal>0xC223</literal> for CHAP.
+	      </entry>
+	    </row>
+
+	    <row>
+	      <entry morerows="1"><code>plugin_timer</code></entry>
+	      <entry morerows="1">
+		Run once per second.
+	      </entry>
+	      <entry spanname="args">
+		<code>struct plugin param_timer *</code>
+	      </entry>
+	    </row>
+	    <row>
+	      <entry><code>time_t time_now</code></entry>
+	      <entry>The current unix timestamp.</entry>
+	    </row>
+
+	    <row>
+	      <entry morerows="2"><code>plugin_new_session</code></entry>
+	      <entry morerows="2">
+		Called after a session is fully set up.  The session
+		is now ready to handle traffic.
+	      </entry>
+	      <entry spanname="args">
+		<code>struct plugin param_new_session *</code>
+	      </entry>
+	    </row>
+	    <row>
+	      <entry><code>tunnelt *t</code></entry>
+	      <entry>Tunnel.</entry>
+	    </row>
+	    <row>
+	      <entry><code>sessiont *s</code></entry>
+	      <entry>Session.</entry>
+	    </row>
+
+	    <row>
+	      <entry morerows="2"><code>plugin_kill_session</code></entry>
+	      <entry morerows="2">
+		Called when a session is about to be shut down.  This
+		may be called multiple times for the same session.
+	      </entry>
+	      <entry spanname="args">
+		<code>struct plugin param_kill_session *</code>
+	      </entry>
+	    </row>
+	    <row>
+	      <entry><code>tunnelt *t</code></entry>
+	      <entry>Tunnel.</entry>
+	    </row>
+	    <row>
+	      <entry><code>sessiont *s</code></entry>
+	      <entry>Session.</entry>
+	    </row>
+
+	    <row>
+	      <entry morerows="5"><code>plugin_control</code></entry>
+	      <entry morerows="5">
+		<para>
+		  Called in whenever a <command>nsctl</command> packet
+		  is received.  This should handle the packet and form a
+		  response if required.
+		</para>
+		<para>
+		  Plugin-specific help strings may be included in the
+		  output of <userinput>nsctl help</userinput> by
+		  defining a <code>NULL</code> terminated list of
+		  strings as follows:
+<programlisting>
+char *plugin_control_help[] = { <replaceable>...</replaceable>, NULL };
+</programlisting>
+		</para>
+	      </entry>
+	      <entry spanname="args">
+		<code>struct plugin param_control *</code>
+	      </entry>
+	    </row>
+	    <row>
+	      <entry><code>int iam_master</code></entry>
+	      <entry>If true, this node is the cluster master.</entry>
+	    </row>
+	    <row>
+	      <entry><code>int argc</code></entry>
+	      <entry morerows="1"><command>nsctl</command> arguments.</entry>
+	    </row>
+	    <row>
+	      <entry><code>char **argc</code></entry>
+	    </row>
+	    <row>
+	      <entry><code>int reponse</code></entry>
+	      <entry>
+		Response from control message (if handled):  should be
+		either <code>NSCTL_RES_OK</code> or
+		<code>NSCTL_RES_ERR</code>.
+	      </entry>
+	    </row>
+	    <row>
+	      <entry><code>char *additional</code></entry>
+	      <entry>
+		Additional information, output by
+		<command>nsctl</command> on receiving the response.
+	      </entry>
+	    </row>
+
+	    <row>
+	      <entry morerows="4"><code>plugin_radius_response</code></entry>
+	      <entry morerows="4">
+		Called whenever a RADIUS response includes a
+		<literal>Cisco-AVPair</literal> value.  The value is
+		split into
+		<replaceable>key</replaceable><literal>=</literal><replaceable>value</replaceable>
+		pairs.  Will be called once for each pair in the
+		response.
+	      </entry>
+	      <entry spanname="args">
+		<code>struct plugin param_radius_response *</code>
+	      </entry>
+	    </row>
+	    <row>
+	      <entry><code>tunnelt *t</code></entry>
+	      <entry>Tunnel.</entry>
+	    </row>
+	    <row>
+	      <entry><code>sessiont *s</code></entry>
+	      <entry>Session.</entry>
+	    </row>
+	    <row>
+	      <entry><code>char *key</code></entry>
+	      <entry morerows="1">Key and value.</entry>
+	    </row>
+	    <row>
+	      <entry><code>char *value</code></entry>
+	    </row>
+
+	    <row>
+	      <entry morerows="2"><code>plugin_radius_reset</code></entry>
+	      <entry morerows="2">
+		Called whenever a RADIUS CoA request is received to
+		reset any options to default values before the new
+		values are applied.
+	      </entry>
+	      <entry spanname="args">
+	        <code>struct param_radius_reset *</code>
+	      </entry>
+	    </row>
+	    <row>
+	      <entry><code>tunnelt *t</code></entry>
+	      <entry>Tunnel.</entry>
+	    </row>
+	    <row>
+	      <entry><code>sessiont *s</code></entry>
+	      <entry>Session.</entry>
+	    </row>
+
+	    <row>
+	      <entry morerows="3"><code>plugin_radius_account</code></entry>
+	      <entry morerows="3">
+		Called when preparing a RADIUS accounting record to
+		allow additional data to be added to the packet.
+	      </entry>
+	      <entry spanname="args">
+	        <code>struct param_radius_account *</code>
+	      </entry>
+	    </row>
+	    <row>
+	      <entry><code>tunnelt *t</code></entry>
+	      <entry>Tunnel.</entry>
+	    </row>
+	    <row>
+	      <entry><code>sessiont *s</code></entry>
+	      <entry>Session.</entry>
+	    </row>
+	    <row>
+	      <entry><code>uint8_t **packet</code></entry>
+	      <entry>
+	        Pointer to the end of the currently assembled
+		packet buffer.  The value should be incremented by the
+		length of any data added.
+	      </entry>
+	    </row>
+
+	    <row>
+	      <entry morerows="1"><code>plugin_become_master</code></entry>
+	      <entry morerows="1">
+		Called when a node elects itself cluster master.
+	      </entry>
+	      <entry spanname="args"><code>void</code></entry>
+	    </row>
+	    <row>
+	      <entry spanname="args">No arguments.</entry>
+	    </row>
+
+	    <row>
+	      <entry morerows="1"><code>plugin_new_session_master</code></entry>
+	      <entry morerows="1">
+		Called once for each open session on becoming cluster
+		master.
+	      </entry>
+	      <entry spanname="args"><code>sessiont *</code></entry>
+	    </row>
+	    <row>
+	      <entry spanname="args">
+	        Session.
+	      </entry>
+	    </row>
+	  </tbody>
+	</tgroup>
+      </informaltable>
+    </para>
+  </sect1>
+
+  <sect1 id="walled-garden">
+    <title>Walled Garden</title>
+    <para>
+      A "Walled Garden" is implemented so that you can provide perhaps
+      limited service to sessions that incorrectly authenticate.
+    </para>
+
+    <para>
+      Whenever a session provides incorrect authentication, and the
+      RADIUS server responds with Auth-Reject, the walled garden
+      module (if loaded) will force authentication to succeed, but set
+      the <literal>walled_garden</literal> flag in the session
+      structure, and adds an <command>iptables</command> rule to the
+      <literal>garden_users</literal> chain to cause all packets for
+      the session to traverse the <literal>garden</literal> chain.
+    </para>
+
+    <para>
+      This doesn't <emphasis>just work</emphasis>.  To set this all
+      up, you will to setup the <literal>garden</literal> nat table
+      with the <xref linkend="config-build-garden"/> script with rules
+      to limit user's traffic.
+    </para>
+
+    <para>
+      For example, to force all traffic except DNS to be forwarded to
+      192.168.1.1, add these entries to your
+      <filename>build-garden</filename> script:
+
+<programlisting>
+iptables -t nat -A garden -p tcp --dport ! 53 -j DNAT --to 192.168.1.1
+iptables -t nat -A garden -p udp --dport ! 53 -j DNAT --to 192.168.1.1
+</programlisting>
+    </para>
+
+    <para>
+      <command>l2tpns</command> will add entries to the
+      <literal>garden_users</literal> chain as appropriate.
+    </para>
+
+    <para>
+      You can check the amount of traffic being captured using the
+      following command:
+
+<screen>
+iptables -t nat -L garden -nvx
+</screen>
+    </para>
+  </sect1>
+
+  <sect1 id="filtering">
+    <title>Filtering</title>
+    <para>
+      Sessions may be filtered by specifying
+      <literal>Filter-Id</literal> attributes in the RADIUS reply.
+      <replaceable>filter</replaceable>.<literal>in</literal>
+      specifies that the named access-list
+      <replaceable>filter</replaceable> should be applied to traffic
+      from the customer,
+      <replaceable>filter</replaceable>.<literal>out</literal>
+      specifies a list for traffic to the customer.
+    </para>
+  </sect1>
+
+  <sect1 id="clustering">
+    <title>Clustering</title>
+    <para>
+      An <command>l2tpns</command> cluster consists of one* or more
+      servers configured with the same configuration, notably the
+      multicast <literal>cluster_address</literal>.
+    </para>
+
+    <para>*A stand-alone server is simply a degraded cluster.</para>
+
+    <para>
+      Initially servers come up as cluster slaves, and periodically
+      (every <literal>cluster_hb_interval</literal>/10 seconds) send
+      out ping packets containing the start time of the process to the
+      multicast <literal>cluster_address</literal>.
+    </para>
+
+    <para>
+      A cluster master sends heartbeat rather than ping packets, which
+      contain those session and tunnel changes since the last
+      heartbeat.
+    </para>
+
+    <para>
+      When a slave has not seen a heartbeat within
+      <literal>cluster_hb_timeout</literal>/10 seconds it "elects" a
+      new master by examining the list of peers it has seen pings from
+      and determines which of these and itself is the "best" candidate
+      to be master.  "Best" in this context means the server with the
+      highest uptime (the highest IP address is used as a tie-breaker
+      in the case of equal uptimes).
+    </para>
+
+    <para>
+      After discovering a master, and determining that it is
+      up-to-date (has seen an update for all in-use sessions and
+      tunnels from heartbeat packets) will raise a route (see <xref
+      linkend="routing"/>) for the <literal>bind_address</literal> and
+      for all addresses/networks in <filename>ip_pool</filename>.
+    </para>
+
+    <para>
+      Any packets recieved by the slave which would alter the session
+      state, as well as packets for throttled or gardened sessions are
+      forwarded to the master for handling.  In addition, byte
+      counters for session traffic are periodically forwarded.
+    </para>
+
+    <para>
+      The master, when determining that it has at least one* up-to-date
+      slave will drop all routes (raising them again if all slaves
+      disappear) and subsequently handle only packets forwarded to it
+      by the slaves.
+    </para>
+
+    <para>*Configurable with <literal>cluster_master_min_adv</literal></para>
+  </sect1>
+
+  <sect1 id="routing">
+    <title>Routing</title>
+    <para>
+      If you are running a single instance, you may simply statically
+      route the IP pools to the <literal>bind_address</literal>
+      (<command>l2tpns</command> will send a gratuitous arp).
+    </para>
+
+    <para>
+      For a cluster, configure the members as BGP neighbours on your
+      router and configure multi-path load-balancing.  Cisco uses
+      <userinput>maximum-paths ibgp</userinput> for IBGP.  If this is
+      not supported by your IOS revision, you can use
+      <userinput>maximum-paths</userinput> (which works for EBGP) and
+      set <literal>as_number</literal> to a private value such as
+      64512.
+    </para>
+  </sect1>
+</article>

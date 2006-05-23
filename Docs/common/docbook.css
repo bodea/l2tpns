@@ -1,0 +1,69 @@
+div.article > div.titlepage {
+    text-align: center;
+}
+
+.abstract {
+    text-align: justify;
+}
+
+.title {
+    font-family: sans-serif;
+    font-weight: bolder;
+    margin-bottom: 0.5em;
+}
+
+.sect2, .sect2, .sect3, .sect4 {
+    margin-left: 2%;
+    margin-right: 2%;
+}
+
+.sect2 .title, .sect2 .title, .sect3 .title, .sect4 .title {
+    margin-left: 0;
+    margin-right: 0;
+}
+
+.synopsis, .screen, .programlisting {
+    font-family: monospace;
+    font-size: 1em;
+    display: block;
+    padding: 10px;
+    border: 1px solid #bbb;
+    background-color: #eee;
+    color: #000;   
+    overflow: auto;
+    border-radius: 2.5px;
+    -moz-border-radius: 2.5px;
+    margin: 0.5em 2em;
+}
+
+.programlisting em {
+    color: red;
+}
+
+.hanging-indent {
+    margin-left: 4em;
+    text-indent: -2em;
+}
+
+table {
+    margin: 0.5em 2em;
+    border: 1px solid #bbb;
+    border-collapse: collapse;
+}
+
+td {
+    vertical-align: baseline;
+}
+
+thead {
+    background-color: #eee;
+}
+
+td table {
+    margin: 0;
+    border: 0;
+}
+
+td {
+    border: 1px solid #bbb;
+}
