@@ -1,9 +1,5 @@
-* Wed May 24 2006 Brendan O'Dea <bod@optus.net> 2.2.0
-- Only poll clifd if successfully bound.
-- Add "Practical VPNs" document from Liran Tal as Docs/vpn .
-- Add Multilink support from Khaled Al Hamwi.
-- Remove non-working setuid option.
-- Convert manual.html to Docbook.
+* Fri May 26 2006 Brendan O'Dea <bod@optus.net> 2.1.19
+- Kludge around problem with Netgear DM602 authentication.
 
 * Tue Apr 18 2006 Brendan O'Dea <bod@optus.net> 2.1.18
 - Don't shutdown on TerminateReq, wait for CDN.

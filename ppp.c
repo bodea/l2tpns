@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.100 2006-04-27 09:53:50 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.99.2.1 2006-05-26 07:33:52 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -15,8 +15,6 @@ char const *cvs_id_ppp = "$Id: ppp.c,v 1.100 2006-04-27 09:53:50 bodea Exp $";
 #include "cluster.h"
 
 extern tunnelt *tunnel;
-extern bundlet *bundle;
-extern fragmentationt *frag;
 extern sessiont *session;
 extern radiust *radius;
 extern int tunfd;
@@ -26,10 +24,6 @@ extern time_t time_now;
 extern configt *config;
 
 static int add_lcp_auth(uint8_t *b, int size, int authtype);
-static bundleidt new_bundle(void);
-static int epdiscmp(epdist, epdist);
-static void setepdis(epdist *, epdist);
-static void ipcp_open(sessionidt s, tunnelidt t);
 
 // Process PAP messages
 void processpap(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
@@ -96,7 +90,7 @@ void processpap(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 		// respond now, either no RADIUS available or already authenticated
 		uint8_t b[MAXETHER];
 		uint8_t id = p[1];
-		uint8_t *p = makeppp(b, sizeof(b), 0, 0, s, t, PPPPAP, 0, 0, 0);
+		uint8_t *p = makeppp(b, sizeof(b), 0, 0, s, t, PPPPAP);
 		if (!p) return;
 
 		if (session[s].ip)
@@ -179,16 +173,24 @@ void processchap(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 		return;
 	}
 
+	if (session[s].ppp.phase != Authenticate)
+	{
+	    	LOG(2, s, t, "CHAP ignored in %s phase\n", ppp_phase(session[s].ppp.phase));
+		return;
+	}
+
 	r = sess_local[s].radius;
 	if (!r)
 	{
 		LOG(3, s, t, "Unexpected CHAP message\n");
-		return;
-	}
 
-	if (session[s].ppp.phase != Authenticate)
-	{
-	    	LOG(2, s, t, "CHAP ignored in %s phase\n", ppp_phase(session[s].ppp.phase));
+		// Some modems (Netgear DM602, possibly others) persist in using CHAP even
+		// after ACKing our ConfigReq for PAP.
+		if (sess_local[s].lcp_authtype == AUTHPAP && config->radius_authtypes & AUTHCHAP)
+		{
+			sess_local[s].lcp_authtype = AUTHCHAP;
+			sendchap(s, t);
+		}
 		return;
 	}
 
@@ -358,29 +360,16 @@ void lcp_open(sessionidt s, tunnelidt t)
 	}
 	else
 	{
-		if (session[s].bundle && bundle[session[s].bundle].num_of_links > 1)
-		{
-			sessionidt first_ses = bundle[session[s].bundle].members[0];
-			LOG(3, s, t, "MPPP: Skipping IPCP negotiation for session:%d, first session of bundle is:%d\n", s, first_ses);
-			session[s].ip = session[first_ses].ip;
-			session[s].dns1 = session[first_ses].dns1;
-			session[s].dns2 = session[first_ses].dns2;
-			session[s].timeout = session[first_ses].timeout;
-			ipcp_open(s, t);
-		}
+		// This-Layer-Up
+		sendipcp(s, t);
+		change_state(s, ipcp, RequestSent);
+		// move to passive state for IPv6 (if configured), CCP
+		if (config->ipv6_prefix.s6_addr[0])
+			change_state(s, ipv6cp, Stopped);
 		else
-		{
-			// This-Layer-Up
-			sendipcp(s, t);
-			change_state(s, ipcp, RequestSent);
-			// move to passive state for IPv6 (if configured), CCP
-			if (config->ipv6_prefix.s6_addr[0])
-				change_state(s, ipv6cp, Stopped);
-			else
-				change_state(s, ipv6cp, Closed);
+			change_state(s, ipv6cp, Closed);
 
-			change_state(s, ccp, Stopped);
-		}
+		change_state(s, ccp, Stopped);
 	}
 }
 
@@ -398,7 +387,7 @@ static uint8_t *ppp_conf_rej(sessionidt s, uint8_t *buf, size_t blen, uint16_t m
 {
 	if (!*response || **response != ConfigRej)
 	{
-		queued = *response = makeppp(buf, blen, packet, 2, s, session[s].tunnel, mtype, 0, 0, 0);
+		queued = *response = makeppp(buf, blen, packet, 2, s, session[s].tunnel, mtype);
 		if (!queued)
 			return 0;
 
@@ -442,7 +431,7 @@ static uint8_t *ppp_conf_nak(sessionidt s, uint8_t *buf, size_t blen, uint16_t m
 	    	if (*nak_sent >= config->ppp_max_failure)
 			return ppp_conf_rej(s, buf, blen, mtype, response, 0, packet, option);
 
-		queued = *response = makeppp(buf, blen, packet, 2, s, session[s].tunnel, mtype, 0, 0, 0);
+		queued = *response = makeppp(buf, blen, packet, 2, s, session[s].tunnel, mtype);
 		if (!queued)
 			return 0;
 
@@ -474,7 +463,7 @@ static void ppp_code_rej(sessionidt s, tunnelidt t, uint16_t proto,
 	l += 4;
 	if (l > mru) l = mru;
 
-	q = makeppp(buf, size, 0, 0, s, t, proto, 0, 0, 0);
+	q = makeppp(buf, size, 0, 0, s, t, proto);
 	if (!q) return;
 
 	*q = CodeRej;
@@ -586,7 +575,6 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 		uint8_t *response = 0;
 		static uint8_t asyncmap[4] = { 0, 0, 0, 0 }; // all zero
 		static uint8_t authproto[5];
-		int changed = 0;
 
 		while (x > 2)
 		{
@@ -602,7 +590,7 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 						if (mru >= MINMTU)
 						{
 							session[s].mru = mru;
-							changed++;
+							cluster_send_session(s);
 							break;
 						}
 
@@ -675,64 +663,6 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 				case 8: // Address-And-Control-Field-Compression
 					break;
 
-				case 17: // Multilink Max-Receive-Reconstructed-Unit
-					{
-						uint16_t mrru = ntohs(*(uint16_t *)(o + 2));
-						session[s].mrru = mrru;
-						changed++;
-						LOG(3, s, t, "    Received PPP LCP option MRRU: %d\n",mrru);
-					}
-					break;
-					
-				case 18: // Multilink Short Sequence Number Header Format
-					{
-						session[s].mssf = 1;
-						changed++;
-						LOG(3, s, t, "    Received PPP LCP option MSSN format\n");
-					}
-					break;
-					
-				case 19: // Multilink Endpoint Discriminator
-					{
-						uint8_t epdis_class = o[2];
-						int addr;
-
-						session[s].epdis.addr_class = epdis_class;
-						session[s].epdis.length = length - 3;
-						if (session[s].epdis.length > 20)
-						{
-							LOG(1, s, t, "Error: received EndDis Address Length more than 20: %d\n", session[s].epdis.length);
-							session[s].epdis.length = 20;
-						}
-
-						for (addr = 0; addr < session[s].epdis.length; addr++)
-							session[s].epdis.address[addr] = o[3+addr];
-
-						changed++;
-
-						switch (epdis_class)
-						{
-						case LOCALADDR:
-							LOG(3, s, t, "    Received PPP LCP option Multilink EndDis Local Address Class: %d\n",epdis_class);
-							break;
-						case IPADDR:
-							LOG(3, s, t, "    Received PPP LCP option Multilink EndDis IP Address Class: %d\n",epdis_class);
-							break;
-						case IEEEMACADDR:
-							LOG(3, s, t, "    Received PPP LCP option Multilink EndDis IEEE MAC Address Class: %d\n",epdis_class);
-							break;
-						case PPPMAGIC:
-							LOG(3, s, t, "    Received PPP LCP option Multilink EndDis PPP Magic No Class: %d\n",epdis_class);
-							break;
-						case PSNDN:
-							LOG(3, s, t, "    Received PPP LCP option Multilink EndDis PSND No Class: %d\n",epdis_class);
-							break;
-						default:
-							LOG(3, s, t, "    Received PPP LCP option Multilink EndDis NULL Class %d\n",epdis_class);
-						}
-					}
-					break;
-
 				default: // Reject any unknown options
 					LOG(3, s, t, "    Rejecting unknown PPP LCP option %d\n", type);
 					q = ppp_conf_rej(s, b, sizeof(b), PPPLCP, &response, q, p, o);
@@ -740,9 +670,6 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 			x -= length;
 			o += length;
 		}
-
-		if (changed)
-			cluster_send_session(s);
 
 		if (response)
 		{
@@ -752,7 +679,7 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 		else
 		{
 			// Send packet back as ConfigAck
-			response = makeppp(b, sizeof(b), p, l, s, t, PPPLCP, 0, 0, 0);
+			response = makeppp(b, sizeof(b), p, l, s, t, PPPLCP);
 			if (!response) return;
 			*response = ConfigAck;
 		}
@@ -760,7 +687,7 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 		switch (session[s].ppp.lcp)
 		{
 		case Closed:
-			response = makeppp(b, sizeof(b), p, 2, s, t, PPPLCP, 0, 0, 0);
+			response = makeppp(b, sizeof(b), p, 2, s, t, PPPLCP);
 			if (!response) return;
 			*response = TerminateAck;
 			*((uint16_t *) (response + 2)) = htons(l = 4);
@@ -893,50 +820,6 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 					cluster_send_session(s);
 					break;
 
-				case 17: // Multilink Max-Receive-Reconstructed-Unit
-				{
-					if (*p == ConfigNak)
-					{
-						sess_local[s].mp_mrru = ntohs(*(uint16_t *)(o + 2));
-						LOG(3, s, t, "    Remote requested MRRU of %u\n", sess_local[s].mp_mrru);
-					}
-					else
-					{
-						sess_local[s].mp_mrru = 0;
-						LOG(3, s, t, "    Remote rejected MRRU negotiation\n");
-					}
-				}
-				break;
-
-				case 18: // Multilink Short Sequence Number Header Format
-				{
-					if (*p == ConfigNak)
-					{
-						sess_local[s].mp_mssf = 0;
-						LOG(3, s, t, "    Remote requested Naked mssf\n");
-					}
-					else
-					{
-						sess_local[s].mp_mssf = 0;
-						LOG(3, s, t, "    Remote rejected mssf\n");
-					}
-				}
-				break;
-
-				case 19: // Multilink Endpoint Discriminator
-				{
-					if (*p == ConfigNak)
-					{
-						LOG(2, s, t, "    Remote should not configNak Endpoint Dis!\n");
-					}
-					else
-					{
-						sess_local[s].mp_epdis = 0;
-						LOG(3, s, t, "    Remote rejected Endpoint Discriminator\n");
-					}
-				}
-				break;
-
 				default:
 				    	LOG(2, s, t, "LCP: remote sent %s for type %u?\n", ppp_code(*p), type);
 					sessionshutdown(s, "Unable to negotiate LCP.", CDN_ADMIN_DISC, TERM_USER_ERROR);
@@ -960,7 +843,7 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 		case Closed:
 		case Stopped:
 		    	{
-				uint8_t *response = makeppp(b, sizeof(b), p, 2, s, t, PPPLCP, 0, 0, 0);
+				uint8_t *response = makeppp(b, sizeof(b), p, 2, s, t, PPPLCP);
 				if (!response) return;
 				*response = TerminateAck;
 				*((uint16_t *) (response + 2)) = htons(l = 4);
@@ -1018,7 +901,7 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 		}
 
 		*p = TerminateAck;	// send ack
-		q = makeppp(b, sizeof(b),  p, l, s, t, PPPLCP, 0, 0, 0);
+		q = makeppp(b, sizeof(b),  p, l, s, t, PPPLCP);
 		if (!q) return;
 
 		LOG(3, s, t, "LCP: send %s\n", ppp_code(*q));
@@ -1054,7 +937,7 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 	{
 		*p = EchoReply;		// reply
 		*(uint32_t *) (p + 4) = htonl(session[s].magic); // our magic number
-		q = makeppp(b, sizeof(b), p, l, s, t, PPPLCP, 0, 0, 0);
+		q = makeppp(b, sizeof(b), p, l, s, t, PPPLCP);
 		if (!q) return;
 
 		LOG(4, s, t, "LCP: send %s\n", ppp_code(*q));
@@ -1070,93 +953,6 @@ void processlcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 	{
 		ppp_code_rej(s, t, PPPLCP, "LCP", p, l, b, sizeof(b));
 	}
-}
-
-int join_bundle(sessionidt s)
-{
-	// Search for a bundle to join
-	bundleidt i;
-	bundleidt b;
-	for (i = 1; i < MAXBUNDLE; i++)
-	{
-		if (bundle[i].state != BUNDLEFREE)
-		{
-			if (epdiscmp(session[s].epdis,bundle[i].epdis) && !strcmp(session[s].user, bundle[i].user))
-			{
-				session[s].bundle = i;
-				bundle[i].mrru = session[s].mrru;
-				bundle[i].mssf = session[s].mssf;
-				if (session[s].epdis.length > 0)
-					setepdis(&bundle[i].epdis, session[s].epdis);
-
-				strcpy(bundle[i].user, session[s].user);
-				bundle[i].members[bundle[i].num_of_links] = s;
-				bundle[i].num_of_links++;
-				LOG(3, s, session[s].tunnel, "MPPP: Bundling additional line in bundle (%d), lines:%d\n",i,bundle[i].num_of_links);
-				return i;
-			}
-		}
-	}
-
-	// No previously created bundle was found for this session, so create a new one
-	if (!(b = new_bundle())) return 0;
-
-	session[s].bundle = b;
-	bundle[b].mrru = session[s].mrru;
-	bundle[b].mssf = session[s].mssf;
-	if (session[s].epdis.length > 0)
-		setepdis(&bundle[b].epdis, session[s].epdis);
-
-	strcpy(bundle[b].user, session[s].user);
-	bundle[b].members[0] = s;
-	LOG(3, s, session[s].tunnel, "MPPP: Created a new bundle (%d)\n", b);
-	return b;
-}
-
-static int epdiscmp(epdist ep1, epdist ep2)
-{
-	int ad;
-	if (ep1.length != ep2.length)
-		return 0;
-
-	if (ep1.addr_class != ep2.addr_class)
-		return 0;
-
-	for (ad = 0; ad < ep1.length; ad++)
-		if (ep1.address[ad] != ep2.address[ad])
-			return 0;
-
-	return 1;
-}
-
-static void setepdis(epdist *ep1, epdist ep2)
-{
-	int ad;
-	ep1->length = ep2.length;
-	ep1->addr_class = ep2.addr_class;
-	for (ad = 0; ad < ep2.length; ad++)
-		ep1->address[ad] = ep2.address[ad];
-}
-
-static bundleidt new_bundle()
-{
-	bundleidt i;
-	for (i = 1; i < MAXBUNDLE; i++)
-	{
-		if (bundle[i].state == BUNDLEFREE)
-		{
-			LOG(4, 0, 0, "MPPP: Assigning bundle ID %d\n", i);
-			bundle[i].num_of_links = 1;
-			bundle[i].last_check = time_now;	// Initialize last_check value
-			bundle[i].state = BUNDLEOPEN;
-			bundle[i].current_ses = -1;	// This is to enforce the first session 0 to be used at first
-			if (i > config->cluster_highest_bundleid)
-				config->cluster_highest_bundleid = i;
-			return i;
-		}
-	}
-	LOG(0, 0, 0, "MPPP: Can't find a free bundle! There shouldn't be this many in use!\n");
-	return 0;
 }
 
 static void ipcp_open(sessionidt s, tunnelidt t)
@@ -1317,7 +1113,7 @@ void processipcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 		else if (gotip)
 		{
 			// Send packet back as ConfigAck
-			response = makeppp(b, sizeof(b), p, l, s, t, PPPIPCP, 0, 0, 0);
+			response = makeppp(b, sizeof(b), p, l, s, t, PPPIPCP);
 			if (!response) return;
 			*response = ConfigAck;
 		}
@@ -1331,7 +1127,7 @@ void processipcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 		switch (session[s].ppp.ipcp)
 		{
 		case Closed:
-			response = makeppp(b, sizeof(b), p, 2, s, t, PPPIPCP, 0, 0, 0);
+			response = makeppp(b, sizeof(b), p, 2, s, t, PPPIPCP);
 			if (!response) return;
 			*response = TerminateAck;
 			*((uint16_t *) (response + 2)) = htons(l = 4);
@@ -1404,7 +1200,7 @@ void processipcp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 		}
 
 		*p = TerminateAck;	// send ack
-		q = makeppp(b, sizeof(b), p, l, s, t, PPPIPCP, 0, 0, 0);
+		q = makeppp(b, sizeof(b),  p, l, s, t, PPPIPCP);
 		if (!q) return;
 
 		LOG(3, s, t, "IPCP: send %s\n", ppp_code(*q));
@@ -1538,7 +1334,7 @@ void processipv6cp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 		else if (gotip)
 		{
 			// Send packet back as ConfigAck
-			response = makeppp(b, sizeof(b), p, l, s, t, PPPIPV6CP, 0, 0, 0);
+			response = makeppp(b, sizeof(b), p, l, s, t, PPPIPV6CP);
 			if (!response) return;
 			*response = ConfigAck;
 		}
@@ -1552,7 +1348,7 @@ void processipv6cp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 		switch (session[s].ppp.ipv6cp)
 		{
 		case Closed:
-			response = makeppp(b, sizeof(b), p, 2, s, t, PPPIPV6CP, 0, 0, 0);
+			response = makeppp(b, sizeof(b), p, 2, s, t, PPPIPV6CP);
 			if (!response) return;
 			*response = TerminateAck;
 			*((uint16_t *) (response + 2)) = htons(l = 4);
@@ -1625,7 +1421,7 @@ void processipv6cp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 		}
 
 		*p = TerminateAck;	// send ack
-		q = makeppp(b, sizeof(b),  p, l, s, t, PPPIPV6CP, 0, 0, 0);
+		q = makeppp(b, sizeof(b),  p, l, s, t, PPPIPV6CP);
 		if (!q) return;
 
 		LOG(3, s, t, "IPV6CP: send %s\n", ppp_code(*q));
@@ -1668,14 +1464,11 @@ void processipin(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 	if (session[s].ppp.phase != Network || session[s].ppp.ipcp != Opened)
 		return;
 
-	if (!session[s].bundle || bundle[session[s].bundle].num_of_links < 2) // FIXME: 
+	// no spoof (do sessionbyip to handled statically routed subnets)
+	if (ip != session[s].ip && sessionbyip(htonl(ip)) != s)
 	{
-		// no spoof (do sessionbyip to handled statically routed subnets)
-		if (ip != session[s].ip && sessionbyip(htonl(ip)) != s)
-		{
-			LOG(4, s, t, "Dropping packet with spoofed IP %s\n", fmtaddr(htonl(ip), 0));
-			return;
-		}
+		LOG(5, s, t, "Dropping packet with spoofed IP %s\n", fmtaddr(htonl(ip), 0));
+		return;
 	}
 
 	// run access-list if any
@@ -1739,167 +1532,6 @@ void processipin(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 
 	STAT(tun_tx_packets);
 	INC_STAT(tun_tx_bytes, l);
-}
-
-// process Multilink PPP packet received
-void processmpin(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
-{
-	bundleidt b = session[s].bundle;
-	uint8_t begin_frame;
-	uint8_t end_frame;
-	uint32_t seq_num;
-	uint32_t offset;
-
-	if (!b)
-	{
-		LOG(3, s, t, "MPPP: Invalid bundle id: 0\n");
-		return;
-	}
-
-	begin_frame = (*p & 0x80);
-	end_frame = (*p & 0x40);
-	if (session[s].mssf)
-	{
-		// Get 12 bit for seq number
-		uint16_t short_seq_num = ntohs((*(uint16_t *) p) & 0xFF0F);
-		uint16_t short_seq_num2 = short_seq_num >> 4;
-		p += 2;
-		l -= 2;
-		seq_num = short_seq_num2;
-		// After this point the pointer should be advanced 2 bytes
-		LOG(3, s, t, "MPPP: 12 bits, sequence number: %d, short1: %d, short2: %d\n",seq_num, short_seq_num, short_seq_num2);
-	}
-	else
-	{
-		// Get 24 bit for seq number
-		p++;
-		seq_num = ntohl((*(uint32_t *) p) & 0xFFFFFF00);
-		seq_num = seq_num >> 8;
-		p += 3;
-		l -= 4;
-		// After this point the pointer should be advanced 4 bytes
-		LOG(4, s, t, "MPPP: 24 bits sequence number:%d\n",seq_num);
-	}
-
-	if (seq_num - bundle[b].offset < 0)
-	{
-		bundle[b].offset = 0;
-		bundle[b].pending_frag = 0;
-	}
-
-	offset = bundle[b].offset;
-	if (begin_frame)
-	{
-		// Check for previous non-assembled frames
-		int error = 0;
-		if (bundle[b].pending_frag)
-		{
-			uint32_t fn = bundle[b].seq_num_m - offset;
-			uint16_t cur_len;
-			bundle[b].pending_frag = 0;
-			// Check for array indexes
-			if (fn < 0 || fn > MAXFRAGNUM)
-			{
-				LOG(2, s, t, "ERROR: Index out of range fn:%d, bundle:%d\n",fn,b);
-				return;
-			}
-
-			if (seq_num-offset < 0 || seq_num-offset > MAXFRAGNUM)
-			{
-				LOG(2, s, t, "ERROR: Index out of range fn(last):%d, bundle:%d\n",fn,b);
-				return;
-			}
-			/////////////////////////////////////////////////////
-			cur_len = 4;   // This is set to 4 to leave 4 bytes for function processipin
-			for (fn = bundle[b].seq_num_m - offset; fn < seq_num - offset; fn++)
-			{
-				if (!frag[b].fragment[fn].length)
-				{
-					LOG(4, s, t, "MPPP: Found lost fragment while reassembling frame %d in (%d,%d)\n",fn, bundle[b].seq_num_m-offset, seq_num-offset);
-					error = 1;
-					break;
-				}
-
-				if (cur_len + frag[b].fragment[fn].length > MAXETHER)
-				{
-					LOG(2, s, t, "MPPP: ERROR: very long frame after assembling %d\n", frag[b].fragment[fn].length+cur_len);
-					error = 1;
-					break;
-				}
-
-				memcpy(frag[b].reassembled_frame+cur_len, frag[b].fragment[fn].data, frag[b].fragment[fn].length);
-				cur_len += frag[b].fragment[fn].length; 
-				frag[b].fragment[fn].length = 0;      // Indicates that this fragment has been consumed
-				// This is usefull for compression
-				memset(frag[b].fragment[fn].data, 0, sizeof(frag[b].fragment[fn].data));
-			}
-
-			if (!error)
-			{
-				frag[b].re_frame_len = cur_len;
-				// Process the resassembled frame
-				LOG(4, s, t, "MPPP: Process the reassembled frame, len=%d\n",cur_len);
-				processmpframe(s, t, frag[b].reassembled_frame, frag[b].re_frame_len, 1);
-				// Set reassembled frame length to zero after processing it
-				frag[b].re_frame_len = 0;
-				memset(frag[b].reassembled_frame, 0, sizeof(frag[b].reassembled_frame));
-			}
-		}
-		//////////////////////////////////////////
-		bundle[b].seq_num_m = seq_num;
-		if (end_frame)
-		{
-			// Both bits are set
-			LOG(4, s, t, "MPPP: Both bits are set (Begin and End).\n");
-			processmpframe(s, t, p, l, 0);
-			// The maximum number of fragments is 1500
-			if (seq_num - bundle[b].offset >= 1400)
-			{
-				bundle[b].offset = seq_num;
-				LOG(4, s, t, "MPPP: Setting offset to: %d\n",bundle[b].offset);
-			}
-		}
-		else
-		{
-			bundle[b].pending_frag = 1;
-			// End bit is clear
-                	LOG(4, s, t, "MPPP: Push to receive buffer\n");
-                	// Push to the receive buffer
-			// Array indexes checking
-			if (seq_num-offset < 0 || seq_num-offset >= MAXFRAGNUM)
-			{
-				LOG(2, s, t, "ERROR: Index out of range, push to receive buffer(1) seq:%d, offset:%d, bundle:%d\n",seq_num,offset,b);
-				return;
-			}
-			// Perform length checking
-			if (l > MAXFRAGLEN)
-			{
-				LOG(2, s, t, "MPPP: ERROR: very long fragment length (1)\n");
-				return;
-			}
-                	frag[b].fragment[seq_num - offset].length = l;
-                	memcpy(frag[b].fragment[seq_num - offset].data, p, l);
-		}
-	}
-	else
-	{
-		LOG(4, s, t, "MPPP: Push to receive buffer\n");
-		// Push to the receive buffer
-		// Array indexes checking
-		if (seq_num-offset < 0 || seq_num-offset >= MAXFRAGNUM)
-		{
-			LOG(2, s, t, "ERROR: Index out of range, push to receive buffer(2) seq:%d, offset:%d, bundle:%d\n",seq_num,offset,b);
-			return;
-		}
-		// Perform length checking
-		if (l > MAXFRAGLEN)
-		{
-			LOG(2, s, t, "MPPP: ERROR: very long fragment length (2).\n");
-			return;
-		}
-		frag[b].fragment[seq_num - offset].length = l;
-		memcpy(frag[b].fragment[seq_num - offset].data, p, l);
-	}
 }
 
 // process IPv6 packet received
@@ -2061,7 +1693,7 @@ void processccp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 		STAT(tunnel_rx_errors);
 	}
 
-	LOG(4, s, t, "CCP: recv %s\n", ppp_code(*p));
+	LOG(3, s, t, "CCP: recv %s\n", ppp_code(*p));
 	if (*p == ConfigAck)
 	{
 		switch (session[s].ppp.ccp)
@@ -2094,13 +1726,13 @@ void processccp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 		else // compression requested--reject
 			*p = ConfigRej;
 
-		q = makeppp(b, sizeof(b), p, l, s, t, PPPCCP, 0, 0, 0);
+		q = makeppp(b, sizeof(b), p, l, s, t, PPPCCP);
 		if (!q) return;
 
 		switch (session[s].ppp.ccp)
 		{
 		case Closed:
-			q = makeppp(b, sizeof(b), p, 2, s, t, PPPCCP, 0, 0, 0);
+			q = makeppp(b, sizeof(b), p, 2, s, t, PPPCCP);
 			if (!q) return;
 			*q = TerminateAck;
 			*((uint16_t *) (q + 2)) = htons(l = 4);
@@ -2146,13 +1778,13 @@ void processccp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 			return;
 		}
 
-		LOG(4, s, t, "CCP: send %s\n", ppp_code(*q));
+		LOG(3, s, t, "CCP: send %s\n", ppp_code(*q));
 		tunnelsend(b, l + (q - b), t);
 	}
 	else if (*p == TerminateReq)
 	{
 		*p = TerminateAck;
-		q = makeppp(b, sizeof(b),  p, l, s, t, PPPCCP, 0, 0, 0);
+		q = makeppp(b, sizeof(b),  p, l, s, t, PPPCCP);
 		if (!q) return;
 		LOG(3, s, t, "CCP: send %s\n", ppp_code(*q));
 		tunnelsend(b, l + (q - b), t);
@@ -2196,7 +1828,7 @@ void sendchap(sessionidt s, tunnelidt t)
 		STAT(tunnel_tx_errors);
 		return ;
 	}
-	q = makeppp(b, sizeof(b), 0, 0, s, t, PPPCHAP, 0, 0, 0);
+	q = makeppp(b, sizeof(b), 0, 0, s, t, PPPCHAP);
 	if (!q) return;
 
 	*q = 1;					// challenge
@@ -2210,86 +1842,37 @@ void sendchap(sessionidt s, tunnelidt t)
 
 // fill in a L2TP message with a PPP frame,
 // returns start of PPP frame
-uint8_t *makeppp(uint8_t *b, int size, uint8_t *p, int l, sessionidt s, tunnelidt t, uint16_t mtype, uint8_t prio, bundleidt bid, uint8_t mp_bits)
+uint8_t *makeppp(uint8_t *b, int size, uint8_t *p, int l, sessionidt s, tunnelidt t, uint16_t mtype)
 {
-	uint16_t hdr = 0x0002; // L2TP with no options
-	uint16_t type = mtype;
-	uint8_t *start = b;
-
-	if (size < 16) // Need more space than this!!
+	if (size < 12) // Need more space than this!!
 	{
 		LOG(0, s, t, "makeppp buffer too small for L2TP header (size=%d)\n", size);
 		return NULL;
 	}
 
-	if (prio) hdr |= 0x0100; // set priority bit
-
-	*(uint16_t *) (b + 0) = htons(hdr);
+	*(uint16_t *) (b + 0) = htons(0x0002); // L2TP with no options
 	*(uint16_t *) (b + 2) = htons(tunnel[t].far); // tunnel
 	*(uint16_t *) (b + 4) = htons(session[s].far); // session
 	b += 6;
-
-	// Check whether this session is part of multilink
-	if (bid)
-	{
-		if (bundle[bid].num_of_links > 1)
-			type = PPPMP; // Change PPP message type to the PPPMP
-		else
-			bid = 0;
-	}
-
-	if (type == PPPLCP || !(session[s].flags & SESSION_ACFC))
+	if (mtype == PPPLCP || !(session[s].flags & SESSION_ACFC))
 	{
 		*(uint16_t *) b = htons(0xFF03); // HDLC header
 		b += 2;
 	}
-
-	if (type < 0x100 && session[s].flags & SESSION_PFC)
-	{
-		*b++ = type;
-	}
+	if (mtype < 0x100 && session[s].flags & SESSION_PFC)
+		*b++ = mtype;
 	else
 	{
-		*(uint16_t *) b = htons(type);
+		*(uint16_t *) b = htons(mtype);
 		b += 2;
 	}
 
-	if (bid)
+	if (l + 12 > size)
 	{
-		// Set the sequence number and (B)egin (E)nd flags
-		if (session[s].mssf)
-		{
-			// Set the multilink bits
-			uint16_t bits_send = mp_bits;
-			*(uint16_t *) b = htons((bundle[bid].seq_num_t & 0xFF0F)|bits_send);
-			b += 2;
-		}
-		else
-		{
-			*(uint32_t *) b = htonl(bundle[bid].seq_num_t);
-			// Set the multilink bits
-			*b = mp_bits;
-			b += 4;
-		}
-
-		bundle[bid].seq_num_t++;
-
-		// Add the message type if this fragment has the begin bit set
-		if (mp_bits & MP_BEGIN)
-		{
-			//*b++ = mtype; // The next two lines are instead of this 
-			*(uint16_t *) b = htons(mtype); // Message type
-			b += 2;
-		}
-	}
-
-	if ((b - start) + l > size)
-	{
-		LOG(2, s, t, "makeppp would overflow buffer (size=%d, header+payload=%d)\n", size, (b - start) + l);
+		LOG(2, s, t, "makeppp would overflow buffer (size=%d, header+payload=%d)\n", size, l + 12);
 		return NULL;
 	}
 
-	// Copy the payload
 	if (p && l)
 		memcpy(b, p, l);
 
@@ -2328,10 +1911,10 @@ void sendlcp(sessionidt s, tunnelidt t)
 	uint8_t b[500], *q, *l;
 	int authtype = sess_local[s].lcp_authtype;
 
-        if (!(q = makeppp(b, sizeof(b), NULL, 0, s, t, PPPLCP, 0, 0, 0)))
+	if (!(q = makeppp(b, sizeof(b), NULL, 0, s, t, PPPLCP)))
 		return;
 
-        LOG(3, s, t, "LCP: send ConfigReq%s%s%s including MP options\n",
+	LOG(3, s, t, "LCP: send ConfigReq%s%s%s\n",
 	    authtype ? " (" : "",
 	    authtype ? (authtype == AUTHCHAP ? "CHAP" : "PAP") : "",
 	    authtype ? ")" : "");
@@ -2358,20 +1941,6 @@ void sendlcp(sessionidt s, tunnelidt t)
 		l += 4;
 	}
 
-        if (sess_local[s].mp_mrru)
-        {
-		*l++ = 17; *l++ = 4; // Multilink Max-Receive-Reconstructed-Unit (length 4)
-		*(uint16_t *) l = htons(sess_local[s].mp_mrru); l += 2;
-	}
-
-        if (sess_local[s].mp_epdis)
-        {
-		*l++ = 19; *l++ = 7;	// Multilink Endpoint Discriminator (length 7)
-		*l++ = IPADDR;	// Endpoint Discriminator class
-		*(uint32_t *) l = htonl(sess_local[s].mp_epdis);
-		l += 4;
-	}
-
 	*(uint16_t *)(q + 2) = htons(l - q); // Length
 
 	LOG_HEX(5, "PPPLCP", q, l - q);
@@ -2386,7 +1955,7 @@ void sendccp(sessionidt s, tunnelidt t)
 {
 	uint8_t b[500], *q;
 
-	if (!(q = makeppp(b, sizeof(b), NULL, 0, s, t, PPPCCP, 0, 0, 0)))
+	if (!(q = makeppp(b, sizeof(b), NULL, 0, s, t, PPPCCP)))
 		return;
 
 	LOG(3, s, t, "CCP: send ConfigReq (no compression)\n");
@@ -2413,7 +1982,7 @@ void protoreject(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l, uint16_t pro
 	l += 6;
 	if (l > mru) l = mru;
 
-	q = makeppp(buf, sizeof(buf), 0, 0, s, t, PPPLCP, 0, 0, 0);
+	q = makeppp(buf, sizeof(buf), 0, 0, s, t, PPPLCP);
 	if (!q) return;
 
 	*q = ProtocolRej;
