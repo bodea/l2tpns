@@ -4,6 +4,7 @@
 - Add Multilink support from Khaled Al Hamwi.
 - Remove non-working setuid option.
 - Convert manual.html to Docbook.
+- Kludge around problem with Netgear DM602 authentication.
 
 * Tue Apr 18 2006 Brendan O'Dea <bod@optus.net> 2.1.18
 - Don't shutdown on TerminateReq, wait for CDN.

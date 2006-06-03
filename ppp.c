@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.100 2006-04-27 09:53:50 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.101 2006-06-03 08:16:46 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -179,16 +179,24 @@ void processchap(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 		return;
 	}
 
+	if (session[s].ppp.phase != Authenticate)
+	{
+	    	LOG(2, s, t, "CHAP ignored in %s phase\n", ppp_phase(session[s].ppp.phase));
+		return;
+	}
+
 	r = sess_local[s].radius;
 	if (!r)
 	{
 		LOG(3, s, t, "Unexpected CHAP message\n");
-		return;
-	}
 
-	if (session[s].ppp.phase != Authenticate)
-	{
-	    	LOG(2, s, t, "CHAP ignored in %s phase\n", ppp_phase(session[s].ppp.phase));
+		// Some modems (Netgear DM602, possibly others) persist in using CHAP even
+		// after ACKing our ConfigReq for PAP.
+		if (sess_local[s].lcp_authtype == AUTHPAP && config->radius_authtypes & AUTHCHAP)
+		{
+			sess_local[s].lcp_authtype = AUTHCHAP;
+			sendchap(s, t);
+		}
 		return;
 	}
 
