@@ -1,6 +1,6 @@
 // L2TPNS Radius Stuff
 
-char const *cvs_id_radius = "$Id: radius.c,v 1.50 2006-04-27 09:53:50 bodea Exp $";
+char const *cvs_id_radius = "$Id: radius.c,v 1.51 2006-06-11 12:46:18 bodea Exp $";
 
 #include <time.h>
 #include <stdio.h>
@@ -330,6 +330,7 @@ void radiussend(uint16_t r, uint8_t state)
 			}
 		}
 	}
+
 	if (s)
 	{
 		*p = 5;		// NAS-Port
@@ -346,52 +347,73 @@ void radiussend(uint16_t r, uint8_t state)
 		p[1] = 6;
 		*(uint32_t *) (p + 2) = htonl(1); // PPP
 		p += p[1];
-	}
-	if (s && session[s].ip)
-	{
-		*p = 8;			// Framed-IP-Address
-		p[1] = 6;
-		*(uint32_t *) (p + 2) = htonl(session[s].ip);
-		p += p[1];
-	}
-	if (s && session[s].route[0].ip)
-	{
-		int r;
-		for (r = 0; s && r < MAXROUTE && session[s].route[r].ip; r++)
+
+		if (session[s].ip)
 		{
-		    	int width = 32;
-			if (session[s].route[r].mask)
+			*p = 8;			// Framed-IP-Address
+			p[1] = 6;
+			*(uint32_t *) (p + 2) = htonl(session[s].ip);
+			p += p[1];
+		}
+
+		if (session[s].route[0].ip)
+		{
+			int r;
+			for (r = 0; s && r < MAXROUTE && session[s].route[r].ip; r++)
 			{
-			    int mask = session[s].route[r].mask;
-			    while (!(mask & 1))
-			    {
-				width--;
-				mask >>= 1;
-			    }
+				int width = 32;
+				if (session[s].route[r].mask)
+				{
+				    int mask = session[s].route[r].mask;
+				    while (!(mask & 1))
+				    {
+					width--;
+					mask >>= 1;
+				    }
+				}
+
+				*p = 22;	// Framed-Route
+				p[1] = sprintf((char *) p + 2, "%s/%d %s 1",
+					fmtaddr(htonl(session[s].route[r].ip), 0),
+					width, fmtaddr(htonl(session[s].ip), 1)) + 2;
+
+				p += p[1];
 			}
+		}
 
-			*p = 22;	// Framed-Route
-			p[1] = sprintf((char *) p + 2, "%s/%d %s 1",
-				fmtaddr(htonl(session[s].route[r].ip), 0),
-				width, fmtaddr(htonl(session[s].ip), 1)) + 2;
+		if (session[s].session_timeout)
+		{
+			*p = 27;		// Session-Timeout
+			p[1] = 6;
+			*(uint32_t *) (p + 2) = htonl(session[s].session_timeout);
+			p += p[1];
+		}
 
+		if (session[s].idle_timeout)
+		{
+			*p = 28;		// Idle-Timeout
+			p[1] = 6;
+			*(uint32_t *) (p + 2) = htonl(session[s].idle_timeout);
+			p += p[1];
+		}
+
+		if (*session[s].called)
+		{
+			*p = 30;                // called
+			p[1] = strlen(session[s].called) + 2;
+			strcpy((char *) p + 2, session[s].called);
+			p += p[1];
+		}
+
+		if (*session[s].calling)
+		{
+			*p = 31;                // calling
+			p[1] = strlen(session[s].calling) + 2;
+			strcpy((char *) p + 2, session[s].calling);
 			p += p[1];
 		}
 	}
-	if (*session[s].called)
-	{
-		*p = 30;                // called
-		p[1] = strlen(session[s].called) + 2;
-		strcpy((char *) p + 2, session[s].called);
-		p += p[1];
-	}
-	if (*session[s].calling)
-	{
-		*p = 31;                // calling
-		p[1] = strlen(session[s].calling) + 2;
-		strcpy((char *) p + 2, session[s].calling);
-		p += p[1];
-	}
+
 	// NAS-IP-Address
 	*p = 4;
 	p[1] = 6;
@@ -698,6 +720,28 @@ void processrad(uint8_t *buf, int len, char socket_index)
 							*fp = f + 1;
 							ip_filters[f].used++;
 						}
+					}
+					else if (*p == 27)
+					{
+					    	// Session-Timeout
+						uint32_t to = ntohl(*(uint32_t *)(p + 2));
+
+						LOG(3, s, session[s].tunnel, "   Radius reply contains Session-Timeout = %u\n", to);
+					        if (to > 0)
+					        {
+							session[s].session_timeout = to;
+					        }
+					}
+					else if (*p == 28)
+					{
+					    	// Idle-Timeout
+						uint32_t to = ntohl(*(uint32_t *)(p + 2));
+
+						LOG(3, s, session[s].tunnel, "   Radius reply contains Idle-Timeout = %u\n", to);
+					        if (to > 0)
+					        {
+							session[s].idle_timeout = to;
+					        }
 					}
 					else if (*p == 26 && p[1] >= 7)
 					{

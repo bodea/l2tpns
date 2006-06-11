@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.166 2006-05-16 06:46:37 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.167 2006-06-11 12:46:18 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -1075,6 +1075,7 @@ void processmpframe(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l, uint8_t e
 		p += 2;
 		l -= 2;
 	}
+
 	if (proto == PPPIP)
 	{
 		if (session[s].die)
@@ -1082,7 +1083,8 @@ void processmpframe(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l, uint8_t e
 			LOG(4, s, t, "MPPP: Session %u is closing.  Don't process PPP packets\n", s);
 			return;              // closing session, PPP not processed
 		}
-		session[s].last_packet = time_now;
+
+		session[s].last_packet = session[s].last_data = time_now;
 		processipin(s, t, p, l);
 	}
 	else if (proto == PPPIPV6 && config->ipv6_prefix.s6_addr[0])
@@ -1093,7 +1095,7 @@ void processmpframe(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l, uint8_t e
 			return;              // closing session, PPP not processed
 		}
 
-		session[s].last_packet = time_now;
+		session[s].last_packet = session[s].last_data = time_now;
 		processipv6in(s, t, p, l);
 	}
 	else
@@ -1166,6 +1168,7 @@ static void processipout(uint8_t *buf, int len)
 	}
 	t = session[s].tunnel;
 	sp = &session[s];
+	sp->last_data = time_now;
 
 	// DoS prevention: enforce a maximum number of packets per 0.1s for a session
 	if (config->max_packets > 0)
@@ -1363,6 +1366,7 @@ static void processipv6out(uint8_t * buf, int len)
 	}
 	t = session[s].tunnel;
 	sp = &session[s];
+	sp->last_data = time_now;
 
 	// FIXME: add DoS prevention/filters?
 
@@ -2642,7 +2646,7 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 						session[s].opened = time_now;
 						session[s].tunnel = t;
 						session[s].far = asession;
-						session[s].last_packet = time_now;
+						session[s].last_packet = session[s].last_data = time_now;
 						LOG(3, s, t, "New session (%u/%u)\n", tunnel[t].far, session[s].far);
 						control16(c, 14, s, 1); // assigned session
 						controladd(c, asession, t); // send the reply
@@ -2803,7 +2807,7 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 				return;              // closing session, PPP not processed
 			}
 
-			session[s].last_packet = time_now;
+			session[s].last_packet = session[s].last_data = time_now;
 			if (session[s].walled_garden && !config->cluster_iam_master)
 			{
 				master_forward_packet(buf, len, addr->sin_addr.s_addr, addr->sin_port);
@@ -2820,7 +2824,7 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 				return;              // closing session, PPP not processed
 			}
 
-			session[s].last_packet = time_now;
+			session[s].last_packet = session[s].last_data = time_now;
 			if (session[s].walled_garden && !config->cluster_iam_master)
 			{
 				master_forward_packet(buf, len, addr->sin_addr.s_addr, addr->sin_port);
@@ -2837,7 +2841,7 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 				return;              // closing session, PPP not processed
 			}
 
-			session[s].last_packet = time_now;
+			session[s].last_packet = session[s].last_data = time_now;
 			if (session[s].walled_garden && !config->cluster_iam_master)
 			{
 				master_forward_packet(buf, len, addr->sin_addr.s_addr, addr->sin_port);
@@ -3193,6 +3197,24 @@ static void regular_cleanups(double period)
 			tunnelsend(b, 24, session[s].tunnel); // send it
 			sess_local[s].last_echo = time_now;
 			s_actions++;
+		}
+
+		// Drop sessions who have reached session_timeout seconds
+		if (session[s].session_timeout && (time_now - session[s].opened >= session[s].session_timeout))
+		{
+			sessionshutdown(s, "Session Timeout Reached", CDN_ADMIN_DISC, TERM_SESSION_TIMEOUT);
+			STAT(session_timeout);
+			s_actions++;
+			continue;
+		}
+
+		// Drop sessions who have reached idle_timeout seconds
+		if (session[s].last_data && session[s].idle_timeout && (time_now - session[s].last_data >= session[s].idle_timeout))
+		{
+			sessionshutdown(s, "Idle Timeout Reached", CDN_ADMIN_DISC, TERM_IDLE_TIMEOUT);
+			STAT(session_timeout);
+			s_actions++;
+			continue;
 		}
 
 		// Check for actions requested from the CLI
@@ -4876,7 +4898,7 @@ int sessionsetup(sessionidt s, tunnelidt t)
 	if (session[s].throttle_in || session[s].throttle_out)
 		throttle_session(s, session[s].throttle_in, session[s].throttle_out);
 
-	session[s].last_packet = time_now;
+	session[s].last_packet = session[s].last_data = time_now;
 
 	LOG(2, s, t, "Login by %s at %s from %s (%s)\n", session[s].user,
 		fmtaddr(htonl(session[s].ip), 0),
@@ -5439,7 +5461,7 @@ int cmd_show_hist_idle(struct cli_def *cli, char *command, char **argv, int argc
 		if (!session[s].opened)
 			continue;
 
-		idle = time_now - session[s].last_packet;
+		idle = time_now - session[s].last_data;
 		idle /= 5 ; // In multiples of 5 seconds.
 		if (idle < 0)
 			idle = 0;

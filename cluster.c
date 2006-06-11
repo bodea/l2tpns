@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.51 2006-04-27 09:53:49 bodea Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.52 2006-06-11 12:46:18 bodea Exp $";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -654,7 +654,7 @@ void cluster_check_master(void)
 		}
 
 			// Reset idle timeouts..
-		session[i].last_packet = time_now;
+		session[i].last_packet = session[i].last_data = time_now;
 
 			// Reset die relative to our uptime rather than the old master's
 		if (session[i].die) session[i].die = TIME;
@@ -1214,7 +1214,9 @@ static int cluster_handle_bytes(uint8_t *data, int size)
 		session[b->sid].cout_delta += b->cout;
 
 		if (b->cin)
-			session[b->sid].last_packet = time_now; // Reset idle timer!
+			session[b->sid].last_packet = session[b->sid].last_data = time_now;
+		else if (b->cout)
+			session[b->sid].last_data = time_now;
 
 		size -= sizeof(*b);
 		++b;

@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.116 2006-04-27 14:37:28 bodea Exp $
+// $Id: l2tpns.h,v 1.117 2006-06-11 12:46:18 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -284,7 +284,10 @@ typedef struct
 	uint16_t mru;			// maximum receive unit
 	clockt opened;			// when started
 	clockt die;			// being closed, when to finally free
+	uint32_t session_timeout;	// Maximum session time in seconds
+ 	uint32_t idle_timeout;		// Maximum idle time in seconds
 	time_t last_packet;		// Last packet from the user (used for idle timeouts)
+ 	time_t last_data;		// Last data packet to/from the user (used for idle timeouts)
 	in_addr_t dns1, dns2;		// DNS servers
 	routet route[MAXROUTE];		// static routes
 	uint16_t tbf_in;		// filter bucket for throttling in from the user.
