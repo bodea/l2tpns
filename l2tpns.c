@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.167 2006-06-11 12:46:18 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.168 2006-06-22 15:30:29 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -2184,9 +2184,10 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 			int error = 0;
 			char *msg = 0;
 
-			// default disconnect cause/message on receipt
-			// of CDN (set to more specific value from
-			// attribute 46 if present below).
+			// Default disconnect cause/message on receipt of CDN.  Set to
+			// more specific value from attribute 1 (result code) or 46
+			// (disconnect cause) if present below.
+			int disc_cause_set = 0;
 			int disc_cause = TERM_NAS_REQUEST;
 			char const *disc_reason = "Closed (Received CDN).";
 
@@ -2296,24 +2297,40 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 				case 1:     // result code
 					{
 						uint16_t rescode = ntohs(*(uint16_t *) b);
-						const char* resdesc = "(unknown)";
+						char const *resdesc = "(unknown)";
+						char const *errdesc = NULL;
+						int cause = 0;
+
 						if (message == 4)
 						{ /* StopCCN */
 							resdesc = l2tp_stopccn_result_code(rescode);
+							cause = TERM_LOST_SERVICE;
 						}
 						else if (message == 14)
 						{ /* CDN */
 							resdesc = l2tp_cdn_result_code(rescode);
+							if (rescode == 1)
+								cause = TERM_LOST_CARRIER;
+							else
+								cause = TERM_ADMIN_RESET;
 						}
 
 						LOG(4, s, t, "   Result Code %u: %s\n", rescode, resdesc);
 						if (n >= 4)
 						{
 							uint16_t errcode = ntohs(*(uint16_t *)(b + 2));
-							LOG(4, s, t, "   Error Code %u: %s\n", errcode, l2tp_error_code(errcode));
+							errdesc = l2tp_error_code(errcode);
+							LOG(4, s, t, "   Error Code %u: %s\n", errcode, errdesc);
 						}
 						if (n > 4)
 							LOG(4, s, t, "   Error String: %.*s\n", n-4, b+4);
+
+						if (cause && disc_cause_set < mtype) // take cause from attrib 46 in preference
+						{
+							disc_cause_set = mtype;
+							disc_reason = errdesc ? errdesc : resdesc;
+							disc_cause = cause;
+						}
 
 						break;
 					}
@@ -2505,6 +2522,8 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 						LOG(4, s, t, "   PPP disconnect cause "
 							"(code=%u, proto=%04X, dir=%u, msg=\"%.*s\")\n",
 							code, proto, dir, n - 5, b + 5);
+
+						disc_cause_set = mtype;
 
 						switch (code)
 						{
