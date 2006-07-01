@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.169 2006-07-01 12:40:17 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.170 2006-07-01 14:07:35 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -82,9 +82,13 @@ uint16_t MSS = 0;		// TCP MSS
 struct cli_session_actions *cli_session_actions = NULL;	// Pending session changes requested by CLI
 struct cli_tunnel_actions *cli_tunnel_actions = NULL;	// Pending tunnel changes required by CLI
 
-static void *ip_hash[256];	// Mapping from IP address to session structures.
+union iphash {
+	sessionidt sess;
+	union iphash *idx;
+} ip_hash[256];			// Mapping from IP address to session structures.
+
 struct ipv6radix {
-	int sess;
+	sessionidt sess;
 	struct ipv6radix *branch;
 } ipv6_hash[256];		// Mapping from IPv6 address to session structures.
 
@@ -189,9 +193,9 @@ struct Tstats *_statistics = NULL;
 struct Tringbuffer *ringbuffer = NULL;
 #endif
 
-static void cache_ipmap(in_addr_t ip, int s);
+static void cache_ipmap(in_addr_t ip, sessionidt s);
 static void uncache_ipmap(in_addr_t ip);
-static void cache_ipv6map(struct in6_addr ip, int prefixlen, int s);
+static void cache_ipv6map(struct in6_addr ip, int prefixlen, sessionidt s);
 static void free_ip_address(sessionidt s);
 static void dump_acct_info(int all);
 static void sighup_handler(int sig);
@@ -678,19 +682,19 @@ static void initudp(void)
 // IP address.
 //
 
-static int lookup_ipmap(in_addr_t ip)
+static sessionidt lookup_ipmap(in_addr_t ip)
 {
 	uint8_t *a = (uint8_t *) &ip;
-	uint8_t **d = (uint8_t **) ip_hash;
+	union iphash *h = ip_hash;
 
-	if (!(d = (uint8_t **) d[(size_t) *a++])) return 0;
-	if (!(d = (uint8_t **) d[(size_t) *a++])) return 0;
-	if (!(d = (uint8_t **) d[(size_t) *a++])) return 0;
+	if (!(h = h[*a++].idx)) return 0;
+	if (!(h = h[*a++].idx)) return 0;
+	if (!(h = h[*a++].idx)) return 0;
 
-	return (int) (intptr_t) d[(size_t) *a];
+	return h[*a].sess;
 }
 
-static int lookup_ipv6map(struct in6_addr ip)
+static sessionidt lookup_ipv6map(struct in6_addr ip)
 {
 	struct ipv6radix *curnode;
 	int i;
@@ -718,18 +722,18 @@ static int lookup_ipv6map(struct in6_addr ip)
 
 sessionidt sessionbyip(in_addr_t ip)
 {
-	int s = lookup_ipmap(ip);
+	sessionidt s = lookup_ipmap(ip);
 	CSTAT(sessionbyip);
 
 	if (s > 0 && s < MAXSESSION && session[s].opened)
-		return (sessionidt) s;
+		return s;
 
 	return 0;
 }
 
 sessionidt sessionbyipv6(struct in6_addr ip)
 {
-	int s;
+	sessionidt s;
 	CSTAT(sessionbyipv6);
 
 	if (!memcmp(&config->ipv6_prefix, &ip, 8) ||
@@ -755,25 +759,22 @@ sessionidt sessionbyipv6(struct in6_addr ip)
 //
 // (It's actually cached in network order)
 //
-static void cache_ipmap(in_addr_t ip, int s)
+static void cache_ipmap(in_addr_t ip, sessionidt s)
 {
 	in_addr_t nip = htonl(ip);	// MUST be in network order. I.e. MSB must in be ((char *) (&ip))[0]
 	uint8_t *a = (uint8_t *) &nip;
-	uint8_t **d = (uint8_t **) ip_hash;
+	union iphash *h = ip_hash;
 	int i;
 
 	for (i = 0; i < 3; i++)
 	{
-		if (!d[(size_t) a[i]])
-		{
-			if (!(d[(size_t) a[i]] = calloc(256, sizeof(void *))))
-				return;
-		}
+		if (!(h[a[i]].idx || (h[a[i]].idx = calloc(256, sizeof(union iphash)))))
+			return;
 
-		d = (uint8_t **) d[(size_t) a[i]];
+		h = h[a[i]].idx;
 	}
 
-	d[(size_t) a[3]] = (uint8_t *) (intptr_t) s;
+	h[a[3]].sess = s;
 
 	if (s > 0)
 		LOG(4, s, session[s].tunnel, "Caching ip address %s\n", fmtaddr(nip, 0));
@@ -788,7 +789,7 @@ static void uncache_ipmap(in_addr_t ip)
 	cache_ipmap(ip, 0);	// Assign it to the NULL session.
 }
 
-static void cache_ipv6map(struct in6_addr ip, int prefixlen, int s)
+static void cache_ipv6map(struct in6_addr ip, int prefixlen, sessionidt s)
 {
 	int i;
 	int bytes;
@@ -829,7 +830,7 @@ static void cache_ipv6map(struct in6_addr ip, int prefixlen, int s)
 //
 int cmd_show_ipcache(struct cli_def *cli, char *command, char **argv, int argc)
 {
-	char **d = (char **) ip_hash, **e, **f, **g;
+	union iphash *d = ip_hash, *e, *f, *g;
 	int i, j, k, l;
 	int count = 0;
 
@@ -840,24 +841,28 @@ int cmd_show_ipcache(struct cli_def *cli, char *command, char **argv, int argc)
 
 	for (i = 0; i < 256; ++i)
 	{
-		if (!d[i])
+		if (!d[i].idx)
 			continue;
-		e = (char **) d[i];
+
+		e = d[i].idx;
 		for (j = 0; j < 256; ++j)
 		{
-			if (!e[j])
+			if (!e[j].idx)
 				continue;
-			f = (char **) e[j];
+
+			f = e[j].idx;
 			for (k = 0; k < 256; ++k)
 			{
-				if (!f[k])
+				if (!f[k].idx)
 					continue;
-				g = (char **)f[k];
+
+				g = f[k].idx;
 				for (l = 0; l < 256; ++l)
 				{
-					if (!g[l])
+					if (!g[l].sess)
 						continue;
-					cli_print(cli, "%7d %d.%d.%d.%d", (int) (intptr_t) g[l], i, j, k, l);
+
+					cli_print(cli, "%7d %d.%d.%d.%d", g[l].sess, i, j, k, l);
 					++count;
 				}
 			}
