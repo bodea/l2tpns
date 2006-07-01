@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.168 2006-06-22 15:30:29 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.169 2006-07-01 12:40:17 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -126,6 +126,8 @@ config_descriptt config_values[] = {
 	CONFIG("radius_secret", radiussecret, STRING),
 	CONFIG("radius_authtypes", radius_authtypes_s, STRING),
 	CONFIG("radius_dae_port", radius_dae_port, SHORT),
+	CONFIG("radius_bind_min", radius_bind_min, SHORT),
+	CONFIG("radius_bind_max", radius_bind_max, SHORT),
 	CONFIG("allow_duplicate_users", allow_duplicate_users, BOOL),
 	CONFIG("guest_account", guest_user, STRING),
 	CONFIG("bind_address", bind_address, IPv4),
@@ -625,7 +627,7 @@ static void initudp(void)
 		int flags = fcntl(udpfd, F_GETFL, 0);
 		fcntl(udpfd, F_SETFL, flags | O_NONBLOCK);
 	}
-	if (bind(udpfd, (void *) &addr, sizeof(addr)) < 0)
+	if (bind(udpfd, (struct sockaddr *) &addr, sizeof(addr)) < 0)
 	{
 		LOG(0, 0, 0, "Error in UDP bind: %s\n", strerror(errno));
 		exit(1);
@@ -638,7 +640,7 @@ static void initudp(void)
 	controlfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 	setsockopt(controlfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
 	setsockopt(controlfd, SOL_IP, IP_PKTINFO, &on, sizeof(on)); // recvfromto
-	if (bind(controlfd, (void *) &addr, sizeof(addr)) < 0)
+	if (bind(controlfd, (struct sockaddr *) &addr, sizeof(addr)) < 0)
 	{
 		LOG(0, 0, 0, "Error in control bind: %s\n", strerror(errno));
 		exit(1);
@@ -651,7 +653,7 @@ static void initudp(void)
 	daefd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 	setsockopt(daefd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
 	setsockopt(daefd, SOL_IP, IP_PKTINFO, &on, sizeof(on)); // recvfromto
-	if (bind(daefd, (void *) &addr, sizeof(addr)) < 0)
+	if (bind(daefd, (struct sockaddr *) &addr, sizeof(addr)) < 0)
 	{
 		LOG(0, 0, 0, "Error in DAE bind: %s\n", strerror(errno));
 		exit(1);

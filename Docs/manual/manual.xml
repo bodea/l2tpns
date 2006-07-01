@@ -391,6 +391,19 @@ set boolean true
 	</varlistentry>
 
 	<varlistentry>
+	  <term><literal>radius_bind_min</literal> (short)</term>
+	  <term><literal>radius_bind_max</literal> (short)</term>
+	  <listitem>
+	    <para>
+	      Define a port range in which to bind sockets used to
+	      send and receive RADIUS packets.  Must be at least
+	      RADIUS_FDS (64) wide.  Simplifies firewalling of RADIUS
+	      ports (default: dynamically assigned).
+	    </para>
+	  </listitem>
+	</varlistentry>
+
+	<varlistentry>
 	  <term><literal>radius_dae_port</literal> (short)</term>
 	  <listitem>
 	    <para>

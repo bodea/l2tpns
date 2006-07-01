@@ -1,6 +1,6 @@
 // L2TPNS Radius Stuff
 
-char const *cvs_id_radius = "$Id: radius.c,v 1.51 2006-06-11 12:46:18 bodea Exp $";
+char const *cvs_id_radius = "$Id: radius.c,v 1.52 2006-07-01 12:40:17 bodea Exp $";
 
 #include <time.h>
 #include <stdio.h>
@@ -45,6 +45,25 @@ static void calc_auth(const void *buf, size_t len, const uint8_t *in, uint8_t *o
 void initrad(void)
 {
 	int i;
+	uint16_t port = 0;
+	uint16_t min = config->radius_bind_min;
+	uint16_t max = config->radius_bind_max;
+	int inc = 1;
+	struct sockaddr_in addr;
+
+	if (min)
+	{
+		port = min;
+		if (!max)
+			max = ~0 - 1;
+	}
+	else if (max) /* no minimum specified, bind from max down */
+	{
+		port = max;
+		min = 1;
+		inc = -1;
+	}
+
 	LOG(3, 0, 0, "Creating %d sockets for RADIUS queries\n", RADIUS_FDS);
 	radfds = calloc(sizeof(int), RADIUS_FDS);
 	for (i = 0; i < RADIUS_FDS; i++)
@@ -53,6 +72,27 @@ void initrad(void)
 		radfds[i] = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 		flags = fcntl(radfds[i], F_GETFL, 0);
 		fcntl(radfds[i], F_SETFL, flags | O_NONBLOCK);
+
+		if (port)
+		{
+			int b;
+
+			memset(&addr, 0, sizeof(addr));
+			addr.sin_family = AF_INET;
+			addr.sin_addr.s_addr = INADDR_ANY;
+
+			do {
+				addr.sin_port = htons(port);
+				if ((b = bind(radfds[i], (struct sockaddr *) &addr, sizeof(addr))) < 0)
+				{
+					if ((port += inc) < min || port > max)
+					{
+						LOG(0, 0, 0, "Can't bind RADIUS socket in range %u-%u\n", min, max);
+						exit(1);
+					}
+				}
+			} while (b < 0);
+		}
 	}
 }
 

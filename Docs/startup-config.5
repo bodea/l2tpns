@@ -2,7 +2,7 @@
 .de Id
 .ds Dt \\$4 \\$5
 ..
-.Id $Id: startup-config.5,v 1.17 2006-04-27 14:38:14 bodea Exp $
+.Id $Id: startup-config.5,v 1.18 2006-07-01 12:40:17 bodea Exp $
 .TH STARTUP-CONFIG 5 "\*(Dt" L2TPNS "File Formats and Conventions"
 .SH NAME
 startup\-config \- configuration file for l2tpns
@@ -77,17 +77,17 @@ Number of configure requests to send before giving up (default: 10).
 Number of Configure-Nak requests to send before sending a
 Configure-Reject (default: 5).
 .TP
-.BR primary_dns , " secondary_dns"
+.BR primary_dns ", " secondary_dns
 Whenever a PPP connection is established, DNS servers will be sent to the
 user, both a primary and a secondary.  If either is set to 0.0.0.0, then that
 one will not be sent.
 .TP
-.BR primary_radius , " secondary_radius"
+.BR primary_radius ", " secondary_radius
 Sets the RADIUS servers used for both authentication and accounting. 
 If the primary server does not respond, then the secondary RADIUS
 server will be tried.
 .TP
-.BR primary_radius_port , " secondary_radius_port"
+.BR primary_radius_port ", " secondary_radius_port
 Sets the authentication ports for the primary and secondary RADIUS
 servers.  The accounting port is one more than the authentication
 port.  If no ports are given, authentication defaults to 1645, and
@@ -117,6 +117,11 @@ A comma separated list of supported RADIUS authentication methods
 .B radius_dae_port
 Port for DAE RADIUS (Packet of Death/Disconnect, Change of Authorization)
 requests (default: 3799).
+.TP
+.BR radius_bind_min ", " radius_bind_max
+Define a port range in which to bind sockets used to send and receive
+RADIUS packets.  Must be at least RADIUS_FDS (64) wide.  Simplifies
+firewalling of RADIUS ports (default: dynamically assigned).
 .TP
 .B allow_duplicate_users
 Allow multiple logins with the same username.  If false (the default),

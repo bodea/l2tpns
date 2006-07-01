@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.117 2006-06-11 12:46:18 bodea Exp $
+// $Id: l2tpns.h,v 1.118 2006-07-01 12:40:17 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -638,7 +638,9 @@ typedef struct
 	uint16_t	radiusport[MAXRADSERVER];	// radius base ports
 	uint8_t		numradiusservers;		// radius server count
 
-	uint16_t	radius_dae_port;		// local port for radius dae
+	uint16_t	radius_dae_port;		// port for radius DAE
+	uint16_t	radius_bind_min;		// port range for udp sockets used to send/recv radius packets
+	uint16_t	radius_bind_max;
 
 	char		radius_authtypes_s[32];		// list of valid authentication types (chap, pap) in order of preference
 	int		radius_authtypes;
