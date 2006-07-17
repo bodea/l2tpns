@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.52 2006-06-11 12:46:18 bodea Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.53 2006-07-17 07:53:08 bodea Exp $";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -1770,7 +1770,7 @@ int processcluster(uint8_t *data, int size, in_addr_t addr)
 	case C_FORWARD_DAE: // Forwarded DAE packet. pass off to processdae.
 		if (!config->cluster_iam_master)
 		{
-			LOG(0, 0, 0, "I'm not the master, but I got a C_FORWARD_%s from %s?\n",
+			LOG(0, 0, 0, "I'm not the master, but I got a C_FORWARD%s from %s?\n",
 				type == C_FORWARD_DAE ? "_DAE" : "", fmtaddr(addr, 0));
 
 			return -1;
