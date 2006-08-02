@@ -1,5 +1,7 @@
-* Wed Aug 2 2006 Brendan O'Dea <bod@optus.net> 2.1.20
+* Thu Aug 3 2006 Brendan O'Dea <bod@optus.net> 2.1.20
 - Fix sign problem with reporting of unknown VSAs.
+- Allow DNS servers to be specified either using the old or new
+  vendor-specific Ascend formats.
 
 * Fri Jun 23 2006 Brendan O'Dea <bod@optus.net> 2.1.19
 - Kludge around problem with Netgear DM602 authentication.
