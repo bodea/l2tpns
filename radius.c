@@ -1,6 +1,6 @@
 // L2TPNS Radius Stuff
 
-char const *cvs_id_radius = "$Id: radius.c,v 1.54 2006-08-02 13:35:39 bodea Exp $";
+char const *cvs_id_radius = "$Id: radius.c,v 1.55 2006-08-02 14:17:30 bodea Exp $";
 
 #include <time.h>
 #include <stdio.h>
@@ -635,6 +635,35 @@ void processrad(uint8_t *buf, int len, char socket_index)
 				uint8_t *e = buf + len;
 				for (; p + 2 <= e && p[1] && p + p[1] <= e; p += p[1])
 				{
+					if (*p == 26 && p[1] >= 7)
+					{
+						// Vendor-Specific Attribute
+						uint32_t vendor = ntohl(*(int *)(p + 2));
+						uint8_t attrib = *(p + 6);
+						int attrib_length = *(p + 7) - 2;
+
+						LOG(4, s, session[s].tunnel, "   Radius reply contains Vendor-Specific.  Vendor=%u Attrib=%u Length=%d\n", vendor, attrib, attrib_length);
+						if (vendor == 9 && attrib == 1) // Cisco-AVPair
+						{
+							if (attrib_length < 0) continue;
+							LOG(3, s, session[s].tunnel, "      Cisco-AVPair value: %.*s\n",
+								attrib_length, p + 8);
+
+							handle_avpair(s, p + 8, attrib_length);
+							continue;
+						}
+						else if (vendor == 529 && attrib >= 135 && attrib <= 136) // Ascend
+						{
+							// handle old-format ascend DNS attributes below
+						    	p += 6;
+						}
+						else
+						{
+							LOG(3, s, session[s].tunnel, "      Unknown vendor-specific\n");
+							continue;
+						}
+					}
+
 					if (*p == 8)
 					{
 						// Framed-IP-Address
@@ -761,28 +790,6 @@ void processrad(uint8_t *buf, int len, char socket_index)
 					    	if (p[1] < 6) continue;
 						session[s].idle_timeout = ntohl(*(uint32_t *)(p + 2));
 						LOG(3, s, session[s].tunnel, "   Radius reply contains Idle-Timeout = %u\n", session[s].idle_timeout);
-					}
-					else if (*p == 26 && p[1] >= 7)
-					{
-						// Vendor-Specific Attribute
-						uint32_t vendor = ntohl(*(int *)(p + 2));
-						uint8_t attrib = *(p + 6);
-						int attrib_length = *(p + 7) - 2;
-
-						LOG(3, s, session[s].tunnel, "   Radius reply contains Vendor-Specific.  Vendor=%u Attrib=%u Length=%d\n", vendor, attrib, attrib_length);
-						if (vendor != 9 || attrib != 1)
-						{
-							LOG(3, s, session[s].tunnel, "      Unknown vendor-specific\n");
-							continue;
-						}
-
-						if (attrib_length > 0)
-						{
-							LOG(3, s, session[s].tunnel, "      Cisco-AVPair value: %.*s\n",
-								attrib_length, p + 8);
-
-							handle_avpair(s, p + 8, attrib_length);
-						}
 					}
 					else if (*p == 99)
 					{

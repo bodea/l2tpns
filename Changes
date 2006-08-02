@@ -1,4 +1,4 @@
-* Wed Aug 2 2006 Brendan O'Dea <bod@optus.net> 2.2.0
+* Thu Aug 3 2006 Brendan O'Dea <bod@optus.net> 2.2.0
 - Only poll clifd if successfully bound.
 - Add "Practical VPNs" document from Liran Tal as Docs/vpn .
 - Add Multilink support from Khaled Al Hamwi.
@@ -10,6 +10,8 @@
   AVP is not present.
 - Add radius_bind_{min,max} to simplify firewalling of RADIUS ports.
 - Fix sign problem with reporting of unknown RADIUS VSAs.
+- Allow DNS servers to be specified either using the old or new
+  vendor-specific Ascend formats.
 
 * Tue Apr 18 2006 Brendan O'Dea <bod@optus.net> 2.1.18
 - Don't shutdown on TerminateReq, wait for CDN.
