@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.118 2006-07-01 12:40:17 bodea Exp $
+// $Id: l2tpns.h,v 1.119 2006-08-02 13:35:39 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -299,7 +299,6 @@ typedef struct
 	char calling[MAXTEL];		// calling number
 	uint32_t tx_connect_speed;
 	uint32_t rx_connect_speed;
-	clockt timeout;			// Session timeout
 	uint32_t mrru;			// Multilink Max-Receive-Reconstructed-Unit
 	uint8_t mssf;			// Multilink Short Sequence Number Header Format
 	epdist epdis;			// Multilink Endpoint Discriminator

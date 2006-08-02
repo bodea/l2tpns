@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.170 2006-07-01 14:07:35 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.171 2006-08-02 13:35:39 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -3053,37 +3053,6 @@ static void regular_cleanups(double period)
 			continue;
 		}
 
-		// check for timed out sessions
-		if (session[s].timeout)
-		{
-			bundleidt bid = session[s].bundle;
-			if (bid)
-			{
-				clockt curr_time = time_now;
-				if (curr_time - bundle[bid].last_check >= 1)
-				{
-					bundle[bid].online_time += (curr_time-bundle[bid].last_check)*bundle[bid].num_of_links;
-					bundle[bid].last_check = curr_time;
-					if (bundle[bid].online_time >= session[s].timeout)
-					{
-						int ses;
-						for (ses = bundle[bid].num_of_links - 1; ses >= 0; ses--)
-						{
-							sessionshutdown(bundle[bid].members[ses], "Session timeout", CDN_ADMIN_DISC, TERM_SESSION_TIMEOUT);
-							s_actions++;
-							continue;
-						}
-					}
-				}
-			}
-			else if (session[s].timeout <= time_now - session[s].opened)
-			{
-				sessionshutdown(s, "Session timeout", CDN_ADMIN_DISC, TERM_SESSION_TIMEOUT);
-				s_actions++;
-				continue;
-			}
-		}
-
 		// PPP timeouts
 		if (sess_local[s].lcp.restart <= time_now)
 		{
@@ -3226,12 +3195,33 @@ static void regular_cleanups(double period)
 		}
 
 		// Drop sessions who have reached session_timeout seconds
-		if (session[s].session_timeout && (time_now - session[s].opened >= session[s].session_timeout))
+		if (session[s].session_timeout)
 		{
-			sessionshutdown(s, "Session Timeout Reached", CDN_ADMIN_DISC, TERM_SESSION_TIMEOUT);
-			STAT(session_timeout);
-			s_actions++;
-			continue;
+			bundleidt bid = session[s].bundle;
+			if (bid)
+			{
+				if (time_now - bundle[bid].last_check >= 1)
+				{
+					bundle[bid].online_time += (time_now - bundle[bid].last_check) * bundle[bid].num_of_links;
+					bundle[bid].last_check = time_now;
+					if (bundle[bid].online_time >= session[s].session_timeout)
+					{
+						int ses;
+						for (ses = bundle[bid].num_of_links - 1; ses >= 0; ses--)
+						{
+							sessionshutdown(bundle[bid].members[ses], "Session timeout", CDN_ADMIN_DISC, TERM_SESSION_TIMEOUT);
+							s_actions++;
+							continue;
+						}
+					}
+				}
+			}
+			else if (time_now - session[s].opened >= session[s].session_timeout)
+			{
+				sessionshutdown(s, "Session timeout", CDN_ADMIN_DISC, TERM_SESSION_TIMEOUT);
+				s_actions++;
+				continue;
+			}
 		}
 
 		// Drop sessions who have reached idle_timeout seconds

@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.101 2006-06-03 08:16:46 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.102 2006-08-02 13:35:39 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -373,7 +373,7 @@ void lcp_open(sessionidt s, tunnelidt t)
 			session[s].ip = session[first_ses].ip;
 			session[s].dns1 = session[first_ses].dns1;
 			session[s].dns2 = session[first_ses].dns2;
-			session[s].timeout = session[first_ses].timeout;
+			session[s].session_timeout = session[first_ses].session_timeout;
 			ipcp_open(s, t);
 		}
 		else
