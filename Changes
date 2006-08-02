@@ -1,3 +1,6 @@
+* Wed Aug 2 2006 Brendan O'Dea <bod@optus.net> 2.1.20
+- Fix sign problem with reporting of unknown VSAs.
+
 * Fri Jun 23 2006 Brendan O'Dea <bod@optus.net> 2.1.19
 - Kludge around problem with Netgear DM602 authentication.
 - Use result code AVP to set Acct-Terminate-Cause is disconnect cause
