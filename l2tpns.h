@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.119 2006-08-02 13:35:39 bodea Exp $
+// $Id: l2tpns.h,v 1.120 2006-10-23 02:51:53 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -49,14 +49,12 @@
 #define RINGBUFFER_SIZE	10000		// Number of ringbuffer entries to allocate
 #define MAX_LOG_LENGTH	512		// Maximum size of log message
 #define ECHO_TIMEOUT	10		// Time between last packet sent and LCP ECHO generation
-#define IDLE_TIMEOUT	240		// Time between last packet sent and LCP ECHO generation
+#define IDLE_TIMEOUT	240		// Time between last packet seen and session shutdown
 #define BUSY_WAIT_TIME	3000		// 5 minutes in 1/10th seconds to wait for radius to cleanup on shutdown
 
 #define MP_BEGIN	0x80		// This value is used when (b)egin bit is set in MP header
 #define MP_END		0x40		// This value is used when (e)nd bit is set in MP header
 #define MP_BOTH_BITS	0xC0		// This value is used when both bits (begin and end) are set in MP header
-
-#define DEFAULT_EPDIS_ADDRESS	"L2TPNetServer"		// Company name may goes here!
 
 // Constants
 #ifndef ETCDIR
