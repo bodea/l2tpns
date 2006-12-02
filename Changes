@@ -1,3 +1,7 @@
+* Fri Dec 1 2006 Brendan O'Dea <bod@optus.net> 2.1.21
+- Security: Rhys Kidd identified a vulnerability in the handling of
+  heartbeat packets.  Drop oversize heartbeat packets.
+
 * Thu Aug 3 2006 Brendan O'Dea <bod@optus.net> 2.1.20
 - Fix sign problem with reporting of unknown VSAs.
 - Allow DNS servers to be specified either using the old or new
