@@ -1,4 +1,4 @@
-* Thu Aug 3 2006 Brendan O'Dea <bod@optus.net> 2.2.0
+* Tue Dec 5 2006 Brendan O'Dea <bod@optus.net> 2.2.0
 - Only poll clifd if successfully bound.
 - Add "Practical VPNs" document from Liran Tal as Docs/vpn .
 - Add Multilink support from Khaled Al Hamwi.
@@ -12,6 +12,8 @@
 - Fix sign problem with reporting of unknown RADIUS VSAs.
 - Allow DNS servers to be specified either using the old or new
   vendor-specific Ascend formats.
+- Security: Rhys Kidd identified a vulnerability in the handling of
+  heartbeat packets.  Drop oversize heartbeat packets.
 
 * Tue Apr 18 2006 Brendan O'Dea <bod@optus.net> 2.1.18
 - Don't shutdown on TerminateReq, wait for CDN.

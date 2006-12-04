@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.53 2006-07-17 07:53:08 bodea Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.54 2006-12-04 20:50:02 bodea Exp $";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -1453,7 +1453,11 @@ static int cluster_process_heartbeat(uint8_t *data, int size, int more, uint8_t 
 		return -1; // Ignore it??
 	}
 
-		// Ok. It's a heartbeat packet from a cluster master!
+	if (size > sizeof(past_hearts[0].data)) {
+		LOG(0, 0, 0, "Received an oversize heartbeat from %s (%d)!\n", fmtaddr(addr, 0), size);
+		return -1;
+	}
+
 	if (s < sizeof(*h))
 		goto shortpacket;
 
