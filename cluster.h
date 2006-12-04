@@ -1,5 +1,5 @@
 // L2TPNS Clustering Stuff
-// $Id: cluster.h,v 1.15 2006-04-27 09:53:49 bodea Exp $
+// $Id: cluster.h,v 1.16 2006-12-04 20:54:51 bodea Exp $
 
 #ifndef __CLUSTER_H__
 #define __CLUSTER_H__
@@ -56,7 +56,7 @@ typedef struct {
 
 	uint64_t table_version;	// # state changes processed by cluster
 
-	char reserved[128 - 13*sizeof(uint32_t)];	// Pad out to 128 bytes.
+	char reserved[128 - 13*sizeof(uint32_t) - sizeof(uint64_t)];	// Pad out to 128 bytes.
 } heartt;
 
 typedef struct {		/* Used to update byte counters on the */
