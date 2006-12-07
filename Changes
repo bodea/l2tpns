@@ -12,8 +12,8 @@
 - Fix sign problem with reporting of unknown RADIUS VSAs.
 - Allow DNS servers to be specified either using the old or new
   vendor-specific Ascend formats.
-- Security: Rhys Kidd identified a vulnerability in the handling of
-  heartbeat packets.  Drop oversize heartbeat packets.
+- Security [CVE-2006-5873]: Rhys Kidd identified a vulnerability in the
+  handling of heartbeat packets.  Drop oversize heartbeat packets.
 
 * Tue Apr 18 2006 Brendan O'Dea <bod@optus.net> 2.1.18
 - Don't shutdown on TerminateReq, wait for CDN.
