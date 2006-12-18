@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.75 2006-08-02 13:35:39 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.76 2006-12-18 12:08:28 bodea Exp $";
 
 #include <stdio.h>
 #include <stddef.h>
@@ -100,6 +100,9 @@ static int cmd_set(struct cli_def *cli, char *command, char **argv, int argc);
 static int cmd_load_plugin(struct cli_def *cli, char *command, char **argv, int argc);
 static int cmd_remove_plugin(struct cli_def *cli, char *command, char **argv, int argc);
 static int cmd_uptime(struct cli_def *cli, char *command, char **argv, int argc);
+static int cmd_shutdown(struct cli_def *cli, char *command, char **argv, int argc);
+static int cmd_reload(struct cli_def *cli, char *command, char **argv, int argc);
+
 
 static int regular_stuff(struct cli_def *cli);
 
@@ -176,6 +179,8 @@ void init_cli(char *hostname)
 #endif
 
 	cli_register_command(cli, NULL, "uptime", cmd_uptime, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Show uptime and bandwidth utilisation");
+	cli_register_command(cli, NULL, "shutdown", cmd_shutdown, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Shutdown l2tpns daemon and exit");
+	cli_register_command(cli, NULL, "reload", cmd_reload, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Reload configuration");
 
 	c = cli_register_command(cli, NULL, "write", NULL, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
 	cli_register_command(cli, c, "memory", cmd_write_memory, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Save the running config to flash");
@@ -426,17 +431,17 @@ static int cmd_show_session(struct cli_def *cli, char *command, char **argv, int
 			cli_print(cli, "\tUnique SID:\t%u", session[s].unique_id);
 			cli_print(cli, "\tOpened:\t\t%u seconds", session[s].opened ? abs(time_now - session[s].opened) : 0);
 			cli_print(cli, "\tIdle time:\t%u seconds", session[s].last_packet ? abs(time_now - session[s].last_packet) : 0);
- 		        if (session[s].session_timeout)
+			if (session[s].session_timeout)
 			{
 			    	clockt opened = session[s].opened;
 				if (session[s].bundle && bundle[session[s].bundle].num_of_links > 1)
 					opened = bundle[session[s].bundle].online_time;
 
- 				cli_print(cli, "\tSess Timeout:\t%u seconds", session[s].session_timeout - (opened ? abs(time_now - opened) : 0));
+				cli_print(cli, "\tSess Timeout:\t%u seconds", session[s].session_timeout - (opened ? abs(time_now - opened) : 0));
 			}
 
- 		        if (session[s].idle_timeout)
- 				cli_print(cli, "\tIdle Timeout:\t%u seconds", session[s].idle_timeout - (session[s].last_data ? abs(time_now - session[s].last_data) : 0));
+			if (session[s].idle_timeout)
+				cli_print(cli, "\tIdle Timeout:\t%u seconds", session[s].idle_timeout - (session[s].last_data ? abs(time_now - session[s].last_data) : 0));
 
 			cli_print(cli, "\tBytes In/Out:\t%u/%u", session[s].cout, session[s].cin);
 			cli_print(cli, "\tPkts In/Out:\t%u/%u", session[s].pout, session[s].pin);
@@ -2029,7 +2034,7 @@ static int cmd_router_bgp_neighbour(struct cli_def *cli, char *command, char **a
 	int keepalive;
 	int hold;
 
-    	if (CLI_HELP_REQUESTED)
+	if (CLI_HELP_REQUESTED)
 	{
 		switch (argc)
 		{
@@ -2139,14 +2144,14 @@ static int cmd_router_bgp_neighbour(struct cli_def *cli, char *command, char **a
 	config->neighbour[i].keepalive = keepalive;
 	config->neighbour[i].hold = hold;
 
-    	return CLI_OK;
+	return CLI_OK;
 }
 
 static int cmd_router_bgp_no_neighbour(struct cli_def *cli, char *command, char **argv, int argc)
 {
 	int i;
 
-    	if (CLI_HELP_REQUESTED)
+	if (CLI_HELP_REQUESTED)
 		return cli_arg_help(cli, argc > 0,
 			"A.B.C.D", "BGP neighbour address",
 			"NAME",    "BGP neighbour name",
@@ -2171,7 +2176,7 @@ static int cmd_router_bgp_no_neighbour(struct cli_def *cli, char *command, char 
 	}
 
 	memset(&config->neighbour[i], 0, sizeof(config->neighbour[i]));
-    	return CLI_OK;
+	return CLI_OK;
 }
 
 static int cmd_show_bgp(struct cli_def *cli, char *command, char **argv, int argc)
@@ -3075,5 +3080,23 @@ static int cmd_show_access_list(struct cli_def *cli, char *command, char **argv,
 		}
 	}
 
+	return CLI_OK;
+}
+
+static int cmd_shutdown(struct cli_def *cli, char *command, char **argv, int argc)
+{
+	if (CLI_HELP_REQUESTED)
+		return CLI_HELP_NO_ARGS;
+
+	kill(getppid(), SIGQUIT);
+	return CLI_OK;
+}
+
+static int cmd_reload(struct cli_def *cli, char *command, char **argv, int argc)
+{
+	if (CLI_HELP_REQUESTED)
+		return CLI_HELP_NO_ARGS;
+
+	kill(getppid(), SIGHUP);
 	return CLI_OK;
 }
