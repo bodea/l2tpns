@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.73 2006-05-05 08:10:18 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.71.2.1 2006-12-18 10:26:58 bodea Exp $";
 
 #include <stdio.h>
 #include <stddef.h>
@@ -36,7 +36,6 @@ char const *cvs_id_cli = "$Id: cli.c,v 1.73 2006-05-05 08:10:18 bodea Exp $";
 #endif
 
 extern tunnelt *tunnel;
-extern bundlet *bundle;
 extern sessiont *session;
 extern radiust *radius;
 extern ippoolt *ip_address_pool;
@@ -100,6 +99,9 @@ static int cmd_set(struct cli_def *cli, char *command, char **argv, int argc);
 static int cmd_load_plugin(struct cli_def *cli, char *command, char **argv, int argc);
 static int cmd_remove_plugin(struct cli_def *cli, char *command, char **argv, int argc);
 static int cmd_uptime(struct cli_def *cli, char *command, char **argv, int argc);
+static int cmd_shutdown(struct cli_def *cli, char *command, char **argv, int argc);
+static int cmd_reload(struct cli_def *cli, char *command, char **argv, int argc);
+
 
 static int regular_stuff(struct cli_def *cli);
 
@@ -176,6 +178,8 @@ void init_cli(char *hostname)
 #endif
 
 	cli_register_command(cli, NULL, "uptime", cmd_uptime, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Show uptime and bandwidth utilisation");
+	cli_register_command(cli, NULL, "shutdown", cmd_shutdown, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Shutdown l2tpns daemon and exit");
+	cli_register_command(cli, NULL, "reload", cmd_reload, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Reload configuration");
 
 	c = cli_register_command(cli, NULL, "write", NULL, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
 	cli_register_command(cli, c, "memory", cmd_write_memory, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Save the running config to flash");
@@ -269,7 +273,7 @@ void init_cli(char *hostname)
 	}
 
 	memset(&addr, 0, sizeof(addr));
-	clifd = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
+	clifd = socket(PF_INET, SOCK_STREAM, 6);
 	setsockopt(clifd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
 	{
 		int flags;
@@ -427,14 +431,6 @@ static int cmd_show_session(struct cli_def *cli, char *command, char **argv, int
 			cli_print(cli, "\tOpened:\t\t%u seconds", session[s].opened ? abs(time_now - session[s].opened) : 0);
 			cli_print(cli, "\tIdle time:\t%u seconds", session[s].last_packet ? abs(time_now - session[s].last_packet) : 0);
 			cli_print(cli, "\tBytes In/Out:\t%u/%u", session[s].cout, session[s].cin);
-			if (session[s].timeout)
-			{
-				cli_print(cli, "\tRemaing time:\t%u",
-					(session[s].bundle && bundle[session[s].bundle].num_of_links > 1)
-					? (unsigned) (session[s].timeout - bundle[session[s].bundle].online_time)
-					: (unsigned) (session[s].timeout - (time_now - session[s].opened)));
-			}
-
 			cli_print(cli, "\tPkts In/Out:\t%u/%u", session[s].pout, session[s].pin);
 			cli_print(cli, "\tMRU:\t\t%d", session[s].mru);
 			cli_print(cli, "\tRx Speed:\t%u", session[s].rx_connect_speed);
@@ -501,7 +497,7 @@ static int cmd_show_session(struct cli_def *cli, char *command, char **argv, int
 	}
 
 	// Show Summary
-	cli_print(cli, "%5s %4s %-32s %-15s %s %s %s %s %10s %10s %10s %4s %10s %-15s %s",
+	cli_print(cli, "%5s %4s %-32s %-15s %s %s %s %s %10s %10s %10s %4s %-15s %s",
 			"SID",
 			"TID",
 			"Username",
@@ -514,20 +510,13 @@ static int cmd_show_session(struct cli_def *cli, char *command, char **argv, int
 			"downloaded",
 			"uploaded",
 			"idle",
-			"Rem.Time",
 			"LAC",
 			"CLI");
 
 	for (i = 1; i < MAXSESSION; i++)
 	{
-		uint32_t rem_time;
 		if (!session[i].opened) continue;
-		if (session[i].bundle && bundle[session[i].bundle].num_of_links > 1)
-			rem_time = session[i].timeout ? (session[i].timeout - bundle[session[i].bundle].online_time) : 0;
-		else
-			rem_time = session[i].timeout ? (session[i].timeout - (time_now-session[i].opened)) : 0;
-
-		cli_print(cli, "%5d %4d %-32s %-15s %s %s %s %s %10u %10lu %10lu %4u %10lu %-15s %s",
+		cli_print(cli, "%5d %4d %-32s %-15s %s %s %s %s %10u %10lu %10lu %4u %-15s %s",
 				i,
 				session[i].tunnel,
 				session[i].user[0] ? session[i].user : "*",
@@ -540,7 +529,6 @@ static int cmd_show_session(struct cli_def *cli, char *command, char **argv, int
 				(unsigned long)session[i].cout,
 				(unsigned long)session[i].cin,
 				abs(time_now - (session[i].last_packet ? session[i].last_packet : time_now)),
-				(unsigned long)(rem_time),
 				fmtaddr(htonl(tunnel[ session[i].tunnel ].ip), 1),
 				session[i].calling[0] ? session[i].calling : "*");
 	}
@@ -2033,7 +2021,7 @@ static int cmd_router_bgp_neighbour(struct cli_def *cli, char *command, char **a
 	int keepalive;
 	int hold;
 
-    	if (CLI_HELP_REQUESTED)
+	if (CLI_HELP_REQUESTED)
 	{
 		switch (argc)
 		{
@@ -2143,14 +2131,14 @@ static int cmd_router_bgp_neighbour(struct cli_def *cli, char *command, char **a
 	config->neighbour[i].keepalive = keepalive;
 	config->neighbour[i].hold = hold;
 
-    	return CLI_OK;
+	return CLI_OK;
 }
 
 static int cmd_router_bgp_no_neighbour(struct cli_def *cli, char *command, char **argv, int argc)
 {
 	int i;
 
-    	if (CLI_HELP_REQUESTED)
+	if (CLI_HELP_REQUESTED)
 		return cli_arg_help(cli, argc > 0,
 			"A.B.C.D", "BGP neighbour address",
 			"NAME",    "BGP neighbour name",
@@ -2175,7 +2163,7 @@ static int cmd_router_bgp_no_neighbour(struct cli_def *cli, char *command, char 
 	}
 
 	memset(&config->neighbour[i], 0, sizeof(config->neighbour[i]));
-    	return CLI_OK;
+	return CLI_OK;
 }
 
 static int cmd_show_bgp(struct cli_def *cli, char *command, char **argv, int argc)
@@ -3079,5 +3067,23 @@ static int cmd_show_access_list(struct cli_def *cli, char *command, char **argv,
 		}
 	}
 
+	return CLI_OK;
+}
+
+static int cmd_shutdown(struct cli_def *cli, char *command, char **argv, int argc)
+{
+	if (CLI_HELP_REQUESTED)
+		return CLI_HELP_NO_ARGS;
+
+	kill(getppid(), SIGQUIT);
+	return CLI_OK;
+}
+
+static int cmd_reload(struct cli_def *cli, char *command, char **argv, int argc)
+{
+	if (CLI_HELP_REQUESTED)
+		return CLI_HELP_NO_ARGS;
+
+	kill(getppid(), SIGHUP);
 	return CLI_OK;
 }
