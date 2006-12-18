@@ -1,3 +1,6 @@
+* Mon Dec 18 2006 Brendan O'Dea <bod@optus.net> 2.1.22
+- Don't send interim records before session start (Daryl Tester)
+
 * Fri Dec 1 2006 Brendan O'Dea <bod@optus.net> 2.1.21
 - Security: Rhys Kidd identified a vulnerability in the handling of
   heartbeat packets.  Drop oversize heartbeat packets.

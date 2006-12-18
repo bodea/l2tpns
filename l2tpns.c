@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.161.2.1 2006-06-22 15:30:50 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.161.2.2 2006-12-18 10:20:15 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -3111,7 +3111,8 @@ static void regular_cleanups(double period)
 		if (config->radius_accounting && config->radius_interim > 0
 		    && session[s].ip && !session[s].walled_garden
 		    && !sess_local[s].radius // RADIUS already in progress
-		    && time_now - sess_local[s].last_interim >= config->radius_interim)
+		    && time_now - sess_local[s].last_interim >= config->radius_interim
+		    && session[s].flags & SESSION_STARTED)
 		{
 		    	int rad = radiusnew(s);
 			if (!rad)
