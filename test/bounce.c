@@ -68,7 +68,8 @@ int main(int argc, char *argv[])
 	while (1)
 	{
 		struct sockaddr_in addr;
-		int alen = sizeof(addr), l;
+		socklen_t alen = sizeof(addr);
+		int l;
 		unsigned int iseq;
 
 		l = recvfrom(s, packet, 65535, 0, (void *) &addr, &alen);
@@ -87,7 +88,7 @@ int main(int argc, char *argv[])
 	free(packet);
 }
 
-void sigalarm(int junk)
+void sigalarm(int unusedg __attribute__ ((unused)))
 {
 	printf("Recv: %10llu %0.1fMbits/s (%lu pps) (%5ld dropped)\n", recv_count, (bytes / 1024.0 / 1024.0 * 8), pps, dropped);
 	pps = bytes = 0;

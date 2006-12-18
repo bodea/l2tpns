@@ -1,3 +1,9 @@
+#define _POSIX_C_SOURCE 200112L
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#define __USE_XOPEN_EXTENDED
+#define __USE_MISC
 #include <arpa/inet.h>
 #include <time.h>
 #include <errno.h>
@@ -6,11 +12,8 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <stdarg.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
-#include <sys/types.h>
 #include <linux/ip.h>
 #include <linux/udp.h>
 #include <unistd.h>
@@ -179,10 +182,10 @@ typedef struct
 } control_message;
 
 typedef struct {
-unsigned long long send_count , recv_count ;
-unsigned long long spkt , rpkt ;
-unsigned int dropped;
-unsigned long sbytes , rbytes ;
+long long send_count, recv_count;
+long long spkt, rpkt ;
+int dropped;
+long sbytes, rbytes ;
 int quitit;
 struct sessiont
 {
@@ -210,7 +213,7 @@ void dump_control_message(control_message *c);
 u32 avp_get_32(control_message *c, int id);
 u16 avp_get_16(control_message *c, int id);
 char *avp_get_s(control_message *c, int id);
-void reader_thread(int udpfd);
+void reader_thread(void);
 void skip_zlb();
 void cm_free(control_message *m);
 controlt *ppp_new(u16 session, int protocol);
@@ -234,7 +237,7 @@ void print_report();
 int ns = 0, nr = 0;
 int udpfd;
 int t = 0;
-struct sockaddr_in gatewayaddr = {0};
+struct sockaddr_in gatewayaddr;
 int numsessions = NUM_SESSIONS;
 int packet_length = PACKET_LENGTH;
 int target_pps = TARGET_PPS;
@@ -251,7 +254,7 @@ char *suffix = "@optusnet.com.au";
 int main(int argc, char *argv[])
 {
 	int s;
-	char *packet;
+	unsigned char *packet;
 
 	ss = (sharedt*) mmap(NULL, sizeof(*ss), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, 0, 0);
 
@@ -377,6 +380,7 @@ int main(int argc, char *argv[])
 		printf("Bound to port %d\n", htons(addr.sin_port));
 	}/*}}}*/
 
+	memset(&gatewayaddr, 0, sizeof(gatewayaddr));
 	gatewayaddr.sin_family = AF_INET;
 	gatewayaddr.sin_port = htons(1701);
 	inet_aton(gwaddr, &gatewayaddr.sin_addr);
@@ -400,7 +404,8 @@ int main(int argc, char *argv[])
 		// Receive reply/*{{{*/
 		{
 			struct sockaddr_in addr;
-			int alen = sizeof(addr), l;
+			int l;
+			socklen_t alen = sizeof(addr);
 
 			l = recvfrom(udpfd, packet, 4096, 0, (void *) &addr, &alen);
 			if (l < 0)
@@ -409,7 +414,7 @@ int main(int argc, char *argv[])
 				return -1;
 			}
 			printf("Received ");
-			r = parsecontrol(packet, l);
+			r = parsecontrol((char *) packet, l);
 			if (!r->first)
 			{
 				printf("Invalid packet.. no first avp\n");
@@ -446,7 +451,7 @@ int main(int argc, char *argv[])
 	printf("All session create requests sent...\n");/*}}}*/
 
 	if ( fork() == 0) {
-		reader_thread(udpfd);
+		reader_thread();
 		exit(0);
 	}
 
@@ -529,7 +534,7 @@ int main(int argc, char *argv[])
 				*(u16 *)(c->buf + 4) = htons(ss->sessions[i].remote_session); // Session ID
 				iph->saddr = ss->sessions[i].addr;
 				iph->check = 0;
-				iph->check = ntohs(checksum((char *)iph, sizeof(struct iphdr)));
+				iph->check = ntohs(checksum((unsigned char *)iph, sizeof(struct iphdr)));
 
 				*((unsigned int *) data) = seq++;
 				ppp_send(c);
@@ -546,7 +551,8 @@ int main(int argc, char *argv[])
 					nanosleep(&req, NULL);
 				}
 
-				if (max_packets && ss->send_count >= max_packets) ss->quitit++;
+				if (max_packets && ss->send_count >= max_packets)
+					ss->quitit++;
 			}
 		}
 
@@ -602,22 +608,24 @@ void clean_shutdown()/*{{{*/
 	}
 }/*}}}*/
 
-void sigint(int signal)
+void sigint(int unused __attribute__ ((unused)))
 {
 	ss->quitit++;
 }
 
-void sigalarm(int junk)
+void sigalarm(int unused __attribute__ ((unused)))
 {
 	static unsigned long long last_rpkts[AVG_SIZE], last_spkts[AVG_SIZE];
 	static int last = 0, avg_count = 0;
-	register unsigned int avg_s = 0, avg_r = 0, i;
+	unsigned int avg_s = 0, avg_r = 0;
+	int i;
 	float loss;
 
 	last_rpkts[last] = ss->rpkt;
 	last_spkts[last] = ss->spkt;
 	last = (last + 1) % AVG_SIZE;
-	if (avg_count < AVG_SIZE) avg_count++;
+	if (avg_count < AVG_SIZE)
+		avg_count++;
 
 	for (i = 0; i < avg_count; i++)
 	{
@@ -867,7 +875,7 @@ void cm_free(control_message *m)
 
 // }}}
 
-void reader_thread(int updfd)/*{{{*/
+void reader_thread()/*{{{*/
 {
 	unsigned char *packet;
 	unsigned int seq = 0;
@@ -877,7 +885,7 @@ void reader_thread(int updfd)/*{{{*/
 	while (!ss->quitit)
 	{
 		struct sockaddr_in addr;
-		int alen = sizeof(addr);
+		socklen_t alen = sizeof(addr);
 		control_message *m;
 		int l;
 		int s;
@@ -906,7 +914,7 @@ void reader_thread(int updfd)/*{{{*/
 		{
 			// Control Packet
 			printf("Reader Received ");
-			m = parsecontrol(packet, l);
+			m = parsecontrol((char *) packet, l);
 			printf("\n");
 			s = m->session;
 
@@ -975,7 +983,7 @@ void reader_thread(int updfd)/*{{{*/
 			if (protocol != PPPIP)
 			{
 				printf("Received ");
-				dump_ppp_packet(packet + 6, l - 6);
+				dump_ppp_packet((char *) (packet + 6), l - 6);
 			}
 
 			if (protocol == PPPLCP)
@@ -1073,13 +1081,13 @@ void reader_thread(int updfd)/*{{{*/
 
 				if (iph->protocol == 17)
 				{
-					int iseq;
+					unsigned int iseq;
 					ss->recv_count++;
 					ss->rpkt++;
 					iseq = *((unsigned int *) data);
-					if (seq != iseq) {
+					if (seq != iseq)
 						ss->dropped += (iseq - seq) ;
-					}
+
 					seq = iseq + 1; // Next sequence number to expect.
 				}
 			}
@@ -1095,7 +1103,7 @@ void reader_thread(int updfd)/*{{{*/
 void skip_zlb() /*{{{*/
 {
 	struct sockaddr_in addr;
-	int alen = sizeof(addr);
+	socklen_t alen = sizeof(addr);
 	char buf[1024];
 	int l;
 	l = recvfrom(udpfd, buf, 1024, MSG_PEEK, (void *) &addr, &alen);
