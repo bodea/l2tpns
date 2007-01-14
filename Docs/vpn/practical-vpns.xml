@@ -109,7 +109,7 @@
 
       <para>
         <xref linkend="site-to-site"/> shows a Site-To-Site VPN diagram.
-	<figure id="site-to-site" float="1">
+	<figure id="site-to-site">
 	  <title>Site to Site VPN</title>
 	  <mediaobject>
 	    <imageobject>
@@ -130,7 +130,7 @@
 
       <para>
         <xref linkend="tunneling-process"/> shows the tunneling process.
-	<figure id="tunneling-process" float="1">
+	<figure id="tunneling-process">
 	  <title>Tunneling Process</title>
 	  <mediaobject>
 	    <imageobject>
@@ -389,7 +389,7 @@
       <xref linkend="vpn-deployment"/> gives a general description of
       how the network will be layed out in real-world scenario.
 
-      <figure id="vpn-deployment" float="1">
+      <figure id="vpn-deployment">
 	<title>VPN Deployment</title>
 	<mediaobject>
 	  <imageobject>
@@ -413,7 +413,7 @@
       process that the VPN takes and to detail the place that each of
       that application-in-charge takes place.
 
-      <figure id="vpn-process" float="1">
+      <figure id="vpn-process">
 	<title>VPN Process</title>
 	<mediaobject>
 	  <imageobject>
