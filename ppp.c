@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.102 2006-08-02 13:35:39 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.103 2007-01-25 12:36:48 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -1703,17 +1703,13 @@ void processipin(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 	*(uint32_t *) p = htonl(PKTIP);
 	l += 4;
 
-	// Are we throttled and a slave?
-	if (session[s].tbf_in && !config->cluster_iam_master) {
-		// Pass it to the master for handling.
-		master_throttle_packet(session[s].tbf_in, p, l);
-		return;
-	}
-
-	// Are we throttled and a master??
-	if (session[s].tbf_in && config->cluster_iam_master) {
-		// Actually handle the throttled packets.
-		tbf_queue_packet(session[s].tbf_in, p, l);
+	if (session[s].tbf_in)
+	{
+		// Are we throttling this session?
+		if (config->cluster_iam_master)
+			tbf_queue_packet(session[s].tbf_in, p, l);
+		else
+			master_throttle_packet(session[s].tbf_in, p, l);
 		return;
 	}
 
