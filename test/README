@@ -11,3 +11,7 @@ radius
 ping-sweep
 
     Send pings of varying sizes to a target host.
+
+hmactest
+
+    Verify MD5 HMAC implementation.

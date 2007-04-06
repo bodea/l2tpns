@@ -270,3 +270,44 @@ void MD5_Final(unsigned char *result, MD5_CTX *ctx)
 
     memset(ctx, 0, sizeof(*ctx));
 }
+
+void MD5_HMAC(unsigned char *result, unsigned char *key, int ksize,
+    unsigned char *data, int dsize)
+{
+    MD5_CTX ctx;
+    unsigned char ok[MD5_BLOCK_SZ];
+    unsigned char ik[MD5_BLOCK_SZ];
+    int i;
+
+    if (ksize > MD5_BLOCK_SZ)
+    {
+	MD5_Init(&ctx);
+	MD5_Update(&ctx, key, ksize);
+	MD5_Final(key, &ctx);
+	ksize = MD5_DIGEST_SZ;
+    }
+
+    for (i = 0; i < ksize; i++)
+    {
+    	ok[i] = key[i] ^ 0x5c;
+    	ik[i] = key[i] ^ 0x36;
+    }
+
+    for (; i < MD5_BLOCK_SZ; i++)
+    {
+    	ok[i] = 0x5c;
+	ik[i] = 0x36;
+    }
+
+    /* inner */
+    MD5_Init(&ctx);
+    MD5_Update(&ctx, ik, MD5_BLOCK_SZ);
+    MD5_Update(&ctx, data, dsize);
+    MD5_Final(result, &ctx);
+
+    /* outer */
+    MD5_Init(&ctx);
+    MD5_Update(&ctx, ok, MD5_BLOCK_SZ);
+    MD5_Update(&ctx, result, MD5_DIGEST_SZ);
+    MD5_Final(result, &ctx);
+}

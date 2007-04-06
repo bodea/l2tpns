@@ -1,5 +1,5 @@
 CFLAGS = -g -Wall -W -std=c99 -pedantic
-TARGETS = bounce generateload radius
+TARGETS = bounce generateload radius hmactest
 
 all: $(TARGETS)
 clean:
@@ -9,3 +9,4 @@ clean:
 	$(MAKE) -C .. md5.o
 
 radius: radius.c ../md5.o
+hmactest: hmactest.c ../md5.o

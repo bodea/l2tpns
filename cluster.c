@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.54 2006-12-04 20:50:02 bodea Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.54.2.1 2007-04-06 11:34:53 bodea Exp $";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,6 +23,7 @@ char const *cvs_id_cluster = "$Id: cluster.c,v 1.54 2006-12-04 20:50:02 bodea Ex
 #include "cluster.h"
 #include "util.h"
 #include "tbf.h"
+#include "md5.h"
 
 #ifdef BGP
 #include "bgp.h"
@@ -1736,7 +1737,7 @@ shortpacket:
 //
 int processcluster(uint8_t *data, int size, in_addr_t addr)
 {
-	int type, more;
+	int type, flags, more;
 	uint8_t *p = data;
 	int s = size;
 
@@ -1755,9 +1756,37 @@ int processcluster(uint8_t *data, int size, in_addr_t addr)
 	p += sizeof(uint32_t);
 	s -= sizeof(uint32_t);
 
+	flags = type >> 16;
+	type &= 0xffff;
+
 	more = *((uint32_t *) p);
 	p += sizeof(uint32_t);
 	s -= sizeof(uint32_t);
+
+	if (flags & F_SIGNED)
+	{
+		if (s < MD5_DIGEST_SZ)
+			goto shortpacket;
+
+		if (*config->cluster_secret)
+		{
+			uint8_t in[MD5_DIGEST_SZ];
+			uint8_t mac[MD5_DIGEST_SZ];
+
+			memcpy(in, p, MD5_DIGEST_SZ);
+			memset(p, 0, MD5_DIGEST_SZ);
+
+			MD5_HMAC(mac, config->cluster_secret, strlen(config->cluster_secret), data, size);
+			if (memcmp(mac, in, MD5_DIGEST_SZ)
+			{
+				LOG(0, 0, 0, "Dropping cluster packet from %s (authentication failed)\n", fmtaddr(addr, 0));
+				return -1;
+			}
+		}
+
+		p += MD5_DIGEST_SZ;
+		s -= MD5_DIGEST_SZ;
+	}
 
 	switch (type)
 	{

@@ -1,12 +1,11 @@
 // L2TPNS Clustering Stuff
-// $Id: cluster.h,v 1.16 2006-12-04 20:54:51 bodea Exp $
+// $Id: cluster.h,v 1.16.2.1 2007-04-06 11:34:53 bodea Exp $
 
 #ifndef __CLUSTER_H__
 #define __CLUSTER_H__
 
 
 #define C_HEARTBEAT		1
-#define C_ACK			2
 #define C_PING			3
 #define C_TUNNEL		4	// Tunnel structure.
 #define C_SESSION		5	// Session structure.
@@ -23,6 +22,8 @@
 #define C_FORWARD_DAE		16	// A DAE packet for the master to handle
 #define C_BUNDLE		17	// Bundle structure.
 #define C_CBUNDLE		18	// Compressed bundle structure.
+
+#define F_SIGNED		1	// cluster packet is signed
 
 #define HB_VERSION		5	// Protocol version number..
 #define HB_MAX_SEQ		(1<<30)	// Maximum sequence number. (MUST BE A POWER OF 2!)

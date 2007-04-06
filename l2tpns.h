@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.120 2006-10-23 02:51:53 bodea Exp $
+// $Id: l2tpns.h,v 1.120.2.1 2007-04-06 11:34:53 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -671,6 +671,7 @@ typedef struct
 	in_addr_t	cluster_address;		// Multicast address of cluster.
 							// Send to this address to have everyone hear.
 	char		cluster_interface[64];		// Which interface to listen for multicast on.
+	char		cluster_secret[64];		// Shared secret for cluster protocol
 	int		cluster_iam_master;		// Are we the cluster master???
 	int		cluster_iam_uptodate;		// Set if we've got a full set of state from the master.
 	in_addr_t	cluster_master_address;		// The network address of the cluster master.
