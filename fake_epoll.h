@@ -1,5 +1,5 @@
 /* kludge up some limited epoll semantics using select for 2.4 kernels */
-/* $Id: fake_epoll.h,v 1.1 2005-06-04 15:42:35 bodea Exp $ */
+/* $Id: fake_epoll.h,v 1.2 2007-06-28 07:22:50 bodea Exp $ */
 
 #ifndef __FAKE_EPOLL_H__
 #define __FAKE_EPOLL_H__
@@ -150,6 +150,9 @@ static int epoll_wait(int epfd __attribute__ ((unused)),
 	tp = 0;
 
     n = select(_epoll_fds, &r, &w, 0, tp);
+    if (n < 0)
+    	return n;
+
     if (n > maxevents)
     	n = maxevents;
 
