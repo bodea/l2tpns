@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.172 2006-12-18 12:05:36 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.173 2009-12-08 14:49:28 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -74,6 +74,9 @@ static int tunidx;		// ifr_ifindex of tun device
 static int syslog_log = 0;	// are we logging to syslog
 static FILE *log_stream = 0;	// file handle for direct logging (i.e. direct into file, not via syslog).
 uint32_t last_id = 0;		// Unique ID for radius accounting
+// Guest change
+char guest_users[10][32];       // Array of guest users
+int guest_accounts_num = 0;     // Number of guest users
 
 // calculated from config->l2tp_mtu
 uint16_t MRU = 0;		// PPP MRU
@@ -133,6 +136,7 @@ config_descriptt config_values[] = {
 	CONFIG("radius_bind_min", radius_bind_min, SHORT),
 	CONFIG("radius_bind_max", radius_bind_max, SHORT),
 	CONFIG("allow_duplicate_users", allow_duplicate_users, BOOL),
+	CONFIG("kill_timedout_sessions", kill_timedout_sessions, BOOL),
 	CONFIG("guest_account", guest_user, STRING),
 	CONFIG("bind_address", bind_address, IPv4),
 	CONFIG("peer_address", peer_address, IPv4),
@@ -1070,45 +1074,63 @@ void processmpframe(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l, uint8_t e
 		l -= 4;
 	}
 
-	// Process this frame
-	if (*p & 1)
-	{
-		proto = *p++;
-		l--;
-	}
-	else
-	{
-		proto = ntohs(*(uint16_t *) p);
-		p += 2;
-		l -= 2;
-	}
+        if (*p & 1)
+        {
+                proto = *p++;
+                l--;
+        }
+        else
+        {
+                proto = ntohs(*(uint16_t *) p);
+                p += 2;
+                l -= 2;
+        }
+        if (proto == PPPIP)
+        {
+                if (session[s].die)
+                {
+                        LOG(4, s, t, "MPPP: Session %d is closing.  Don't process PPP packets\n", s);
+                        return;              // closing session, PPP not processed
+                }
+                session[s].last_packet = session[s].last_data = time_now;
+                processipin(s, t, p, l);
+        }
+        else if (proto == PPPIPV6 && config->ipv6_prefix.s6_addr[0])
+        {
+                if (session[s].die)
+                {
+                        LOG(4, s, t, "MPPP: Session %d is closing.  Don't process PPP packets\n", s);
+                        return;              // closing session, PPP not processed
+                }
 
-	if (proto == PPPIP)
-	{
-		if (session[s].die)
-		{
-			LOG(4, s, t, "MPPP: Session %u is closing.  Don't process PPP packets\n", s);
-			return;              // closing session, PPP not processed
-		}
+                session[s].last_packet = session[s].last_data = time_now;
+                processipv6in(s, t, p, l);
+        }
+	else if (proto == PPPIPCP)
+        {
+                session[s].last_packet = session[s].last_data = time_now;
+                processipcp(s, t, p, l);
+        }
+        else if (proto == PPPCCP)
+        {
+                session[s].last_packet = session[s].last_data = time_now;
+                processccp(s, t, p, l);
+        }
+        else
+        {
+                LOG(2, s, t, "MPPP: Unsupported MP protocol 0x%04X received\n",proto);
+        }
+}
 
-		session[s].last_packet = session[s].last_data = time_now;
-		processipin(s, t, p, l);
-	}
-	else if (proto == PPPIPV6 && config->ipv6_prefix.s6_addr[0])
-	{
-		if (session[s].die)
-		{
-			LOG(4, s, t, "MPPP: Session %u is closing.  Don't process PPP packets\n", s);
-			return;              // closing session, PPP not processed
-		}
+static void update_session_out_stat(sessionidt s, sessiont *sp, int len)
+{
+	increment_counter(&sp->cout, &sp->cout_wrap, len); // byte count
+	sp->cout_delta += len;
+	sp->pout++;
+	sp->last_data = time_now;
 
-		session[s].last_packet = session[s].last_data = time_now;
-		processipv6in(s, t, p, l);
-	}
-	else
-	{
-		LOG(2, s, t, "MPPP: Unsupported MP protocol 0x%04X received\n",proto);
-	}
+	sess_local[s].cout += len;	// To send to master..
+	sess_local[s].pout++;
 }
 
 // process outgoing (to tunnel) IP
@@ -1123,8 +1145,7 @@ static void processipout(uint8_t *buf, int len)
 	uint8_t *data = buf;	// Keep a copy of the originals.
 	int size = len;
 
-	uint8_t b1[MAXETHER + 20];
-	uint8_t b2[MAXETHER + 20];
+	uint8_t fragbuf[MAXETHER + 20];
 
 	CSTAT(processipout);
 
@@ -1173,9 +1194,15 @@ static void processipout(uint8_t *buf, int len)
 		}
 		return;
 	}
+
 	t = session[s].tunnel;
+	if (len > session[s].mru || (session[s].mrru && len > session[s].mrru))
+	{
+		LOG(3, s, t, "Packet size more than session MRU\n");
+		return;
+	}
+
 	sp = &session[s];
-	sp->last_data = time_now;
 
 	// DoS prevention: enforce a maximum number of packets per 0.1s for a session
 	if (config->max_packets > 0)
@@ -1246,55 +1273,80 @@ static void processipout(uint8_t *buf, int len)
 	}
 
 	// Add on L2TP header
-	{
-		bundleidt bid = 0;
-		if (session[s].bundle && bundle[session[s].bundle].num_of_links > 1)
-		{
-			bid = session[s].bundle;
-			s = bundle[bid].members[bundle[bid].current_ses = ++bundle[bid].current_ses % bundle[bid].num_of_links];
-			LOG(4, s, t, "MPPP: (1)Session number becomes: %u\n", s);
-			if (len > 256)
-			{
-				// Partition the packet to 2 fragments
-				uint32_t frag1len = len / 2;
-				uint32_t frag2len = len - frag1len;
-				uint8_t *p = makeppp(b1, sizeof(b1), buf, frag1len, s, t, PPPIP, 0, bid, MP_BEGIN);
-				uint8_t *q;
+        {
+                bundleidt bid = 0;
+                if(session[s].bundle != 0 && bundle[session[s].bundle].num_of_links > 1)
+                {
+                        bid = session[s].bundle;
+                        s = bundle[bid].members[bundle[bid].current_ses = ++bundle[bid].current_ses % bundle[bid].num_of_links];
+			t = session[s].tunnel;
+			sp = &session[s];
+                        LOG(4, s, t, "MPPP: (1)Session number becomes: %d\n", s);
+                        if(len > MINFRAGLEN)
+                        {
+                                // Partition the packet to "bundle[b].num_of_links" fragments
+				bundlet *b = &bundle[bid];
+				uint32_t num_of_links = b->num_of_links;
+                                uint32_t fraglen = len / num_of_links;
+				fraglen = (fraglen > session[s].mru ? session[s].mru : fraglen);
+				uint32_t last_fraglen = fraglen + len % num_of_links;
+				last_fraglen = (last_fraglen > session[s].mru ? len % num_of_links : last_fraglen);
+				uint32_t remain = len;
 
-				if (!p) return;
-				tunnelsend(b1, frag1len + (p-b1), t); // send it...
-				s = bundle[bid].members[bundle[bid].current_ses = ++bundle[bid].current_ses % bundle[bid].num_of_links];
-				LOG(4, s, t, "MPPP: (2)Session number becomes: %u\n", s);
-				q = makeppp(b2, sizeof(b2), buf+frag1len, frag2len, s, t, PPPIP, 0, bid, MP_END);
-				if (!q) return;
-				tunnelsend(b2, frag2len + (q-b2), t); // send it...
-			}
-			else {
-				// Send it as one frame
-				uint8_t *p = makeppp(b1, sizeof(b1), buf, len, s, t, PPPIP, 0, bid, MP_BOTH_BITS);
-				if (!p) return;
-				tunnelsend(b1, len + (p-b1), t); // send it...
-			}
-		}
-		else
-		{
-			uint8_t *p = makeppp(b1, sizeof(b1), buf, len, s, t, PPPIP, 0, 0, 0);
-			if (!p) return;
-			tunnelsend(b1, len + (p-b1), t); // send it...
-		}
-	}
+				// send the first packet
+                                uint8_t *p = makeppp(fragbuf, sizeof(fragbuf), buf, fraglen, s, t, PPPIP, 0, bid, MP_BEGIN);
+                                if (!p) return;
+                                tunnelsend(fragbuf, fraglen + (p-fragbuf), t); // send it...
+				// statistics
+				update_session_out_stat(s, sp, fraglen);
+				remain -= fraglen;
+				while (remain > last_fraglen)
+				{ 
+                                	s = b->members[b->current_ses = ++b->current_ses % num_of_links];
+					t = session[s].tunnel;
+					sp = &session[s];
+                                	LOG(4, s, t, "MPPP: (2)Session number becomes: %d\n", s);
+                                	p = makeppp(fragbuf, sizeof(fragbuf), buf+(len - remain), fraglen, s, t, PPPIP, 0, bid, 0);
+                                	if (!p) return;
+                                	tunnelsend(fragbuf, fraglen + (p-fragbuf), t); // send it...
+					update_session_out_stat(s, sp, fraglen);
+					remain -= fraglen;
+				}
+				// send the last fragment
+				s = b->members[b->current_ses = ++b->current_ses % num_of_links];
+				t = session[s].tunnel;
+				sp = &session[s];
+                               	LOG(4, s, t, "MPPP: (2)Session number becomes: %d\n", s);
+                               	p = makeppp(fragbuf, sizeof(fragbuf), buf+(len - remain), remain, s, t, PPPIP, 0, bid, MP_END);
+                               	if (!p) return;
+                               	tunnelsend(fragbuf, remain + (p-fragbuf), t); // send it...
+				update_session_out_stat(s, sp, remain);
+				if (remain != last_fraglen)
+					LOG(3, s, t, "PROCESSIPOUT ERROR REMAIN != LAST_FRAGLEN, %d != %d\n", remain, last_fraglen);
+                        }
+                        else {
+                                // Send it as one frame
+                                uint8_t *p = makeppp(fragbuf, sizeof(fragbuf), buf, len, s, t, PPPIP, 0, bid, MP_BOTH_BITS);
+                                if (!p) return;
+                                tunnelsend(fragbuf, len + (p-fragbuf), t); // send it...
+				LOG(4, s, t, "MPPP: packet sent as one frame\n");
+				update_session_out_stat(s, sp, len);
+                        }
+                }
+                else
+                {
+                        uint8_t *p = makeppp(fragbuf, sizeof(fragbuf), buf, len, s, t, PPPIP, 0, 0, 0);
+                        if (!p) return;
+                        tunnelsend(fragbuf, len + (p-fragbuf), t); // send it...
+			update_session_out_stat(s, sp, len);
+                }
+        }
 
 	// Snooping this session, send it to intercept box
 	if (sp->snoop_ip && sp->snoop_port)
 		snoop_send_packet(buf, len, sp->snoop_ip, sp->snoop_port);
 
-	increment_counter(&sp->cout, &sp->cout_wrap, len); // byte count
-	sp->cout_delta += len;
-	sp->pout++;
 	udp_tx += len;
-
-	sess_local[s].cout += len;	// To send to master..
-	sess_local[s].pout++;
 }
 
 // process outgoing (to tunnel) IPv6
@@ -1661,7 +1713,9 @@ void filter_session(sessionidt s, int filter_in, int filter_out)
 void sessionshutdown(sessionidt s, char const *reason, int cdn_result, int cdn_error, int term_cause)
 {
 	int walled_garden = session[s].walled_garden;
-
+	bundleidt b = session[s].bundle;
+	//delete routes only for last session in bundle (in case of MPPP)
+	int del_routes = !b || (bundle[b].num_of_links == 1);
 
 	CSTAT(sessionshutdown);
 
@@ -1710,21 +1764,52 @@ void sessionshutdown(sessionidt s, char const *reason, int cdn_result, int cdn_e
 			    (session[s].route[r].ip & session[s].route[r].mask))
 				routed++;
 
-			routeset(s, session[s].route[r].ip, session[s].route[r].mask, 0, 0);
+			if (del_routes) routeset(s, session[s].route[r].ip, session[s].route[r].mask, 0, 0);
 			session[s].route[r].ip = 0;
 		}
 
 		if (session[s].ip_pool_index == -1) // static ip
 		{
-			if (!routed) routeset(s, session[s].ip, 0, 0, 0);
+			if (!routed && del_routes) routeset(s, session[s].ip, 0, 0, 0);
 			session[s].ip = 0;
 		}
 		else
 			free_ip_address(s);
 
 		// unroute IPv6, if setup
-		if (session[s].ppp.ipv6cp == Opened && session[s].ipv6prefixlen)
+		if (session[s].ppp.ipv6cp == Opened && session[s].ipv6prefixlen && del_routes)
 			route6set(s, session[s].ipv6route, session[s].ipv6prefixlen, 0);
+		
+		if (b) 
+		{
+	                // This session was part of a bundle
+	                bundle[b].num_of_links--;
+	                LOG(3, s, 0, "MPPP: Dropping member link: %d from bundle %d\n",s,b);
+	                if(bundle[b].num_of_links == 0) 
+			{
+	                        bundleclear(b);
+	                        LOG(3, s, 0, "MPPP: Kill bundle: %d (No remaing member links)\n",b);
+                	}
+                	else 
+			{
+	                        // Adjust the members array to accomodate the new change
+	                        uint8_t mem_num = 0;
+	                        // It should be here num_of_links instead of num_of_links-1 (previous instruction "num_of_links--")
+	                        if(bundle[b].members[bundle[b].num_of_links] != s) 
+				{
+	                                uint8_t ml;
+	                                for(ml = 0; ml<bundle[b].num_of_links; ml++)
+	                                        if(bundle[b].members[ml] == s)
+	                                        {
+	                                                mem_num = ml;
+	                                                break;
+	                                        }
+	                                bundle[b].members[mem_num] = bundle[b].members[bundle[b].num_of_links];
+	                                LOG(3, s, 0, "MPPP: Adjusted member links array\n");
+                        	}
+                	}
+                	cluster_send_bundle(b);
+        	}
 	}
 
 	if (session[s].throttle_in || session[s].throttle_out) // Unthrottle if throttled.
@@ -1834,8 +1919,6 @@ static void sessionclear(sessionidt s)
 // kill a session now
 void sessionkill(sessionidt s, char *reason)
 {
-	bundleidt b;
-
 	CSTAT(sessionkill);
 
 	if (!session[s].opened) // not alive
@@ -1852,39 +1935,7 @@ void sessionkill(sessionidt s, char *reason)
 	if (sess_local[s].radius)
 		radiusclear(sess_local[s].radius, s); // cant send clean accounting data, session is killed
 
-	LOG(2, s, session[s].tunnel, "Kill session %u (%s): %s\n", s, session[s].user, reason);
-	if ((b = session[s].bundle))
-	{
-		// This session was part of a bundle
-		bundle[b].num_of_links--;
-		LOG(3, s, 0, "MPPP: Dropping member link: %u from bundle %u\n", s, b);
-		if (bundle[b].num_of_links == 0)
-		{
-			bundleclear(b);
-			LOG(3, s, 0, "MPPP: Kill bundle: %u (No remaing member links)\n", b);
-		}
-		else
-		{
-			// Adjust the members array to accomodate the new change
-			uint8_t mem_num = 0;
-			// It should be here num_of_links instead of num_of_links-1 (previous instruction "num_of_links--")
-			if (bundle[b].members[bundle[b].num_of_links] != s)
-			{
-				uint8_t ml;
-				for (ml = 0; ml<bundle[b].num_of_links; ml++)
-				{
-					if (bundle[b].members[ml] == s)
-					{
-						mem_num = ml;
-						break;
-					}
-				}
-				bundle[b].members[mem_num] = bundle[b].members[bundle[b].num_of_links];
-				LOG(3, s, 0, "MPPP: Adjusted member links array\n");
-			}
-		}
-		cluster_send_bundle(b);
-	}
+	LOG(2, s, session[s].tunnel, "Kill session %d (%s): %s\n", s, session[s].user, reason);
 	sessionclear(s);
 	cluster_send_session(s);
 }
@@ -3911,6 +3962,7 @@ static void initdata(int optdebug, char *optconfig)
 	config->ppp_restart_time = 3;
 	config->ppp_max_configure = 10;
 	config->ppp_max_failure = 5;
+	config->kill_timedout_sessions = 1;
 	strcpy(config->random_device, RANDOMDEVICE);
 
 	log_stream = stderr;
@@ -4737,6 +4789,40 @@ static void update_config()
 		}
 	}
 
+	// Guest change
+        guest_accounts_num = 0;
+        char *p2 = config->guest_user;
+        while (p2 && *p2)
+        {
+                char *s = strpbrk(p2, " \t,");
+                if (s)
+                {
+                        *s++ = 0;
+                        while (*s == ' ' || *s == '\t')
+                                s++;
+
+                        if (!*s)
+                                s = 0;
+                }
+
+                strcpy(guest_users[guest_accounts_num], p2);
+                LOG(1, 0, 0, "Guest account[%d]: %s\n", guest_accounts_num, guest_users[guest_accounts_num]);
+                guest_accounts_num++;
+                p2 = s;
+        }
+        // Rebuild the guest_user array
+        strcpy(config->guest_user, "");
+        int ui = 0;
+        for (ui=0; ui<guest_accounts_num; ui++)
+        {
+                strcat(config->guest_user, guest_users[ui]);
+                if (ui<guest_accounts_num-1)
+                {
+                        strcat(config->guest_user, ",");
+                }
+        }
+
+
 	memcpy(config->old_plugins, config->plugins, sizeof(config->plugins));
 	if (!config->multi_read_count) config->multi_read_count = 10;
 	if (!config->cluster_address) config->cluster_address = inet_addr(DEFAULT_MCAST_ADDR);
@@ -4815,6 +4901,20 @@ int sessionsetup(sessionidt s, tunnelidt t)
 
 	LOG(3, s, t, "Doing session setup for session\n");
 
+	// Join a bundle if the MRRU option is accepted
+        if(session[s].mrru > 0 && session[s].bundle == 0)
+        {
+                LOG(3, s, t, "This session can be part of multilink bundle\n");
+                if (join_bundle(s) > 0)
+                	cluster_send_bundle(session[s].bundle);
+		else
+		{
+			LOG(0, s, t, "MPPP: Mismaching mssf option with other sessions in bundle\n");
+			sessionshutdown(s, "Mismaching mssf option.", CDN_NONE, TERM_SERVICE_UNAVAILABLE);
+			return 0;
+		}
+        }
+
 	if (!session[s].ip)
 	{
 		assign_ip_address(s);
@@ -4832,14 +4932,6 @@ int sessionsetup(sessionidt s, tunnelidt t)
 	// Make sure this is right
 	session[s].tunnel = t;
 
-	// Join a bundle if the MRRU option is accepted
-	if (session[s].mrru > 0 && !session[s].bundle)
-	{
-		LOG(3, s, t, "This session can be part of multilink bundle\n");
-		if (join_bundle(s))
-			cluster_send_bundle(session[s].bundle);
-	}
-
 	// zap old sessions with same IP and/or username
 	// Don't kill gardened sessions - doing so leads to a DoS
 	// from someone who doesn't need to know the password
@@ -4850,25 +4942,29 @@ int sessionsetup(sessionidt s, tunnelidt t)
 		{
 			if (i == s) continue;
 			if (!session[s].opened) continue;
+			// Allow duplicate sessions for multilink ones of the same bundle.
+                        if (session[s].bundle && session[i].bundle && session[s].bundle == session[i].bundle)
+                                continue;
 			if (ip == session[i].ip)
 			{
 				sessionkill(i, "Duplicate IP address");
 				continue;
 			}
 
-			if (config->allow_duplicate_users)
-				continue;
-
-			if (session[s].walled_garden || session[i].walled_garden)
-				continue;
-
-			// Allow duplicate sessions for guest account.
-			if (*config->guest_user && !strcasecmp(user, config->guest_user))
-				continue;
-
-			// Allow duplicate sessions for multilink ones of the same bundle.
-			if (session[s].bundle && session[i].bundle && session[s].bundle == session[i].bundle)
-				continue;
+			if (config->allow_duplicate_users) continue;
+			if (session[s].walled_garden || session[i].walled_garden) continue;
+			// Guest change
+			int found = 0;
+                        int gu;
+                        for (gu = 0; gu < guest_accounts_num; gu++)
+                        {
+                                if (!strcasecmp(user, guest_users[gu]))
+                                {
+                                        found = 1;
+                                        break;
+                                }
+                        }
+                        if (found) continue;
 
 			// Drop the new session in case of duplicate sessionss, not the old one.
 			if (!strcasecmp(user, session[i].user))
@@ -4876,6 +4972,8 @@ int sessionsetup(sessionidt s, tunnelidt t)
 		}
 	}
 
+	// no need to set a route for the same IP address of the bundle
+	if (!session[s].bundle || (bundle[session[s].bundle].num_of_links == 1))
 	{
 	    	int routed = 0;
 

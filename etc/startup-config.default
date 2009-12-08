@@ -41,6 +41,9 @@ set radius_secret "secret"
 # Allow multiple logins for the same username
 #set allow_duplicate_users no
 
+# Kill timedout sessions ? (default yes)
+#set kill_timedout_sessions no
+
 # Allow multiple logins for specific username
 #set guest_account ""
 

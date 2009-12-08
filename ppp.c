@@ -1,6 +1,6 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.103 2007-01-25 12:36:48 bodea Exp $";
+char const *cvs_id_ppp = "$Id: ppp.c,v 1.104 2009-12-08 14:49:28 bodea Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -30,6 +30,16 @@ static bundleidt new_bundle(void);
 static int epdiscmp(epdist, epdist);
 static void setepdis(epdist *, epdist);
 static void ipcp_open(sessionidt s, tunnelidt t);
+
+static int first_session_in_bundle(sessionidt s)
+{
+	bundleidt i;
+	for (i = 1; i < MAXBUNDLE; i++)
+		if (bundle[i].state != BUNDLEFREE)
+			if (epdiscmp(session[s].epdis,bundle[i].epdis) && !strcmp(session[s].user, bundle[i].user))
+				return 0;
+	return 1;	
+}
 
 // Process PAP messages
 void processpap(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
@@ -140,7 +150,10 @@ void processpap(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 
 		radius[r].id = p[1];
 		LOG(3, s, t, "Sending login for %s/%s to RADIUS\n", user, pass);
-		radiussend(r, RADIUSAUTH);
+		if ((session[s].mrru) && (!first_session_in_bundle(s)))
+			radiussend(r, RADIUSJUSTAUTH);
+		else
+			radiussend(r, RADIUSAUTH);
 	}
 }
 
@@ -257,7 +270,10 @@ void processchap(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 
 	radius[r].chap = 1;
 	LOG(3, s, t, "CHAP login %s\n", session[s].user);
-	radiussend(r, RADIUSAUTH);
+	if ((session[s].mrru) && (!first_session_in_bundle(s)))
+		radiussend(r, RADIUSJUSTAUTH);
+	else
+		radiussend(r, RADIUSAUTH);
 }
 
 static void dumplcp(uint8_t *p, int l)
@@ -366,17 +382,7 @@ void lcp_open(sessionidt s, tunnelidt t)
 	}
 	else
 	{
-		if (session[s].bundle && bundle[session[s].bundle].num_of_links > 1)
-		{
-			sessionidt first_ses = bundle[session[s].bundle].members[0];
-			LOG(3, s, t, "MPPP: Skipping IPCP negotiation for session:%d, first session of bundle is:%d\n", s, first_ses);
-			session[s].ip = session[first_ses].ip;
-			session[s].dns1 = session[first_ses].dns1;
-			session[s].dns2 = session[first_ses].dns2;
-			session[s].session_timeout = session[first_ses].session_timeout;
-			ipcp_open(s, t);
-		}
-		else
+		if(session[s].bundle == 0 || bundle[session[s].bundle].num_of_links == 1)
 		{
 			// This-Layer-Up
 			sendipcp(s, t);
@@ -389,6 +395,12 @@ void lcp_open(sessionidt s, tunnelidt t)
 
 			change_state(s, ccp, Stopped);
 		}
+		else
+		{
+			sessionidt first_ses = bundle[session[s].bundle].members[0];
+			LOG(3, s, t, "MPPP: Skipping IPCP negotiation for session:%d, first session of bundle is:%d\n",s,first_ses);
+			ipcp_open(s, t);
+                }
 	}
 }
 
@@ -1091,10 +1103,20 @@ int join_bundle(sessionidt s)
 		{
 			if (epdiscmp(session[s].epdis,bundle[i].epdis) && !strcmp(session[s].user, bundle[i].user))
 			{
+				sessionidt first_ses = bundle[i].members[0];
+				if (bundle[i].mssf != session[s].mssf)
+				{
+					// uniformity of sequence number format must be insured
+					LOG(3, s, session[s].tunnel, "MPPP: unable to bundle session %d in bundle %d cause of different mssf\n", s, i);
+					return -1;
+				}
 				session[s].bundle = i;
-				bundle[i].mrru = session[s].mrru;
-				bundle[i].mssf = session[s].mssf;
-				if (session[s].epdis.length > 0)
+				session[s].ip = session[first_ses].ip;
+				session[s].dns1 = session[first_ses].dns1;
+				session[s].dns2 = session[first_ses].dns2;
+				session[s].timeout = session[first_ses].timeout;
+
+				if(session[s].epdis.length > 0)
 					setepdis(&bundle[i].epdis, session[s].epdis);
 
 				strcpy(bundle[i].user, session[s].user);
@@ -1112,11 +1134,19 @@ int join_bundle(sessionidt s)
 	session[s].bundle = b;
 	bundle[b].mrru = session[s].mrru;
 	bundle[b].mssf = session[s].mssf;
-	if (session[s].epdis.length > 0)
+	// FIXME !!! to enable l2tpns reading mssf frames receiver_max_seq, sender_max_seq must be introduce
+	// now session[s].mssf flag indecates that the receiver wish to receive frames in mssf, so max_seq (i.e. recv_max_seq) = 1<<24
+	/*
+	if (bundle[b].mssf)
+		bundle[b].max_seq = 1 << 12;
+	else */
+		bundle[b].max_seq = 1 << 24;
+	if(session[s].epdis.length > 0)
 		setepdis(&bundle[b].epdis, session[s].epdis);
 
 	strcpy(bundle[b].user, session[s].user);
 	bundle[b].members[0] = s;
+	bundle[b].timeout = session[s].timeout;
 	LOG(3, s, session[s].tunnel, "MPPP: Created a new bundle (%d)\n", b);
 	return b;
 }
@@ -1148,23 +1178,24 @@ static void setepdis(epdist *ep1, epdist ep2)
 
 static bundleidt new_bundle()
 {
-	bundleidt i;
-	for (i = 1; i < MAXBUNDLE; i++)
-	{
-		if (bundle[i].state == BUNDLEFREE)
-		{
-			LOG(4, 0, 0, "MPPP: Assigning bundle ID %d\n", i);
-			bundle[i].num_of_links = 1;
-			bundle[i].last_check = time_now;	// Initialize last_check value
-			bundle[i].state = BUNDLEOPEN;
-			bundle[i].current_ses = -1;	// This is to enforce the first session 0 to be used at first
-			if (i > config->cluster_highest_bundleid)
-				config->cluster_highest_bundleid = i;
-			return i;
-		}
-	}
-	LOG(0, 0, 0, "MPPP: Can't find a free bundle! There shouldn't be this many in use!\n");
-	return 0;
+        bundleidt i;
+        for (i = 1; i < MAXBUNDLE; i++)
+        {
+                if (bundle[i].state == BUNDLEFREE)
+                {
+                        LOG(4, 0, 0, "MPPP: Assigning bundle ID %d\n", i);
+                        bundle[i].num_of_links = 1;
+                        bundle[i].last_check = time_now;        // Initialize last_check value
+                        bundle[i].state = BUNDLEOPEN;
+                        bundle[i].current_ses = -1;     // This is to enforce the first session 0 to be used at first
+			memset(&frag[i], 0, sizeof(fragmentationt));
+                        if (i > config->cluster_highest_bundleid)
+                                config->cluster_highest_bundleid = i;
+                        return i;
+                }
+        }
+        LOG(0, 0, 0, "MPPP: Can't find a free bundle! There shouldn't be this many in use!\n");
+        return 0;
 }
 
 static void ipcp_open(sessionidt s, tunnelidt t)
@@ -1645,6 +1676,39 @@ void processipv6cp(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 	}
 }
 
+static void update_sessions_in_stat(sessionidt s, uint16_t l)
+{
+	bundleidt b = session[s].bundle;
+	if (!b)
+	{
+		increment_counter(&session[s].cin, &session[s].cin_wrap, l);
+        	session[s].cin_delta += l;
+       		session[s].pin++;
+
+        	sess_local[s].cin += l;
+        	sess_local[s].pin++;
+	}
+	else
+	{
+		int i = frag[b].re_frame_begin_index;
+		int end = frag[b].re_frame_end_index;
+		for (;;)
+		{
+			l = frag[b].fragment[i].length;
+			s = frag[b].fragment[i].sid;
+			increment_counter(&session[s].cin, &session[s].cin_wrap, l);
+	                session[s].cin_delta += l;
+       		        session[s].pin++;
+
+                	sess_local[s].cin += l;
+                	sess_local[s].pin++;
+			if (i == end)
+				return;
+			i = (i + 1) & MAXFRAGNUM_MASK;
+		}
+	}
+}
+
 // process IP packet received
 //
 // This MUST be called with at least 4 byte behind 'p'.
@@ -1732,12 +1796,7 @@ void processipin(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 		snoop_send_packet(p, l, session[s].snoop_ip, session[s].snoop_port);
 	}
 
-	increment_counter(&session[s].cin, &session[s].cin_wrap, l);
-	session[s].cin_delta += l;
-	session[s].pin++;
-
-	sess_local[s].cin += l;
-	sess_local[s].pin++;
+	update_sessions_in_stat(s, l);
 
 	eth_tx += l;
 
@@ -1748,162 +1807,190 @@ void processipin(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 // process Multilink PPP packet received
 void processmpin(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 {
-	bundleidt b = session[s].bundle;
-	uint8_t begin_frame;
-	uint8_t end_frame;
-	uint32_t seq_num;
-	uint32_t offset;
+        bundleidt b = session[s].bundle;
+	bundlet * this_bundle = &bundle[b];
+	uint32_t frag_offset, M_offset;
+	uint16_t frag_index, M_index;
+	fragmentationt *this_fragmentation = &frag[b];
+	uint8_t begin_frame = (*p & MP_BEGIN);
+        uint8_t end_frame = (*p & MP_END);
+        uint32_t seq_num;
+	uint8_t flags = *p;
+	uint16_t begin_index, end_index;
 
-	if (!b)
+	// Perform length checking
+        if(l > MAXFRAGLEN)
+        {
+	       	LOG(2, s, t, "MPPP: discarding fragment larger than MAXFRAGLEN\n");
+              	return;
+        }
+
+        if(!b)
+        {
+                LOG(2, s, t, "MPPP: Invalid bundle id: 0\n");
+                return;
+        }
+	// FIXME !! session[s].mssf means that the receiver wants to receive frames in mssf not means the receiver will send frames in mssf
+        /* if(session[s].mssf)
+        {
+                // Get 12 bit for seq number
+                seq_num = ntohs((*(uint16_t *) p) & 0xFF0F);
+                p += 2;
+                l -= 2;
+                // After this point the pointer should be advanced 2 bytes
+                LOG(3, s, t, "MPPP: 12 bits, sequence number: %d\n",seq_num);
+        }
+        else */
+        {
+                // Get 24 bit for seq number
+                seq_num = ntohl((*(uint32_t *) p) & 0xFFFFFF00);
+                p += 4;
+                l -= 4;
+                // After this point the pointer should be advanced 4 bytes
+                LOG(4, s, t, "MPPP: 24 bits sequence number:%d\n",seq_num);
+        }
+
+	// calculate this fragment's offset from the begin seq in the bundle
+	frag_offset = (seq_num + this_bundle->max_seq - this_fragmentation->start_seq) & (this_bundle->max_seq-1);
+
+	// discard this fragment if frag_offset is bigger that the fragmentation buffer size
+	if (frag_offset >= MAXFRAGNUM)
+        {
+        	LOG(3, s, t, "MPPP: Index out of range, received more than MAXFRAGNUM fragment (lost frag) seq:%d, begin_seq:%d, bundle:%d, max:%d\n",seq_num, this_fragmentation->start_seq, b, this_bundle->max_seq);
+                return;
+        }
+	
+	// update M
+	sess_local[s].last_seq = seq_num;
+	if (seq_num < this_fragmentation->M)
+		this_fragmentation->M = seq_num;
+	else
 	{
-		LOG(3, s, t, "MPPP: Invalid bundle id: 0\n");
-		return;
+		uint32_t i, min = sess_local[(this_bundle->members[0])].last_seq;;
+		for (i = 1; i < this_bundle->num_of_links; i++)
+		{
+			uint32_t s_seq = sess_local[(this_bundle->members[i])].last_seq; 
+			if (s_seq < min)
+				min = s_seq;
+		}
+		this_fragmentation->M = min;
 	}
 
-	begin_frame = (*p & 0x80);
-	end_frame = (*p & 0x40);
-	if (session[s].mssf)
+	LOG(4, s, t, "MPPP: Setting M to %d\n", this_fragmentation->M);	
+	//calculate M's offset from the begin seq in the bundle
+	M_offset = (this_fragmentation->M + this_bundle->max_seq - this_fragmentation->start_seq) & (this_bundle->max_seq-1);
+
+	//caculate M's index in the fragment array
+	M_index = (M_offset + this_fragmentation->start_index) & MAXFRAGNUM_MASK;
+	
+	//caculate received fragment's index in the fragment array
+	frag_index = (frag_offset + this_fragmentation->start_index) & MAXFRAGNUM_MASK;
+
+	//frame with a single fragment
+	if (begin_frame && end_frame)
 	{
-		// Get 12 bit for seq number
-		uint16_t short_seq_num = ntohs((*(uint16_t *) p) & 0xFF0F);
-		uint16_t short_seq_num2 = short_seq_num >> 4;
-		p += 2;
-		l -= 2;
-		seq_num = short_seq_num2;
-		// After this point the pointer should be advanced 2 bytes
-		LOG(3, s, t, "MPPP: 12 bits, sequence number: %d, short1: %d, short2: %d\n",seq_num, short_seq_num, short_seq_num2);
+		// process and reset fragmentation
+                LOG(4, s, t, "MPPP: Both bits are set (Begin and End).\n");
+		this_fragmentation->fragment[frag_index].length = l;
+		this_fragmentation->fragment[frag_index].sid = s;
+		this_fragmentation->fragment[frag_index].flags = flags;
+		this_fragmentation->fragment[frag_index].seq = seq_num;
+		this_fragmentation->re_frame_begin_index = frag_index;
+		this_fragmentation->re_frame_end_index = frag_index;
+		processmpframe(s, t, p, l, 0);
+		this_fragmentation->fragment[frag_index].length = 0;
+		this_fragmentation->fragment[frag_index].flags = 0;
+		end_index = frag_index;
 	}
 	else
 	{
-		// Get 24 bit for seq number
-		p++;
-		seq_num = ntohl((*(uint32_t *) p) & 0xFFFFFF00);
-		seq_num = seq_num >> 8;
-		p += 3;
-		l -= 4;
-		// After this point the pointer should be advanced 4 bytes
-		LOG(4, s, t, "MPPP: 24 bits sequence number:%d\n",seq_num);
-	}
+		// insert the frame in it's place
+		fragmentt *this_frag = &this_fragmentation->fragment[frag_index];
+		this_frag->length = l;
+		this_frag->sid = s;
+		this_frag->flags = flags;
+		this_frag->seq = seq_num;
+                memcpy(this_frag->data, p, l);
 
-	if (seq_num - bundle[b].offset < 0)
-	{
-		bundle[b].offset = 0;
-		bundle[b].pending_frag = 0;
-	}
-
-	offset = bundle[b].offset;
-	if (begin_frame)
-	{
-		// Check for previous non-assembled frames
-		int error = 0;
-		if (bundle[b].pending_frag)
+		// try to assemble the frame that has the received fragment as a member		
+		// get the beginning of this frame
+		begin_index = end_index = frag_index;
+		while (this_fragmentation->fragment[begin_index].length)
 		{
-			uint32_t fn = bundle[b].seq_num_m - offset;
-			uint16_t cur_len;
-			bundle[b].pending_frag = 0;
-			// Check for array indexes
-			if (fn < 0 || fn > MAXFRAGNUM)
-			{
-				LOG(2, s, t, "ERROR: Index out of range fn:%d, bundle:%d\n",fn,b);
-				return;
-			}
-
-			if (seq_num-offset < 0 || seq_num-offset > MAXFRAGNUM)
-			{
-				LOG(2, s, t, "ERROR: Index out of range fn(last):%d, bundle:%d\n",fn,b);
-				return;
-			}
-			/////////////////////////////////////////////////////
-			cur_len = 4;   // This is set to 4 to leave 4 bytes for function processipin
-			for (fn = bundle[b].seq_num_m - offset; fn < seq_num - offset; fn++)
-			{
-				if (!frag[b].fragment[fn].length)
-				{
-					LOG(4, s, t, "MPPP: Found lost fragment while reassembling frame %d in (%d,%d)\n",fn, bundle[b].seq_num_m-offset, seq_num-offset);
-					error = 1;
-					break;
-				}
-
-				if (cur_len + frag[b].fragment[fn].length > MAXETHER)
-				{
-					LOG(2, s, t, "MPPP: ERROR: very long frame after assembling %d\n", frag[b].fragment[fn].length+cur_len);
-					error = 1;
-					break;
-				}
-
-				memcpy(frag[b].reassembled_frame+cur_len, frag[b].fragment[fn].data, frag[b].fragment[fn].length);
-				cur_len += frag[b].fragment[fn].length; 
-				frag[b].fragment[fn].length = 0;      // Indicates that this fragment has been consumed
-				// This is usefull for compression
-				memset(frag[b].fragment[fn].data, 0, sizeof(frag[b].fragment[fn].data));
-			}
-
-			if (!error)
-			{
-				frag[b].re_frame_len = cur_len;
-				// Process the resassembled frame
-				LOG(4, s, t, "MPPP: Process the reassembled frame, len=%d\n",cur_len);
-				processmpframe(s, t, frag[b].reassembled_frame, frag[b].re_frame_len, 1);
-				// Set reassembled frame length to zero after processing it
-				frag[b].re_frame_len = 0;
-				memset(frag[b].reassembled_frame, 0, sizeof(frag[b].reassembled_frame));
-			}
+			if (this_fragmentation->fragment[begin_index].flags & MP_BEGIN)
+				break;
+			begin_index = (begin_index ? (begin_index -1) : (MAXFRAGNUM -1)); 
 		}
-		//////////////////////////////////////////
-		bundle[b].seq_num_m = seq_num;
-		if (end_frame)
+
+		// return if a lost fragment is found
+		if (!(this_fragmentation->fragment[begin_index].length))
+			return; // assembling frame failed
+		// get the end of his frame
+		while (this_fragmentation->fragment[end_index].length)
 		{
-			// Both bits are set
-			LOG(4, s, t, "MPPP: Both bits are set (Begin and End).\n");
-			processmpframe(s, t, p, l, 0);
-			// The maximum number of fragments is 1500
-			if (seq_num - bundle[b].offset >= 1400)
-			{
-				bundle[b].offset = seq_num;
-				LOG(4, s, t, "MPPP: Setting offset to: %d\n",bundle[b].offset);
-			}
+			if (this_fragmentation->fragment[end_index].flags & MP_END)
+				break;
+			end_index = (end_index +1) & MAXFRAGNUM_MASK; 
 		}
-		else
+
+		// return if a lost fragment is found
+		if (!(this_fragmentation->fragment[end_index].length))
+			return; // assembling frame failed
+
+		// assemble the packet
+		//assemble frame, process it, reset fragmentation
+		uint16_t cur_len = 4;   // This is set to 4 to leave 4 bytes for function processipin
+		uint32_t i;
+
+               	LOG(4, s, t, "MPPP: processing fragments from %d to %d\n", begin_index, end_index);
+               	// Push to the receive buffer
+		                        
+		for (i = begin_index;; i = (i + 1) & MAXFRAGNUM_MASK)
+                {
+			this_frag = &this_fragmentation->fragment[i];
+                        if(cur_len + this_frag->length > MAXETHER)
+                        {
+                                LOG(2, s, t, "MPPP: discarding reassembled frames larger than MAXETHER\n");				
+                                break;
+                        }
+                        memcpy(this_fragmentation->reassembled_frame+cur_len, this_frag->data, this_frag->length);
+			LOG(5, s, t, "MPPP: processing frame at %d, with len %d\n", i, this_frag->length);
+                        cur_len += this_frag->length;
+			if (i == end_index)
+			{
+				this_fragmentation->re_frame_len = cur_len;
+				this_fragmentation->re_frame_begin_index = begin_index;
+                		this_fragmentation->re_frame_end_index = end_index;
+                		// Process the resassembled frame
+                		LOG(5, s, t, "MPPP: Process the reassembled frame, len=%d\n",cur_len);
+                		processmpframe(s, t, this_fragmentation->reassembled_frame, this_fragmentation->re_frame_len, 1);
+				break;
+			}
+                }
+                // Set reassembled frame length to zero after processing it
+                this_fragmentation->re_frame_len = 0;
+		for (i = begin_index;; i = (i + 1) & MAXFRAGNUM_MASK)
 		{
-			bundle[b].pending_frag = 1;
-			// End bit is clear
-                	LOG(4, s, t, "MPPP: Push to receive buffer\n");
-                	// Push to the receive buffer
-			// Array indexes checking
-			if (seq_num-offset < 0 || seq_num-offset >= MAXFRAGNUM)
-			{
-				LOG(2, s, t, "ERROR: Index out of range, push to receive buffer(1) seq:%d, offset:%d, bundle:%d\n",seq_num,offset,b);
-				return;
-			}
-			// Perform length checking
-			if (l > MAXFRAGLEN)
-			{
-				LOG(2, s, t, "MPPP: ERROR: very long fragment length (1)\n");
-				return;
-			}
-                	frag[b].fragment[seq_num - offset].length = l;
-                	memcpy(frag[b].fragment[seq_num - offset].data, p, l);
+			this_fragmentation->fragment[i].length = 0;      // Indicates that this fragment has been consumed
+			this_fragmentation->fragment[i].flags = 0;
+			if (i == end_index)
+				break;
 		}
 	}
-	else
-	{
-		LOG(4, s, t, "MPPP: Push to receive buffer\n");
-		// Push to the receive buffer
-		// Array indexes checking
-		if (seq_num-offset < 0 || seq_num-offset >= MAXFRAGNUM)
-		{
-			LOG(2, s, t, "ERROR: Index out of range, push to receive buffer(2) seq:%d, offset:%d, bundle:%d\n",seq_num,offset,b);
-			return;
-		}
-		// Perform length checking
-		if (l > MAXFRAGLEN)
-		{
-			LOG(2, s, t, "MPPP: ERROR: very long fragment length (2).\n");
-			return;
-		}
-		frag[b].fragment[seq_num - offset].length = l;
-		memcpy(frag[b].fragment[seq_num - offset].data, p, l);
-	}
+	//discard fragments received before the recently assembled frame
+	begin_index = this_fragmentation->start_index;
+	this_fragmentation->start_index = (end_index + 1) & MAXFRAGNUM_MASK;
+        this_fragmentation->start_seq = (this_fragmentation->fragment[end_index].seq + 1) & (this_bundle->max_seq-1);
+	//clear length and flags of the discarded fragments
+	while (begin_index != this_fragmentation->start_index)
+        {
+                this_fragmentation->fragment[begin_index].flags = 0;
+		this_fragmentation->fragment[begin_index].length = 0;
+                begin_index = (begin_index + 1) & MAXFRAGNUM_MASK;
+        }
+
+	LOG(4, s, t, "MPPP after assembling: M index is =%d, start index is = %d, start seq=%d\n",M_index, this_fragmentation->start_index, this_fragmentation->start_seq);	
+	return;
 }
 
 // process IPv6 packet received
@@ -1989,12 +2076,7 @@ void processipv6in(sessionidt s, tunnelidt t, uint8_t *p, uint16_t l)
 		snoop_send_packet(p, l, session[s].snoop_ip, session[s].snoop_port);
 	}
 
-	increment_counter(&session[s].cin, &session[s].cin_wrap, l);
-	session[s].cin_delta += l;
-	session[s].pin++;
-
-	sess_local[s].cin += l;
-	sess_local[s].pin++;
+	update_sessions_in_stat(s, l);
 
 	eth_tx += l;
 
@@ -2265,7 +2347,7 @@ uint8_t *makeppp(uint8_t *b, int size, uint8_t *p, int l, sessionidt s, tunnelid
 		{
 			// Set the multilink bits
 			uint16_t bits_send = mp_bits;
-			*(uint16_t *) b = htons((bundle[bid].seq_num_t & 0xFF0F)|bits_send);
+			*(uint16_t *) b = htons((bundle[bid].seq_num_t & 0x0FFF)|bits_send);
 			b += 2;
 		}
 		else

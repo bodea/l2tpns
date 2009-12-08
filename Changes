@@ -1,3 +1,6 @@
+Wed Dec 9 2009 Brendan O'Dea <bod@optus.net> 2.2.x
+- Apply MLPPP patch from Muhammad Tayseer Alquoatli.
+
 * Mon Dec 18 2006 Brendan O'Dea <bod@optus.net> 2.2.0
 - Only poll clifd if successfully bound.
 - Add "Practical VPNs" document from Liran Tal as Docs/vpn .

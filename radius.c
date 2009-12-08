@@ -1,6 +1,6 @@
 // L2TPNS Radius Stuff
 
-char const *cvs_id_radius = "$Id: radius.c,v 1.55 2006-08-02 14:17:30 bodea Exp $";
+char const *cvs_id_radius = "$Id: radius.c,v 1.56 2009-12-08 14:49:28 bodea Exp $";
 
 #include <time.h>
 #include <stdio.h>
@@ -177,7 +177,7 @@ void radiussend(uint16_t r, uint8_t state)
 		return;
 	}
 
-	if (state != RADIUSAUTH && !config->radius_accounting)
+	if (state != RADIUSAUTH && state != RADIUSJUSTAUTH && !config->radius_accounting)
 	{
 		// Radius accounting is turned off
 		radiusclear(r, s);
@@ -197,7 +197,7 @@ void radiussend(uint16_t r, uint8_t state)
 	{
 		if (s)
 		{
-			if (state == RADIUSAUTH)
+			if (state == RADIUSAUTH || state == RADIUSJUSTAUTH)
 				sessionshutdown(s, "RADIUS timeout.", CDN_ADMIN_DISC, TERM_REAUTHENTICATION_FAILURE);
 			else
 			{
@@ -219,6 +219,7 @@ void radiussend(uint16_t r, uint8_t state)
 	switch (state)
 	{
 		case RADIUSAUTH:
+		case RADIUSJUSTAUTH:
 			b[0] = AccessRequest;               // access request
 			break;
 		case RADIUSSTART:
@@ -239,7 +240,7 @@ void radiussend(uint16_t r, uint8_t state)
 		strcpy((char *) p + 2, session[s].user);
 		p += p[1];
 	}
-	if (state == RADIUSAUTH)
+	if (state == RADIUSAUTH || state == RADIUSJUSTAUTH)
 	{
 		if (radius[r].chap)
 		{
@@ -380,12 +381,12 @@ void radiussend(uint16_t r, uint8_t state)
 
 	        *p = 6;		// Service-Type
 		p[1] = 6;
-		*(uint32_t *) (p + 2) = htonl(2); // Framed-User
+		*(uint32_t *) (p + 2) = htonl((state == RADIUSJUSTAUTH ? 8 : 2)); // Authenticate only or Framed-User respectevily
 		p += p[1];
 		   
 	        *p = 7;		// Framed-Protocol
-		p[1] = 6;
-		*(uint32_t *) (p + 2) = htonl(1); // PPP
+		p[1] = htonl((state == RADIUSJUSTAUTH ? 0 : 6));
+		*(uint32_t *) (p + 2) = htonl((state == RADIUSJUSTAUTH ? 0 : 1)); // PPP
 		p += p[1];
 
 		if (session[s].ip)
@@ -462,7 +463,7 @@ void radiussend(uint16_t r, uint8_t state)
 
 	// All AVpairs added
 	*(uint16_t *) (b + 2) = htons(p - b);
-	if (state != RADIUSAUTH)
+	if (state != RADIUSAUTH && state != RADIUSJUSTAUTH)
 	{
 		// Build auth for accounting packet
 		calc_auth(b, p - b, zero, b + 4);
@@ -475,7 +476,7 @@ void radiussend(uint16_t r, uint8_t state)
 		// get radius port
 		uint16_t port = config->radiusport[(radius[r].try - 1) % config->numradiusservers];
 		// assume RADIUS accounting port is the authentication port +1
-		addr.sin_port = htons((state == RADIUSAUTH) ? port : port+1);
+		addr.sin_port = htons((state == RADIUSAUTH || state == RADIUSJUSTAUTH) ? port : port+1);
 	}
 
 	LOG_HEX(5, "RADIUS Send", b, (p - b));
@@ -558,7 +559,7 @@ void processrad(uint8_t *buf, int len, char socket_index)
 		LOG(1, s, session[s].tunnel, "   Unexpected RADIUS response\n");
 		return;
 	}
-	if (radius[r].state != RADIUSAUTH && radius[r].state != RADIUSSTART
+	if (radius[r].state != RADIUSAUTH && radius[r].state != RADIUSJUSTAUTH && radius[r].state != RADIUSSTART
 	    && radius[r].state != RADIUSSTOP && radius[r].state != RADIUSINTERIM)
 	{
 		LOG(1, s, session[s].tunnel, "   Unexpected RADIUS response\n");
@@ -573,7 +574,7 @@ void processrad(uint8_t *buf, int len, char socket_index)
 			return; // Do nothing. On timeout, it will try the next radius server.
 		}
 
-		if ((radius[r].state == RADIUSAUTH && r_code != AccessAccept && r_code != AccessReject) ||
+		if (((radius[r].state == RADIUSAUTH ||radius[r].state == RADIUSJUSTAUTH) && r_code != AccessAccept && r_code != AccessReject) ||
 			((radius[r].state == RADIUSSTART || radius[r].state == RADIUSSTOP || radius[r].state == RADIUSINTERIM) && r_code != AccountingResponse))
 		{
 			LOG(1, s, session[s].tunnel, "   Unexpected RADIUS response %s\n", radius_code(r_code));
@@ -581,7 +582,7 @@ void processrad(uint8_t *buf, int len, char socket_index)
 				// care off finishing the radius session if that's really correct.
 		}
 
-		if (radius[r].state == RADIUSAUTH)
+		if (radius[r].state == RADIUSAUTH || radius[r].state == RADIUSJUSTAUTH)
 		{
 			// run post-auth plugin
 			struct param_post_auth packet = {
@@ -783,6 +784,8 @@ void processrad(uint8_t *buf, int len, char socket_index)
 					    	if (p[1] < 6) continue;
 						session[s].session_timeout = ntohl(*(uint32_t *)(p + 2));
 						LOG(3, s, session[s].tunnel, "   Radius reply contains Session-Timeout = %u\n", session[s].session_timeout);
+						if(!session[s].session_timeout && config->kill_timedout_sessions)
+                                                        sessionshutdown(s, "Session timeout is zero", CDN_ADMIN_DISC, 0);
 					}
 					else if (*p == 28)
 					{
@@ -869,6 +872,7 @@ void radiusretry(uint16_t r)
 			sendchap(s, t);
 			break;
 		case RADIUSAUTH:	// sending auth to RADIUS server
+		case RADIUSJUSTAUTH:	// sending auth to RADIUS server
 		case RADIUSSTART:	// sending start accounting to RADIUS server
 		case RADIUSSTOP:	// sending stop accounting to RADIUS server
 		case RADIUSINTERIM:	// sending interim accounting to RADIUS server

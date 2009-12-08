@@ -1,6 +1,6 @@
 // L2TPNS: constants
 
-char const *cvs_id_constants = "$Id: constants.c,v 1.7 2005-07-31 10:04:10 bodea Exp $";
+char const *cvs_id_constants = "$Id: constants.c,v 1.8 2009-12-08 14:49:28 bodea Exp $";
 
 #include <stdio.h>
 #include "constants.h"
@@ -197,7 +197,8 @@ CONSTANT(radius_state,
     "RADIUSSTART",					// 3
     "RADIUSSTOP",					// 4
     "RADIUSINTERIM",					// 5
-    "RADIUSWAIT"					// 6
+    "RADIUSWAIT",					// 6
+    "RADIUSJUSTAUTH"					// 7
 )
 
 CONSTANT(radius_code,

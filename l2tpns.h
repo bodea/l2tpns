@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.120 2006-10-23 02:51:53 bodea Exp $
+// $Id: l2tpns.h,v 1.121 2009-12-08 14:49:28 bodea Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -19,10 +19,8 @@
 // Limits
 #define MAXTUNNEL	500		// could be up to 65535
 #define MAXBUNDLE	300		// could be up to 65535
-#define MAXBUNDLESES	10		// Maximum number of member links in bundle
+#define MAXBUNDLESES	12		// Maximum number of member links in bundle
 #define MAXADDRESS	20		// Maximum length for the Endpoint Discrminiator address
-#define MAXFRAGNUM	1500		// Maximum number of Multilink fragment in a bundle
-#define MAXFRAGLEN      1000		// Maximum length for Multilink fragment
 #define MAXSESSION	60000		// could be up to 65535
 #define MAXTBFS		6000		// Maximum token bucket filters. Might need up to 2 * session.
 
@@ -52,9 +50,15 @@
 #define IDLE_TIMEOUT	240		// Time between last packet seen and session shutdown
 #define BUSY_WAIT_TIME	3000		// 5 minutes in 1/10th seconds to wait for radius to cleanup on shutdown
 
-#define MP_BEGIN	0x80		// This value is used when (b)egin bit is set in MP header
-#define MP_END		0x40		// This value is used when (e)nd bit is set in MP header
-#define MP_BOTH_BITS	0xC0		// This value is used when both bits (begin and end) are set in MP header
+#define MP_BEGIN        0x80            // This value is used when (b)egin bit is set in MP header
+#define MP_END          0x40            // This value is used when (e)nd bit is set in MP header
+#define MP_BOTH_BITS    0xC0            // This value is used when both bits (begin and end) are set in MP header
+
+#define MINFRAGLEN	64		// Minumum fragment length
+#define MAXFRAGLEN	750		// Maximum length for Multilink fragment (MTU / 2 sessions)
+#define MAXFRAGNUM	128		// Maximum number of Multilink fragment in a bundle (must be in the form of 2^X)
+					// it's not expected to have a space for more than 10 unassembled packets = 10 * MAXBUNDLESES
+#define	MAXFRAGNUM_MASK	127		// Must be equal to MAXFRAGNUM-1
 
 // Constants
 #ifndef ETCDIR
@@ -248,8 +252,11 @@ typedef struct {
 } epdist;
 
 typedef struct {
-	uint16_t length;		// Fragment length
-	uint8_t data[MAXFRAGLEN];	// Fragment data
+	sessionidt sid;			// Fragment originating session
+	uint8_t	flags;			// MP frame flags
+	uint32_t seq;			// fragment seq num
+        uint16_t length;                // Fragment length
+        uint8_t data[MAXFRAGLEN];       // Fragment data
 } fragmentt;
 
 typedef struct
@@ -297,10 +304,11 @@ typedef struct
 	char calling[MAXTEL];		// calling number
 	uint32_t tx_connect_speed;
 	uint32_t rx_connect_speed;
-	uint32_t mrru;			// Multilink Max-Receive-Reconstructed-Unit
-	uint8_t mssf;			// Multilink Short Sequence Number Header Format
-	epdist epdis;			// Multilink Endpoint Discriminator
-	bundleidt bundle;		// Multilink Bundle Identifier
+	clockt timeout;                 // Session timeout
+        uint32_t mrru;                  // Multilink Max-Receive-Reconstructed-Unit
+        uint8_t mssf;                   // Multilink Short Sequence Number Header Format
+        epdist epdis;                   // Multilink Endpoint Discriminator
+        bundleidt bundle;               // Multilink Bundle Identifier
 	in_addr_t snoop_ip;		// Interception destination IP
 	uint16_t snoop_port;		// Interception destination port
 	uint8_t walled_garden;		// is this session gardened?
@@ -312,28 +320,31 @@ sessiont;
 
 typedef struct
 {
-	int state;				// current state (bundlestate enum)
-	uint32_t seq_num_t;			// Sequence Number (transmission)
-	uint32_t seq_num_m;			// Last received frame sequence number (bearing B bit)
-	uint32_t offset;			// Offset between sequence number and array index
-	uint8_t pending_frag;			// Indicate that there is pending fragments to reassemble
-	uint8_t num_of_links;			// Number of links joint to this bundle
-	uint32_t online_time;			// The time this bundle is online
-	clockt last_check;			// Last time the timeout is checked
-	uint32_t mrru;				// Multilink Max-Receive-Reconstructed-Unit
-	uint8_t mssf;				// Multilink Short Sequence Number Header Format
-	epdist epdis;				// Multilink Endpoint Discriminator
-	char user[MAXUSER];			// Needed for matching member links
-	sessionidt current_ses;			// Current session to use for sending (used in RR load-balancing)
-	sessionidt members[MAXBUNDLESES];	// Array for member links sessions
+        int state;                              // current state (bundlestate enum)
+        uint32_t seq_num_t;                     // Sequence Number (transmission)
+        uint32_t timeout;                       // Session-Timeout for bundle
+	uint32_t max_seq;			// Max value of sequence number field
+        uint8_t num_of_links;                   // Number of links joint to this bundle
+        uint32_t online_time;                   // The time this bundle is online
+        clockt last_check;                      // Last time the timeout is checked
+        uint32_t mrru;                          // Multilink Max-Receive-Reconstructed-Unit
+        uint8_t mssf;                           // Multilink Short Sequence Number Header Format
+        epdist epdis;                           // Multilink Endpoint Discriminator
+        char user[MAXUSER];                     // Needed for matching member links
+        sessionidt current_ses;                 // Current session to use for sending (used in RR load-balancing)
+        sessionidt members[MAXBUNDLESES];       // Array for member links sessions
 }
 bundlet;
 
 typedef struct
 {
-	fragmentt fragment[MAXFRAGNUM];
-	uint8_t reassembled_frame[MAXETHER];	// The reassembled frame
-	uint16_t re_frame_len;			// The reassembled frame length
+        fragmentt fragment[MAXFRAGNUM];
+        uint8_t reassembled_frame[MAXETHER];    // The reassembled frame
+        uint16_t re_frame_len;                  // The reassembled frame length
+	uint16_t re_frame_begin_index, re_frame_end_index;	// reassembled frame begin index, end index respectively
+	uint16_t start_index, end_index;	// start and end sequence numbers available on the fragments array respectively
+	uint32_t M;				// Minumum frame sequence number received over all bundle members
+	uint32_t start_seq;                     // Last received frame sequence number (bearing B bit)
 }
 fragmentationt;
 
@@ -388,6 +399,9 @@ typedef struct
 
 	// last LCP Echo
 	time_t last_echo;
+
+	// Last Multilink frame sequence number received
+	uint32_t last_seq;
 } sessionlocalt;
 
 // session flags
@@ -497,6 +511,7 @@ enum
 	RADIUSSTOP,             // sending stop accounting to RADIUS server
 	RADIUSINTERIM,		// sending interim accounting to RADIUS server
 	RADIUSWAIT,		// waiting timeout before available, in case delayed replies
+	RADIUSJUSTAUTH,         // sending auth to RADIUS server, just authentication, no ip assigning
 };
 
 struct Tstats
@@ -644,7 +659,7 @@ typedef struct
 	int		radius_authprefer;
 
 	int		allow_duplicate_users;		// allow multiple logins with the same username
-	char		guest_user[MAXUSER];		// allow multiple logins to guest account username
+	int		kill_timedout_sessions;		// kill authenticated sessions with "session_timeout == 0"
 
 	in_addr_t	default_dns1, default_dns2;
 
@@ -691,10 +706,14 @@ typedef struct
 	int		cluster_hb_interval;		// How often to send a heartbeat.
 	int		cluster_hb_timeout;		// How many missed heartbeats trigger an election.
 	uint64_t	cluster_table_version;		// # state changes processed by cluster
-	int		cluster_master_min_adv;		// Master advertises routes while the number of up to date
-							// slaves is less than this value.
 
 	struct in6_addr ipv6_prefix;			// Our IPv6 network pool.
+
+
+	int		cluster_master_min_adv;		// Master advertises routes while the number of up to date
+							// slaves is less than this value.
+	// Guest change
+	char            guest_user[MAXUSER];            // Guest account username
 
 #ifdef BGP
 #define BGP_NUM_PEERS	2

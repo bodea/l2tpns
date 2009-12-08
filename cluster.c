@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.54 2006-12-04 20:50:02 bodea Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.55 2009-12-08 14:49:28 bodea Exp $";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -402,7 +402,7 @@ void cluster_send_ping(time_t basetime)
 
 	x.ver = 1;
 	x.addr = config->bind_address;
-	x.undef = config->cluster_undefined_sessions + config->cluster_undefined_tunnels;
+	x.undef = config->cluster_undefined_sessions + config->cluster_undefined_tunnels + config->cluster_undefined_bundles;
 	x.basetime = basetime;
 
 	add_type(&p, C_PING, basetime, (uint8_t *) &x, sizeof(x));
@@ -940,9 +940,8 @@ void cluster_heartbeat()
 		if (bcount >= config->cluster_highest_bundleid)
 			break;
 
-		hb_add_type(&p, C_CTUNNEL, walk_bundle_number);
-		walk_tunnel_number = (1+walk_bundle_number)%(config->cluster_highest_bundleid+1);       // +1 avoids divide by zero.
-
+		hb_add_type(&p, C_CBUNDLE, walk_bundle_number);
+		walk_bundle_number = (1+walk_bundle_number)%(config->cluster_highest_bundleid+1);	// +1 avoids divide by zero.
 		++bcount;
         }
 
