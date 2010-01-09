@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.173 2009-12-08 14:49:28 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.174 2010-01-09 13:33:41 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -1730,6 +1730,7 @@ void sessionshutdown(sessionidt s, char const *reason, int cdn_result, int cdn_e
 		struct param_kill_session data = { &tunnel[session[s].tunnel], &session[s] };
 		LOG(2, s, session[s].tunnel, "Shutting down session %u: %s\n", s, reason);
 		run_plugins(PLUGIN_KILL_SESSION, &data);
+		session[s].die = TIME + 150; // Clean up in 15 seconds
 	}
 
 	if (session[s].ip && !walled_garden && !session[s].die)
@@ -1832,9 +1833,6 @@ void sessionshutdown(sessionidt s, char const *reason, int cdn_result, int cdn_e
 		controladd(c, session[s].far, session[s].tunnel); // send the message
 	}
 
-	if (!session[s].die)
-		session[s].die = TIME + 150; // Clean up in 15 seconds
-
 	// update filter refcounts
 	if (session[s].filter_in) ip_filters[session[s].filter_in - 1].used--;
 	if (session[s].filter_out) ip_filters[session[s].filter_out - 1].used--;
@@ -1930,8 +1928,9 @@ void sessionkill(sessionidt s, char *reason)
 		return;
 	}
 
-	session[s].die = TIME;
-	sessionshutdown(s, reason, CDN_ADMIN_DISC, TERM_ADMIN_RESET);  // close radius/routes, etc.
+	if (!session[s].die)
+		sessionshutdown(s, reason, CDN_ADMIN_DISC, TERM_ADMIN_RESET);  // close radius/routes, etc.
+
 	if (sess_local[s].radius)
 		radiusclear(sess_local[s].radius, s); // cant send clean accounting data, session is killed
 
