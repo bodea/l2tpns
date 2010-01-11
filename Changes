@@ -1,5 +1,6 @@
-Wed Dec 9 2009 Brendan O'Dea <bod@optus.net> 2.2.x
+* Mon Jan 11 2010 Brendan O'Dea <bod@optus.net> 2.2.x
 - Apply MLPPP patch from Muhammad Tayseer Alquoatli.
+- Apply patch from Michael O to avoid sending multiple CDNs.
 
 * Mon Dec 18 2006 Brendan O'Dea <bod@optus.net> 2.2.0
 - Only poll clifd if successfully bound.
