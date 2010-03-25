@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.174 2010-01-09 13:33:41 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.175 2010-03-25 05:24:23 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -2686,9 +2686,11 @@ void processudp(uint8_t *buf, int len, struct sockaddr_in *addr)
 					break;
 				case 2:       // SCCRP
 					tunnel[t].state = TUNNELOPEN;
+					tunnel[t].lastrec = time_now;
 					break;
 				case 3:       // SCCN
 					tunnel[t].state = TUNNELOPEN;
+					tunnel[t].lastrec = time_now;
 					controlnull(t); // ack
 					break;
 				case 4:       // StopCCN
