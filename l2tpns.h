@@ -1,5 +1,5 @@
 // L2TPNS Global Stuff
-// $Id: l2tpns.h,v 1.113.2.4 2006-12-18 10:20:15 bodea Exp $
+// $Id: l2tpns.h,v 1.113.2.3.2.1 2010-05-21 01:37:47 perlboy84 Exp $
 
 #ifndef __L2TPNS_H__
 #define __L2TPNS_H__
@@ -14,7 +14,7 @@
 #include <sys/types.h>
 #include <libcli.h>
 
-#define VERSION	"2.1.22"
+#define VERSION	"2.1.21"
 
 // Limits
 #define MAXTUNNEL	500		// could be up to 65535
@@ -37,6 +37,8 @@
 #define MAXTEL		96		// telephone number
 #define MAXUSER		128		// username
 #define MAXPASS		128		// password
+#define MAXGARDEN       16              // maximum size of the garden name string
+#define MAXGARDENCOUNT  16              // maximum size of the garden name string
 #define MAXPLUGINS	20		// maximum number of plugins to load
 #define MAXRADSERVER	10		// max radius servers
 #define MAXROUTE	10		// max static routes per session
@@ -276,8 +278,11 @@ typedef struct
 	in_addr_t snoop_ip;		// Interception destination IP
 	uint16_t snoop_port;		// Interception destination port
 	uint8_t walled_garden;		// is this session gardened?
+        char  walled_garden_name[MAXGARDEN];       // name of the walled garden this user is in
 	uint8_t ipv6prefixlen;		// IPv6 route prefix length
 	struct in6_addr ipv6route;	// Static IPv6 route
+        char pool_id[2];                // IP pool that we use for this
+        clockt last_dump;               // last time that dump_session was called in this session.
 	char reserved_3[11];		// Space to expand structure without changing HB_VERSION
 }
 sessiont;
@@ -622,6 +627,10 @@ typedef struct
 		int hold;
 	} neighbour[BGP_NUM_PEERS];
 #endif
+	
+	char		append_realm[MAXUSER-96];	
+        char            gardens[MAXGARDEN * MAXGARDENCOUNT];
+
 } configt;
 
 enum config_typet { INT, STRING, UNSIGNED_LONG, SHORT, BOOL, IPv4, IPv6 };
@@ -772,6 +781,8 @@ int ip_filter(uint8_t *buf, int len, uint8_t filter);
 int cmd_show_ipcache(struct cli_def *cli, char *command, char **argv, int argc);
 int cmd_show_hist_idle(struct cli_def *cli, char *command, char **argv, int argc);
 int cmd_show_hist_open(struct cli_def *cli, char *command, char **argv, int argc);
+void initippool(uint8_t x,uint8_t y);
+void add_ip_range(char* buf, uint8_t x,uint8_t y);
 
 #undef LOG
 #undef LOG_HEX
@@ -804,7 +815,7 @@ void host_unreachable(in_addr_t destination, uint16_t id, in_addr_t source, uint
 extern tunnelt *tunnel;
 extern sessiont *session;
 extern sessionlocalt *sess_local;
-extern ippoolt *ip_address_pool;
+extern ippoolt *ip_address_pool[256][256];
 #define sessionfree (session[0].next)
 
 

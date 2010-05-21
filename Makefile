@@ -6,7 +6,7 @@ man5dir = /usr/share/man/man5
 man8dir = /usr/share/man/man8
 statedir = /var/lib/l2tpns
 
-DEFINES =
+DEFINES =  
 DEFINES += -DLIBDIR='"$(libdir)"'
 DEFINES += -DETCDIR='"$(etcdir)"'
 
@@ -18,10 +18,10 @@ CC = gcc
 LD = gcc
 INCLUDES = -I.
 CPPFLAGS = $(INCLUDES) $(DEFINES)
-CFLAGS = -Wall -Wformat-security -Wno-format-zero-length $(OPTIM)
+CFLAGS = -Wall -Wformat-security -Wno-format-zero-length $(OPTIM) -ggdb
 LDFLAGS =
 LDLIBS =
-INSTALL = install -c -D -o root -g root
+INSTALL = install -c -D
 
 l2tpns.LIBS = -lm -lcli -ldl
 
@@ -29,8 +29,9 @@ OBJS = arp.o cli.o cluster.o constants.o control.o icmp.o l2tpns.o \
     ll.o md5.o ppp.o radius.o tbf.o util.o
 
 PROGRAMS = l2tpns nsctl
-PLUGINS = autosnoop.so autothrottle.so garden.so sessionctl.so \
-    setrxspeed.so snoopctl.so stripdomain.so throttlectl.so
+PLUGINS = appendrealm.so autosnoop.so autothrottle.so clitousername.so \
+	  editcsid.so garden.so sessionctl.so setrxspeed.so \
+	  snoopctl.so stripdomain.so throttlectl.so
 
 DEFINES += -DSTATISTICS
 DEFINES += -DSTAT_CALLS
@@ -38,6 +39,10 @@ DEFINES += -DRINGBUFFER
 
 ifneq (2.4, $(shell uname -r | perl -pe 's/^(\d+\.\d+).*/$$1/'))
  DEFINES += -DHAVE_EPOLL
+endif
+
+ifdef ISEEK_CONTROL_MESSAGE
+ DEFINES += -DISEEK_CONTROL_MESSAGE
 endif
 
 DEFINES += -DBGP
@@ -123,8 +128,11 @@ radius.o: radius.c md5.h constants.h l2tpns.h plugin.h util.h cluster.h
 tbf.o: tbf.c l2tpns.h util.h tbf.h
 util.o: util.c l2tpns.h bgp.h
 bgp.o: bgp.c l2tpns.h bgp.h util.h
+appendrealm.so: appendrealm.c l2tpns.h plugin.h control.h
 autosnoop.so: autosnoop.c l2tpns.h plugin.h
 autothrottle.so: autothrottle.c l2tpns.h plugin.h
+clitousername.so: clitousername.c l2tpns.h plugin.h
+editcsid.so: editcsid.c l2tpns.h plugin.h
 garden.so: garden.c l2tpns.h plugin.h control.h
 sessionctl.so: sessionctl.c l2tpns.h plugin.h control.h
 setrxspeed.so: setrxspeed.c l2tpns.h plugin.h

@@ -2,7 +2,7 @@
 // vim: sw=8 ts=8
 
 char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.71.2.1 2006-12-18 10:26:58 bodea Exp $";
+char const *cvs_id_cli = "$Id: cli.c,v 1.71.4.1 2010-05-21 01:37:47 perlboy84 Exp $";
 
 #include <stdio.h>
 #include <stddef.h>
@@ -38,7 +38,7 @@ char const *cvs_id_cli = "$Id: cli.c,v 1.71.2.1 2006-12-18 10:26:58 bodea Exp $"
 extern tunnelt *tunnel;
 extern sessiont *session;
 extern radiust *radius;
-extern ippoolt *ip_address_pool;
+extern ippoolt *ip_address_pool[256][256];
 extern struct Tstats *_statistics;
 static struct cli_def *cli = NULL;
 extern configt *config;
@@ -99,9 +99,9 @@ static int cmd_set(struct cli_def *cli, char *command, char **argv, int argc);
 static int cmd_load_plugin(struct cli_def *cli, char *command, char **argv, int argc);
 static int cmd_remove_plugin(struct cli_def *cli, char *command, char **argv, int argc);
 static int cmd_uptime(struct cli_def *cli, char *command, char **argv, int argc);
-static int cmd_shutdown(struct cli_def *cli, char *command, char **argv, int argc);
-static int cmd_reload(struct cli_def *cli, char *command, char **argv, int argc);
 
+static int cmd_load_ip_pool(struct cli_def *cli, char *command, char **argv, int argc);
+static int cmd_add_ip_pool(struct cli_def *cli, char *command, char **argv, int argc);
 
 static int regular_stuff(struct cli_def *cli);
 
@@ -178,8 +178,6 @@ void init_cli(char *hostname)
 #endif
 
 	cli_register_command(cli, NULL, "uptime", cmd_uptime, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Show uptime and bandwidth utilisation");
-	cli_register_command(cli, NULL, "shutdown", cmd_shutdown, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Shutdown l2tpns daemon and exit");
-	cli_register_command(cli, NULL, "reload", cmd_reload, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Reload configuration");
 
 	c = cli_register_command(cli, NULL, "write", NULL, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
 	cli_register_command(cli, c, "memory", cmd_write_memory, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Save the running config to flash");
@@ -221,9 +219,13 @@ void init_cli(char *hostname)
 	cli_register_command(cli, c, "user", cmd_drop_user, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Disconnect a user");
 	cli_register_command(cli, c, "tunnel", cmd_drop_tunnel, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Disconnect a tunnel and all sessions on that tunnel");
 	cli_register_command(cli, c, "session", cmd_drop_session, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Disconnect a session");
+	
+	c = cli_register_command(cli, NULL, "add", NULL, PRIVILEGE_PRIVILEGED, MODE_CONFIG, NULL);
+	cli_register_command(cli, c, "ip-pool", cmd_add_ip_pool, PRIVILEGE_PRIVILEGED, MODE_CONFIG, "Add new range to an IP pool");
 
 	c = cli_register_command(cli, NULL, "load", NULL, PRIVILEGE_PRIVILEGED, MODE_CONFIG, NULL);
 	cli_register_command(cli, c, "plugin", cmd_load_plugin, PRIVILEGE_PRIVILEGED, MODE_CONFIG, "Load a plugin");
+	cli_register_command(cli, c, "ip-pool", cmd_load_ip_pool, PRIVILEGE_PRIVILEGED, MODE_CONFIG, "Load an IP-Pool");
 
 	c = cli_register_command(cli, NULL, "remove", NULL, PRIVILEGE_PRIVILEGED, MODE_CONFIG, NULL);
 	cli_register_command(cli, c, "plugin", cmd_remove_plugin, PRIVILEGE_PRIVILEGED, MODE_CONFIG, "Remove a plugin");
@@ -445,6 +447,21 @@ static int cmd_show_session(struct cli_def *cli, char *command, char **argv, int
 				cli_print(cli, "\tIntercepted:\tno");
 
 			cli_print(cli, "\tWalled Garden:\t%s", session[s].walled_garden ? "YES" : "no");
+                        if (session[s].walled_garden) 
+                        {
+                          cli_print(cli, "\tWalled Garden Name:\t%s", session[s].walled_garden_name);
+                        }
+			//Handle IP-Pools
+			if (session[s].pool_id[0] == 0 || session[s].pool_id[1] == 0)
+			{
+                          cli_print(cli, "\tIP Pool:\tDefault", session[s].walled_garden_name);
+			} else if (0 == ip_address_pool[(uint8_t)session[s].pool_id[0]][(uint8_t)session[s].pool_id[1]])
+			{
+			  cli_print(cli, "\tIP Pool:\tDefault (Requested %c%c)", session[s].pool_id[0], session[s].pool_id[1]);
+			} else {
+			  cli_print(cli, "\tIP Pool:\t%c%c", session[s].pool_id[0], session[s].pool_id[1]);
+			}
+
 			{
 				int t = (session[s].throttle_in || session[s].throttle_out);
 				cli_print(cli, "\tThrottled:\t%s%s%.0d%s%s%.0d%s%s",
@@ -850,10 +867,36 @@ static int cmd_show_version(struct cli_def *cli, char *command, char **argv, int
 	return CLI_OK;
 }
 
+void display_pool(ippoolt ip,int show_all,int *used,int *free)
+{
+        if (!ip.address) return;
+        if (ip.assigned)
+        {
+          cli_print(cli, "%-15s\tY %8d %s",
+                    fmtaddr(htonl(ip.address), 0),
+                    ip.session,
+                    session[ip.session].user);
+
+          (*used)++;
+        }
+        else
+        {
+          if (ip.last)
+            cli_print(cli, "%-15s\tN %8s [%s] %ds",
+                      fmtaddr(htonl(ip.address), 0), "",
+                      ip.user, (int) time_now - ip.last);
+
+          else if (show_all)
+            cli_print(cli, "%-15s\tN", fmtaddr(htonl(ip.address), 0));
+          (*free)++;
+        }  
+}
+
 static int cmd_show_pool(struct cli_def *cli, char *command, char **argv, int argc)
 {
 	int i;
-	int used = 0, free = 0, show_all = 0;
+	int used = 0, free = 0, show_all = 0, show_summary = 0;
+        int x,y;
 
 	if (!config->cluster_iam_master)
 	{
@@ -870,44 +913,55 @@ static int cmd_show_pool(struct cli_def *cli, char *command, char **argv, int ar
 
 		return cli_arg_help(cli, 1,
 			"all", "Show all pool addresses, including unused",
+			"summary", "Show all pool ranges, including unused identified by code",
 			NULL);
 	}
 
 	if (argc > 0 && strcmp(argv[0], "all") == 0)
 		show_all = 1;
+	
+	if (argc > 0 && strcmp(argv[0], "summary") == 0)
+		show_summary = 1;
+
 
 	time(&time_now);
-	cli_print(cli, "%-15s %4s %8s %s", "IP Address", "Used", "Session", "User");
-	for (i = 0; i < MAXIPPOOL; i++)
+	if (show_summary)
 	{
-		if (!ip_address_pool[i].address) continue;
-		if (ip_address_pool[i].assigned)
-		{
-			cli_print(cli, "%-15s\tY %8d %s",
-				fmtaddr(htonl(ip_address_pool[i].address), 0),
-				ip_address_pool[i].session,
-				session[ip_address_pool[i].session].user);
-
-			used++;
-		}
-		else
-		{
-			if (ip_address_pool[i].last)
-				cli_print(cli, "%-15s\tN %8s [%s] %ds",
-					fmtaddr(htonl(ip_address_pool[i].address), 0), "",
-					ip_address_pool[i].user, (int) time_now - ip_address_pool[i].last);
-
-			else if (show_all)
-				cli_print(cli, "%-15s\tN", fmtaddr(htonl(ip_address_pool[i].address), 0));
-
-			free++;
-		}
+		cli_print(cli,"%-33s %9s", "IP Address Range", "Pool Name");
 	}
+	else
+	{
+		cli_print(cli, "%-15s %4s %8s %s", "IP Address", "Used", "Session", "User");
+	}
+        for (x = 0; x < 256 ; x++)
+        {
+                for (y = 0; y < 256 ; y++)
+                {
+                        if (ip_address_pool[x][y] == NULL) continue;
+                        for (i = 0; i < MAXIPPOOL; i++)
+                        {
+				if (show_summary && i > 0)
+				{
+					if (!ip_address_pool[x][y][i].address && ip_address_pool[x][y][i-1].address)
+					{
+						cli_print(cli, "%-15s - %-15s %c%c", fmtaddr(htonl(ip_address_pool[x][y][1].address),0),
+										   fmtaddr(htonl(ip_address_pool[x][y][i-1].address),1),
+										   x,y);
+					}
+				} 
+				else
+				{
+                          		display_pool(ip_address_pool[x][y][i],show_all,&used,&free);
+				}
+                        }
 
-	if (!show_all)
+                }
+        }
+
+	if (!show_all && !show_summary)
 		cli_print(cli, "(Not displaying unused addresses)");
-
-	cli_print(cli, "\r\nFree: %d\r\nUsed: %d", free, used);
+	if (!show_summary)
+		cli_print(cli, "\r\nFree: %d\r\nUsed: %d", free, used);
 	return CLI_OK;
 }
 
@@ -1751,6 +1805,99 @@ static int cmd_remove_plugin(struct cli_def *cli, char *command, char **argv, in
 	return CLI_OK;
 }
 
+static int cmd_add_ip_pool(struct cli_def *cli, char *command, char **argv, int argc)
+{
+	uint8_t x = 0;
+	uint8_t y = 0;
+	
+	if (CLI_HELP_REQUESTED)
+		return cli_arg_help(cli, argc > 2, "IP-RANGE", "IP or network to add", "IP-POOL", "Name of IP pool (or 'default')", NULL);
+
+	if (argc != 2)
+	{
+		cli_error(cli, "Specify a range and the IP pool to load it into.");
+		return CLI_OK;
+	}
+
+	if (strcmp(argv[1], "default") != 0) {
+		x = argv[1][0];
+		y = argv[1][1];
+		cli_print(cli,"Adding %s to pool %s.", argv[0], argv[1]);
+	} else {
+		cli_print(cli,"Adding %s to the default pool.", argv[0]);
+	}
+
+	add_ip_range(argv[0], x, y);
+	
+	if (ip_address_pool[x][y] == NULL)
+	{
+		cli_error(cli, "Unable to add to IP Pool %c%c. Check that it exists.", x, y);
+		return CLI_OK;
+	}
+
+	rebuild_address_pool();
+
+	if (strcmp(argv[1], "default") != 0)
+		cli_print(cli, "Range added. Please remember to add it to the config file /etc/l2tpns/ip_pool.%c%c", x,y);
+	else
+		cli_print(cli, "Range added. Please remember to add it to the config file /etc/l2tpns/ip_pool");
+	return CLI_OK;
+}
+
+static int cmd_load_ip_pool(struct cli_def *cli, char *command, char **argv, int argc)
+{
+	uint8_t x,y,i = 0;
+
+	if (CLI_HELP_REQUESTED)
+		return cli_arg_help(cli, argc > 1,
+			"IP-POOL", "Name of IP pool to load", NULL);
+
+	if (argc != 1)
+	{
+		cli_error(cli, "Specify an IP pool to load");
+		return CLI_OK;
+	}
+
+	x = argv[0][0];
+	y = argv[0][1];
+
+	if (ip_address_pool[x][y] != 0)
+	{
+		cli_error(cli, "IP Pool %c%c is already loaded", x, y);
+		return CLI_OK;
+	}
+
+	//Add the IP Pool
+	initippool(x,y);
+
+	if (ip_address_pool[x][y] == NULL)
+	{
+		cli_error(cli, "Unable to load IP Pool %c%c. Check that it exists on the filesystem.", x, y);
+		return CLI_OK;
+	}
+
+        cli_print(cli, "Pool %s loaded.", argv[0]);
+
+	//Set each peer to reload.
+        for (i = 0; i < BGP_NUM_PEERS; i++)
+        {
+                if (!*bgp_peers[i].name)
+                        continue;
+
+                bgp_peers[i].update_routes = 1;
+                bgp_peers[i].routing = 1;
+                cli_print(cli, "\tAdding route and sending update to peer %s", bgp_peers[i].name);
+
+
+        }
+
+        rebuild_address_pool();
+
+	return CLI_OK;
+}
+
+
+
 static char *duration(time_t secs)
 {
 	static char *buf = NULL;
@@ -2021,7 +2168,7 @@ static int cmd_router_bgp_neighbour(struct cli_def *cli, char *command, char **a
 	int keepalive;
 	int hold;
 
-	if (CLI_HELP_REQUESTED)
+    	if (CLI_HELP_REQUESTED)
 	{
 		switch (argc)
 		{
@@ -2131,14 +2278,14 @@ static int cmd_router_bgp_neighbour(struct cli_def *cli, char *command, char **a
 	config->neighbour[i].keepalive = keepalive;
 	config->neighbour[i].hold = hold;
 
-	return CLI_OK;
+    	return CLI_OK;
 }
 
 static int cmd_router_bgp_no_neighbour(struct cli_def *cli, char *command, char **argv, int argc)
 {
 	int i;
 
-	if (CLI_HELP_REQUESTED)
+    	if (CLI_HELP_REQUESTED)
 		return cli_arg_help(cli, argc > 0,
 			"A.B.C.D", "BGP neighbour address",
 			"NAME",    "BGP neighbour name",
@@ -2163,7 +2310,7 @@ static int cmd_router_bgp_no_neighbour(struct cli_def *cli, char *command, char 
 	}
 
 	memset(&config->neighbour[i], 0, sizeof(config->neighbour[i]));
-	return CLI_OK;
+    	return CLI_OK;
 }
 
 static int cmd_show_bgp(struct cli_def *cli, char *command, char **argv, int argc)
@@ -3067,23 +3214,5 @@ static int cmd_show_access_list(struct cli_def *cli, char *command, char **argv,
 		}
 	}
 
-	return CLI_OK;
-}
-
-static int cmd_shutdown(struct cli_def *cli, char *command, char **argv, int argc)
-{
-	if (CLI_HELP_REQUESTED)
-		return CLI_HELP_NO_ARGS;
-
-	kill(getppid(), SIGQUIT);
-	return CLI_OK;
-}
-
-static int cmd_reload(struct cli_def *cli, char *command, char **argv, int argc)
-{
-	if (CLI_HELP_REQUESTED)
-		return CLI_HELP_NO_ARGS;
-
-	kill(getppid(), SIGHUP);
 	return CLI_OK;
 }

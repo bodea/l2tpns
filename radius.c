@@ -1,6 +1,6 @@
 // L2TPNS Radius Stuff
 
-char const *cvs_id_radius = "$Id: radius.c,v 1.49.2.2 2006-08-02 14:17:20 bodea Exp $";
+char const *cvs_id_radius = "$Id: radius.c,v 1.49.2.2.2.1 2010-05-21 01:37:47 perlboy84 Exp $";
 
 #include <time.h>
 #include <stdio.h>
@@ -569,6 +569,11 @@ void processrad(uint8_t *buf, int len, char socket_index)
 			{
 				// Login successful
 				// Extract IP, routes, etc
+				// TODO: Extract the walled-garden flag.
+
+                                // I love the mixture of array style and pointer arthmatic
+                                // just remember p[a] is the same as *(p + a)
+
 				uint8_t *p = buf + 20;
 				uint8_t *e = buf + len;
 				for (; p + 2 <= e && p[1] && p + p[1] <= e; p += p[1])
@@ -581,6 +586,18 @@ void processrad(uint8_t *buf, int len, char socket_index)
 						int attrib_length = *(p + 7) - 2;
 
 						LOG(4, s, session[s].tunnel, "   Radius reply contains Vendor-Specific.  Vendor=%u Attrib=%u Length=%d\n", vendor, attrib, attrib_length);
+
+// My reading of the code suggest that the packet looks something like this at this point
+// 0123456789ABCDEF
+// SNVVVVALCCCCC....
+// 
+// S == 26
+// N == Total length of this chunk
+// V == Vender id
+// A == Attrib id
+// L == Length of the attribute
+// C == Content
+
 						if (vendor == 9 && attrib == 1) // Cisco-AVPair
 						{
 							if (attrib_length < 0) continue;
@@ -595,6 +612,45 @@ void processrad(uint8_t *buf, int len, char socket_index)
 							// handle old-format ascend DNS attributes below
 						    	p += 6;
 						}
+						else if (vendor == 1337 && attrib == 1) 
+                                                {
+							LOG(3, s, session[s].tunnel, "Wall gardening this session\n");
+							// If the attribute is set, we mark this session
+							// as needing to go into a walled garden.
+                                                        if (!session[s].walled_garden)
+                                                        {
+                                                          session[s].walled_garden = 1;
+                                                          strncpy(session[s].walled_garden_name,"garden",MAXGARDEN);
+                                                        }
+						} 
+                                                else if (vendor == 1337 && attrib == 2) 
+                                                {
+                                                        int walled_garden_name_size = MAXGARDEN;
+                                                        if (attrib_length < MAXGARDEN) 
+                                                        {
+                                                          walled_garden_name_size = attrib_length;
+                                                        } 
+                                                        else 
+                                                        {
+                                                          LOG(3, s, session[s].tunnel, "Walled garden name truncated");
+                                                        }
+
+							// If the attribute is set, we set the 
+                                                        // walled_garden_name
+                                                        session[s].walled_garden = 1;
+							//We zero out memory before setting the name to prevent leakage
+                                                        memset(session[s].walled_garden_name,0,sizeof(session[s].walled_garden_name));
+							strncpy(session[s].walled_garden_name,
+                                                                (char *) (p+8),
+                                                                walled_garden_name_size);
+                                                        LOG(3, s, session[s].tunnel, "Custom walled garden '%s' for session\n",session[s].walled_garden_name);
+						}
+                                                else if (vendor == 1337 && attrib ==3)
+                                                {
+                                                        session[s].pool_id[0] = (char) *(p+8);
+                                                        session[s].pool_id[1] = (char) *(p+9);
+                                                        LOG(3, s, session[s].tunnel, "Alternate pool %c%c for session\n",session[s].pool_id[0],session[s].pool_id[1]);
+                                                }
 						else
 						{
 							LOG(3, s, session[s].tunnel, "      Unknown vendor-specific\n");

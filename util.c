@@ -1,6 +1,6 @@
 /* Misc util functions */
 
-char const *cvs_id_util = "$Id: util.c,v 1.14 2006-04-05 01:45:57 bodea Exp $";
+char const *cvs_id_util = "$Id: util.c,v 1.14.6.1 2010-05-21 01:37:47 perlboy84 Exp $";
 
 #include <unistd.h>
 #include <errno.h>
@@ -41,6 +41,12 @@ void *shared_malloc(unsigned int size)
     return p;
 }
 
+void shared_free(void *p, unsigned int size)
+{
+    if (!munmap(p,size)) {
+        LOG(0,0,0, "Free of shared memory failed: %s\n", strerror(errno));
+    } 
+}
 extern int forked;
 extern int cluster_sockfd, tunfd, udpfd, controlfd, daefd, snoopfd, ifrfd, ifr6fd, rand_fd;
 extern int *radfds;
@@ -74,6 +80,11 @@ pid_t fork_and_close()
     signal(SIGTERM, SIG_DFL);
 
     // Close sockets
+    /* Children should not close the ifrfd sockets as we may
+     * wish to add routes from the CLI. - Rob
+    if (ifrfd != -1)          close(ifrfd);
+    if (ifr6fd != -1)         close(ifr6fd);
+     */
     if (clifd != -1)          close(clifd);
     if (cluster_sockfd != -1) close(cluster_sockfd);
     if (tunfd != -1)          close(tunfd);
@@ -81,8 +92,6 @@ pid_t fork_and_close()
     if (controlfd != -1)      close(controlfd);
     if (daefd != -1)          close(daefd);
     if (snoopfd != -1)        close(snoopfd);
-    if (ifrfd != -1)          close(ifrfd);
-    if (ifr6fd != -1)         close(ifr6fd);
     if (rand_fd != -1)        close(rand_fd);
     if (epollfd != -1)        close(epollfd);
 

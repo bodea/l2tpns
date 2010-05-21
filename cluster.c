@@ -1,6 +1,6 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.50.2.1 2006-12-02 14:09:14 bodea Exp $";
+char const *cvs_id_cluster = "$Id: cluster.c,v 1.50.2.1.2.1 2010-05-21 01:37:47 perlboy84 Exp $";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -557,6 +557,9 @@ void cluster_check_master(void)
 	config->cluster_master_address = 0;
 
 	LOG(0, 0, 0, "Master timed out! Holding election...\n");
+	#ifdef ISEEK_CONTROL_MESSAGE
+	LOG(1, 0, 0, "iseek-control-message master_timeout\n");
+	#endif
 
 	// In the process of shutting down, can't be master
 	if (main_quit)
@@ -572,12 +575,18 @@ void cluster_check_master(void)
 
 		if (peers[i].basetime < basetime) {
 			LOG(1, 0, 0, "Expecting %s to become master\n", fmtaddr(peers[i].peer, 0));
+			#ifdef ISEEK_CONTROL_MESSAGE
+			LOG(1, 0, 0, "iseek-control-message delegate_master %s\n", fmtaddr(peers[i].peer, 0));
+			#endif
 			return;		// They'll win the election. Get out of here.
 		}
 
 		if (peers[i].basetime == basetime &&
 			peers[i].peer > my_address) {
 			LOG(1, 0, 0, "Expecting %s to become master\n", fmtaddr(peers[i].peer, 0));
+			#ifdef ISEEK_CONTROL_MESSAGE
+			LOG(1, 0, 0, "iseek-control-message delegate_master %s\n", fmtaddr(peers[i].peer, 0));
+			#endif
 			return;		// They'll win the election. Wait for them to come up.
 		}
 
@@ -681,6 +690,10 @@ void cluster_check_master(void)
 	config->cluster_undefined_sessions = 0;
 	config->cluster_undefined_tunnels = 0;
 	config->cluster_iam_uptodate = 1; // assume all peers are up-to-date
+
+	#ifdef ISEEK_CONTROL_MESSAGE
+	LOG(1, 0, 0, "iseek-control-message become_master\n");
+	#endif
 
 	// FIXME. We need to fix up the tunnel control message
 	// queue here! There's a number of other variables we
@@ -886,7 +899,7 @@ void cluster_heartbeat()
 		exit(1);
 	}
 
-	LOG(3, 0, 0, "Sending v%d heartbeat #%d, change #%" PRIu64 " with %d changes "
+	LOG(6, 0, 0, "Sending v%d heartbeat #%d, change #%" PRIu64 " with %d changes "
 		     "(%d x-sess, %d x-tunnels, %d highsess, %d hightun, size %d)\n",
 	    HB_VERSION, h.seq, h.table_version, config->cluster_num_changes,
 	    count, tcount, config->cluster_highest_sessionid,
@@ -1114,7 +1127,7 @@ static int cluster_handle_bytes(uint8_t *data, int size)
 
 	b = (bytest *) data;
 
-	LOG(3, 0, 0, "Got byte counter update (size %d)\n", size);
+	LOG(6, 0, 0, "Got byte counter update (size %d)\n", size);
 
 				/* Loop around, adding the byte
 				counts to each of the sessions. */
@@ -1337,11 +1350,11 @@ static int cluster_process_heartbeat(uint8_t *data, int size, int more, uint8_t 
 	int i, type;
 	int hb_ver = more;
 
-#if HB_VERSION != 5
+#if HB_VERSION != 7
 # error "need to update cluster_process_heartbeat()"
 #endif
 
-	// we handle versions 3 through 5
+	// we handle versions 3 through 7
 	if (hb_ver < 3 || hb_ver > HB_VERSION) {
 		LOG(0, 0, 0, "Received a heartbeat version that I don't support (%d)!\n", hb_ver);
 		return -1; // Ignore it??

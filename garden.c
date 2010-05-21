@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <string.h>
 #include <malloc.h>
 #include <stdlib.h>
@@ -9,7 +10,7 @@
 
 /* walled garden */
 
-char const *cvs_id = "$Id: garden.c,v 1.25 2006-02-23 01:07:23 bodea Exp $";
+char const *cvs_id = "$Id: garden.c,v 1.25.6.1 2010-05-21 01:37:47 perlboy84 Exp $";
 
 int plugin_api_version = PLUGIN_API_VERSION;
 static struct pluginfuncs *f = 0;
@@ -17,24 +18,25 @@ static struct pluginfuncs *f = 0;
 static int iam_master = 0;	// We're all slaves! Slaves I tell you!
 
 char *up_commands[] = {
-    "iptables -t nat -N garden >/dev/null 2>&1",		// Create a chain that all gardened users will go through
-    "iptables -t nat -F garden",
-    ". " PLUGINCONF "/build-garden",				// Populate with site-specific DNAT rules
-    "iptables -t nat -N garden_users >/dev/null 2>&1",		// Empty chain, users added/removed by garden_session
-    "iptables -t nat -F garden_users",
-    "iptables -t nat -A PREROUTING -j garden_users",		// DNAT any users on the garden_users chain
-    "sysctl -w net.ipv4.netfilter.ip_conntrack_max=512000"	// lots of entries
+    "/sbin/iptables -t nat -N %s >/dev/null 2>&1",		// Create a chain that all gardened users will go through
+    "/sbin/iptables -t nat -F %s",
+    ". " PLUGINCONF "/build-%s",				// Populate with site-specific DNAT rules
+    "/sbin/iptables -t nat -N %s_users >/dev/null 2>&1",		// Empty chain, users added/removed by garden_session
+    "/sbin/iptables -t nat -F %s_users",
+    "/sbin/iptables -t nat -A PREROUTING -j %s_users",		// DNAT any users on the garden_users chain
+    "/sbin/sysctl -w net.ipv4.netfilter.ip_conntrack_max=512000"	// lots of entries
     	     " net.ipv4.netfilter.ip_conntrack_tcp_timeout_established=18000 >/dev/null", // 5hrs
     NULL,
 };
 
 char *down_commands[] = {
-    "iptables -t nat -F PREROUTING",
-    "iptables -t nat -F garden_users",
-    "iptables -t nat -X garden_users",
-    "iptables -t nat -F garden",
-    "iptables -t nat -X garden",
-    "rmmod iptable_nat",	// Should also remove ip_conntrack, but
+    "/sbin/iptables -t nat -F PREROUTING",
+    "/sbin/iptables -t nat -F %s_users",
+    "/sbin/iptables -t nat -X %s_users",
+    "/sbin/iptables -t nat -F %s",
+    "/sbin/iptables -t nat -X %s",
+    // Not sure if this is valid anymore.  Commenting this out.
+    // "rmmod iptable_nat",	// Should also remove ip_conntrack, but
 				// doing so can take hours...  literally.
 				// If a master is re-started as a slave,
 				// either rmmod manually, or reboot.
@@ -50,6 +52,8 @@ int garden_session(sessiont *s, int flag, char *newuser);
 int plugin_post_auth(struct param_post_auth *data)
 {
     // Ignore if user authentication was successful
+    // In the case of the radius Wall-Authenticated-User, vendor-supplied
+    // attribute, auth_allowed will be 1 anyway, as will be walled_garden.
     if (data->auth_allowed)
 	return PLUGIN_RET_OK;
 
@@ -84,7 +88,7 @@ int plugin_kill_session(struct param_new_session *data)
 }
 
 char *plugin_control_help[] = {
-    "  garden USER|SID                             Put user into the walled garden",
+    "  garden USER|SID [gardenname]                Put user into the walled garden",
     "  ungarden SID [USER]                         Release session from garden",
     0
 };
@@ -107,7 +111,7 @@ int plugin_control(struct param_control *data)
 
     flag = data->argv[0][0] == 'g' ? F_GARDEN : F_UNGARDEN;
 
-    if (data->argc < 2 || data->argc > 3 || (data->argc > 2 && flag == F_GARDEN))
+    if (data->argc < 2 || data->argc > 4 || (data->argc > 3 && flag == F_GARDEN))
     {
 	data->response = NSCTL_RES_ERR;
 	data->additional = flag == F_GARDEN
@@ -142,7 +146,15 @@ int plugin_control(struct param_control *data)
 	return PLUGIN_RET_STOP;
     }
 
-    garden_session(s, flag, data->argc > 2 ? data->argv[2] : 0);
+    if(data->argc > 2) { 
+      strncpy(s->walled_garden_name, data->argv[2],MAXGARDEN);
+      f->log(5, session, s->tunnel, "Using garden of %s", s->walled_garden_name);
+    } else if ((data->argc > 1) && flag == F_GARDEN) {
+      strncpy(s->walled_garden_name, "garden",7);
+      f->log(5, session, s->tunnel, "Using garden of %s (default)", s->walled_garden_name);
+    }
+
+    garden_session(s, flag, data->argc > 2 ? data->argv[1] : 0);
     f->session_changed(session);
 
     data->response = NSCTL_RES_OK;
@@ -154,12 +166,27 @@ int plugin_control(struct param_control *data)
 int plugin_become_master(void)
 {
     int i;
+    char gardens[MAXGARDEN * MAXGARDENCOUNT];
+    char *tok;
+    char temporary[MAXGARDEN + 200]; 
+
+    strncpy(gardens,f->getconfig("gardens", STRING),MAXGARDEN * MAXGARDENCOUNT);
+
     iam_master = 1;	// We just became the master. Wow!
 
-    for (i = 0; up_commands[i] && *up_commands[i]; i++)
-    {
-	f->log(3, 0, 0, "Running %s\n", up_commands[i]);
-	system(up_commands[i]);
+    if (gardens[0] == 0)
+      strncpy(gardens,"garden",7);
+    
+    tok = strtok(gardens,",");
+
+    while (tok != NULL) {
+      for (i = 0; up_commands[i] && *up_commands[i]; i++)
+      {
+	sprintf(temporary,up_commands[i],tok);
+	f->log(3, 0, 0, "Running %s\n", temporary);
+	system(temporary);
+      }
+      tok = strtok(NULL,",");
     }
 
     return PLUGIN_RET_OK;
@@ -183,14 +210,20 @@ int garden_session(sessiont *s, int flag, char *newuser)
     if (!s->opened) return 0;
 
     sess = f->get_id_by_session(s);
+
     if (flag == F_GARDEN)
     {
-	f->log(2, sess, s->tunnel, "Garden user %s (%s)\n", s->user,
-	    f->fmtaddr(htonl(s->ip), 0));
+
+	f->log(2, sess, s->tunnel, "Garden user %s (%s) with name of %s \n", s->user,
+	    f->fmtaddr(htonl(s->ip), 0), s->walled_garden_name);
+	#ifdef ISEEK_CONTROL_MESSAGE
+	f->log(1, sess, s->tunnel, "iseek-control-message garden %s %d/%d %s %s\n", s->user, s->rx_connect_speed, s->tx_connect_speed, f->fmtaddr(htonl(s->ip), 0), s->walled_garden_name);
+	#endif
 
 	snprintf(cmd, sizeof(cmd),
-	    "iptables -t nat -A garden_users -s %s -j garden",
-	    f->fmtaddr(htonl(s->ip), 0));
+                 "/sbin/iptables -t nat -A %s_users -s %s -j %s",
+                 s->walled_garden_name,
+                 f->fmtaddr(htonl(s->ip), 0), s->walled_garden_name);
 
 	f->log(3, sess, s->tunnel, "%s\n", cmd);
 	system(cmd);
@@ -203,6 +236,9 @@ int garden_session(sessiont *s, int flag, char *newuser)
 
 	// Normal User
 	f->log(2, sess, s->tunnel, "Un-Garden user %s (%s)\n", s->user, f->fmtaddr(htonl(s->ip), 0));
+	#ifdef ISEEK_CONTROL_MESSAGE
+	f->log(1, sess, s->tunnel, "iseek-control-message ungarden %s %d/%d %s %s\n", s->user, s->rx_connect_speed, s->tx_connect_speed, f->fmtaddr(htonl(s->ip), 0), s->walled_garden_name);
+	#endif
 	if (newuser)
 	{
 	    snprintf(s->user, MAXUSER, "%s", newuser);
@@ -225,8 +261,10 @@ int garden_session(sessiont *s, int flag, char *newuser)
 	s->cin_wrap = s->cout_wrap = 0;
 
 	snprintf(cmd, sizeof(cmd),
-	    "iptables -t nat -D garden_users -s %s -j garden",
-	    f->fmtaddr(htonl(s->ip), 0));
+	    "iptables -t nat -D %s_users -s %s -j %s",
+             s->walled_garden_name,
+             f->fmtaddr(htonl(s->ip), 0),
+             s->walled_garden_name);
 
 	f->log(3, sess, s->tunnel, "%s\n", cmd);
 	while (--count)
@@ -236,6 +274,7 @@ int garden_session(sessiont *s, int flag, char *newuser)
 	}
 
 	s->walled_garden = 0;
+	memset(s->walled_garden_name,0,sizeof(s->walled_garden_name));
 
 	if (flag != F_CLEANUP)
 	{
@@ -246,6 +285,33 @@ int garden_session(sessiont *s, int flag, char *newuser)
     }
 
     return 1;
+}
+
+// Take down the ip tables firewall rules for the natting.
+
+void go_down(void)
+{
+    int i;
+    char gardens[MAXGARDEN * MAXGARDENCOUNT];
+    char *tok;
+    char temporary[MAXGARDEN + 200]; 
+
+    strncpy(gardens,f->getconfig("gardens", STRING),MAXGARDEN * MAXGARDENCOUNT);
+
+    if (gardens[0] == 0)
+      strncpy(gardens,"garden",7);
+    
+    tok = strtok(gardens,",");
+
+    while (tok != NULL) {
+      for (i = 0; down_commands[i] && *down_commands[i]; i++)
+      {
+	sprintf(temporary,down_commands[i],tok);
+        f->log(3, 0, 0, "Running %s\n", temporary);
+        system(temporary);
+      }
+      tok = strtok(NULL,",");
+    }
 }
 
 int plugin_init(struct pluginfuncs *funcs)
@@ -270,12 +336,7 @@ int plugin_init(struct pluginfuncs *funcs)
     /* master killed/crashed? */
     if (found_nat)
     {
-	int i;
-	for (i = 0; down_commands[i] && *down_commands[i]; i++)
-	{
-	    f->log(3, 0, 0, "Running %s\n", down_commands[i]);
-	    system(down_commands[i]);
-	}
+      go_down();
     }
 
     return 1;
@@ -283,15 +344,8 @@ int plugin_init(struct pluginfuncs *funcs)
 
 void plugin_done()
 {
-    int i;
-
     if (!iam_master)	// Never became master. nothing to do.
 	return;
 
-    for (i = 0; down_commands[i] && *down_commands[i]; i++)
-    {
-	f->log(3, 0, 0, "Running %s\n", down_commands[i]);
-	system(down_commands[i]);
-    }
+    go_down();
 }
-

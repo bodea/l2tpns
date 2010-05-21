@@ -245,8 +245,8 @@ int ppsend;
 int do_init = 1;
 char **session_usernames;
 char *base_username = "dslloadtest";
-char *base_password = "testing";
-char *suffix = "@optusnet.com.au";
+char *base_password = "testing2";
+char *suffix = "@foobar";
 
 int main(int argc, char *argv[])
 {
@@ -349,6 +349,7 @@ int main(int argc, char *argv[])
 	{
 		session_usernames[0] = strdup(base_username);
 	}
+
 	// }}}
 
 	// Create socket/*{{{*/
@@ -436,7 +437,7 @@ int main(int argc, char *argv[])
 
 			c = controlnew(10); // ICRQ
 			controls(c, 21, "12356", 0); // Called Number
-			controls(c, 22, "000", 0); // Calling Number
+			controls(c, 22, "61435184802", 0); // Calling Number
 			control16(c, 14, s, 0); // Assigned Session ID
 			controlsend(c, t, 0);
 			controlfree(c);

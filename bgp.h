@@ -1,5 +1,5 @@
 /* BGPv4 (RFC1771) */
-/* $Id: bgp.h,v 1.5 2005-06-04 15:42:35 bodea Exp $ */
+/* $Id: bgp.h,v 1.5.6.1 2010-05-21 01:37:47 perlboy84 Exp $ */
 
 #ifndef __BGP_H__
 #define __BGP_H__
@@ -11,6 +11,8 @@
 #define BGP_MAX_RETRY		42	/* maximum number of times to retry */
 #define BGP_RETRY_BACKOFF	60	/* number of seconds between retries,
 					   cumulative */
+
+#define BGP_MAX_ROUTES		32768 /* Maximum number of routes that we support using BGP */
 
 #define BGP_METRIC		1	/* multi_exit_disc */
 #define BGP_LOCAL_PREF		100	/* local preference value */
@@ -182,6 +184,7 @@ struct bgp_peer {
 #define BGP_CLI_ENABLE		2
 #define BGP_CLI_RESTART		3
 
+extern struct bgp_ip_prefix *bgp_routes;
 extern struct bgp_peer *bgp_peers;
 extern int bgp_configured;
 
