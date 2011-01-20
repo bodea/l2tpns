@@ -4,7 +4,7 @@
 // Copyright (c) 2002 FireBrick (Andrews & Arnold Ltd / Watchfront Ltd) - GPL licenced
 // vim: sw=8 ts=8
 
-char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.175 2010-03-25 05:24:23 bodea Exp $";
+char const *cvs_id_l2tpns = "$Id: l2tpns.c,v 1.176 2011-01-20 12:48:40 bodea Exp $";
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -3033,7 +3033,7 @@ static void regular_cleanups(double period)
 			if (tunnel[t].retry <= TIME)
 			{
 				controlt *c = tunnel[t].controls;
-				uint8_t w = tunnel[t].window;
+				uint16_t w = tunnel[t].window;
 				tunnel[t].try++; // another try
 				if (tunnel[t].try > 5)
 					tunnelkill(t, "Timeout on control message"); // game over

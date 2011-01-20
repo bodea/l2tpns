@@ -1,7 +1,8 @@
-* Thu Mar 25 2010 Brendan O'Dea <bod@optus.net> 2.2.x
+* Thu Jan 20 2011 Brendan O'Dea <bod@optus.net> 2.2.x
 - Apply MLPPP patch from Muhammad Tayseer Alquoatli.
 - Apply patch from Michael O to avoid sending multiple CDNs.
 - Apply patch from Cyril Elkaim to fix an issue with MacOS.
+- Apply patch from Geoffrey D. Bennett to fix retry of control packets.
 
 * Mon Dec 18 2006 Brendan O'Dea <bod@optus.net> 2.2.0
 - Only poll clifd if successfully bound.
