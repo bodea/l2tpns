@@ -1,7 +1,5 @@
 // L2TPNS PPP Stuff
 
-char const *cvs_id_ppp = "$Id: ppp.c,v 1.104 2009-12-08 14:49:28 bodea Exp $";
-
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>

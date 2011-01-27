@@ -4,8 +4,6 @@
 
 /* fudge up session rx speed if not set */
 
-char const *cvs_id = "$Id: setrxspeed.c,v 1.4 2005-10-11 09:04:53 bodea Exp $";
-
 int plugin_api_version = PLUGIN_API_VERSION;
 static struct pluginfuncs *f = 0;
 

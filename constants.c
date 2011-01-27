@@ -1,7 +1,5 @@
 // L2TPNS: constants
 
-char const *cvs_id_constants = "$Id: constants.c,v 1.8 2009-12-08 14:49:28 bodea Exp $";
-
 #include <stdio.h>
 #include "constants.h"
 

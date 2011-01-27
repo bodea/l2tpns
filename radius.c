@@ -1,7 +1,5 @@
 // L2TPNS Radius Stuff
 
-char const *cvs_id_radius = "$Id: radius.c,v 1.56 2009-12-08 14:49:28 bodea Exp $";
-
 #include <time.h>
 #include <stdio.h>
 #include <sys/types.h>

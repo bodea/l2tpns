@@ -5,8 +5,6 @@
 
 /* session control */
 
-char const *cvs_id = "$Id: sessionctl.c,v 1.5 2006-04-13 11:14:35 bodea Exp $";
-
 int plugin_api_version = PLUGIN_API_VERSION;
 static struct pluginfuncs *f = 0;
 

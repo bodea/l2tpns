@@ -4,8 +4,6 @@
 
 /* strip domain part of username before sending RADIUS requests */
 
-char const *cvs_id = "$Id: stripdomain.c,v 1.8 2005-10-11 09:04:53 bodea Exp $";
-
 int plugin_api_version = PLUGIN_API_VERSION;
 static struct pluginfuncs *f = 0;
 

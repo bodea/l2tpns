@@ -1,7 +1,5 @@
 // L2TPNS Clustering Stuff
 
-char const *cvs_id_cluster = "$Id: cluster.c,v 1.55 2009-12-08 14:49:28 bodea Exp $";
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>

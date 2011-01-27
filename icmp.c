@@ -1,7 +1,5 @@
 // L2TPNS: icmp
 
-char const *cvs_id_icmp = "$Id: icmp.c,v 1.11 2006-04-27 09:53:49 bodea Exp $";
-
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <netinet/in.h>

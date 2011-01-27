@@ -1,7 +1,5 @@
 /* Misc util functions */
 
-char const *cvs_id_util = "$Id: util.c,v 1.14 2006-04-05 01:45:57 bodea Exp $";
-
 #include <unistd.h>
 #include <errno.h>
 #include <sched.h>

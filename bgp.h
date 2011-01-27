@@ -200,6 +200,4 @@ int bgp_set_poll(void);
 int bgp_process(uint32_t events[]);
 char const *bgp_state_str(enum bgp_state state);
 
-extern char const *cvs_id_bgp;
-
 #endif /* __BGP_H__ */

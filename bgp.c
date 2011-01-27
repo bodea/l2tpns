@@ -10,8 +10,6 @@
  *   nor RFC2385 (which requires a kernel patch on 2.4 kernels).
  */
 
-char const *cvs_id_bgp = "$Id: bgp.c,v 1.12 2005-09-02 23:39:36 bodea Exp $";
-
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>

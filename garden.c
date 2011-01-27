@@ -9,8 +9,6 @@
 
 /* walled garden */
 
-char const *cvs_id = "$Id: garden.c,v 1.25 2006-02-23 01:07:23 bodea Exp $";
-
 int plugin_api_version = PLUGIN_API_VERSION;
 static struct pluginfuncs *f = 0;
 

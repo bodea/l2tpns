@@ -1,7 +1,5 @@
 // L2TPNS: token bucket filters
 
-char const *cvs_id_tbf = "$Id: tbf.c,v 1.13 2005-07-31 10:04:10 bodea Exp $";
-
 #include <string.h>
 #include "l2tpns.h"
 #include "util.h"

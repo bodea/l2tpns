@@ -948,19 +948,4 @@ extern uint16_t MSS;
 #define CLI_HELP_REQUESTED	(argc > 0 && argv[argc-1][strlen(argv[argc-1])-1] == '?')
 #define CLI_HELP_NO_ARGS	(argc > 1 || argv[0][1]) ? CLI_OK : cli_arg_help(cli, 1, NULL)
 
-// CVS identifiers (for "show version file")
-extern char const *cvs_id_arp;
-extern char const *cvs_id_cli;
-extern char const *cvs_id_cluster;
-extern char const *cvs_id_constants;
-extern char const *cvs_id_control;
-extern char const *cvs_id_icmp;
-extern char const *cvs_id_l2tpns;
-extern char const *cvs_id_ll;
-extern char const *cvs_id_md5;
-extern char const *cvs_id_ppp;
-extern char const *cvs_id_radius;
-extern char const *cvs_id_tbf;
-extern char const *cvs_id_util;
-
 #endif /* __L2TPNS_H__ */

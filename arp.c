@@ -1,7 +1,5 @@
 // L2TPNS: arp
 
-char const *cvs_id_arp = "$Id: arp.c,v 1.7 2005-07-31 10:04:09 bodea Exp $";
-
 #include <string.h>
 #include <unistd.h>
 #include <net/ethernet.h>

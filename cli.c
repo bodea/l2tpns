@@ -1,9 +1,6 @@
 // L2TPNS Command Line Interface
 // vim: sw=8 ts=8
 
-char const *cvs_name = "$Name:  $";
-char const *cvs_id_cli = "$Id: cli.c,v 1.76 2006-12-18 12:08:28 bodea Exp $";
-
 #include <stdio.h>
 #include <stddef.h>
 #include <stdarg.h>
@@ -794,72 +791,10 @@ static int cmd_clear_counters(struct cli_def *cli, char *command, char **argv, i
 
 static int cmd_show_version(struct cli_def *cli, char *command, char **argv, int argc)
 {
-	int tag = 0;
-	int file = 0;
-	int i = 0;
-
 	if (CLI_HELP_REQUESTED)
-		return cli_arg_help(cli, 1,
-			"tag", "Include CVS release tag",
-			"file", "Include file versions",
-			NULL);
-
-	for (i = 0; i < argc; i++)
-		if (!strcmp(argv[i], "tag"))
-			tag++;
-		else if (!strcmp(argv[i], "file"))
-			file++;
+		return CLI_HELP_NO_ARGS;
 
 	cli_print(cli, "L2TPNS %s", VERSION);
-	if (tag)
-	{
-		char const *p = strchr(cvs_name, ':');
-		char const *e;
-		if (p)
-		{
-			p++;
-			while (isspace(*p))
-				p++;
-		}
-
-		if (!p || *p == '$')
-			p = "HEAD";
-
-		e = strpbrk(p, " \t$");
-		cli_print(cli, "Tag: %.*s", (int) (e ? e - p + 1 : strlen(p)), p);
-	}
-	
-	if (file)
-	{
-		extern linked_list *loaded_plugins;
-		void *p;
-
-		cli_print(cli, "Files:");
-		cli_print(cli, "  %s", cvs_id_arp);
-#ifdef BGP
-		cli_print(cli, "  %s", cvs_id_bgp);
-#endif /* BGP */
-		cli_print(cli, "  %s", cvs_id_cli);
-		cli_print(cli, "  %s", cvs_id_cluster);
-		cli_print(cli, "  %s", cvs_id_constants);
-		cli_print(cli, "  %s", cvs_id_control);
-		cli_print(cli, "  %s", cvs_id_icmp);
-		cli_print(cli, "  %s", cvs_id_l2tpns);
-		cli_print(cli, "  %s", cvs_id_ll);
-		cli_print(cli, "  %s", cvs_id_ppp);
-		cli_print(cli, "  %s", cvs_id_radius);
-		cli_print(cli, "  %s", cvs_id_tbf);
-		cli_print(cli, "  %s", cvs_id_util);
-
-		ll_reset(loaded_plugins);
-		while ((p = ll_next(loaded_plugins)))
-		{
-			char const **id = dlsym(p, "cvs_id");
-			if (id)
-				cli_print(cli, "  %s", *id);
-		}
-	}
-
 	return CLI_OK;
 }
 

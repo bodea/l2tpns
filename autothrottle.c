@@ -13,8 +13,6 @@
  * throttle=no
  */
 
-char const *cvs_id = "$Id: autothrottle.c,v 1.17 2006-05-18 14:40:31 bodea Exp $";
-
 int plugin_api_version = PLUGIN_API_VERSION;
 static struct pluginfuncs *f = 0;
 
