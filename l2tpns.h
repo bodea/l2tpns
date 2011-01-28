@@ -14,7 +14,7 @@
 #include <sys/types.h>
 #include <libcli.h>
 
-#define VERSION	"2.2.0"
+#define VERSION	"2.2.1"
 
 // Limits
 #define MAXTUNNEL	500		// could be up to 65535
