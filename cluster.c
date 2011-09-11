@@ -426,12 +426,6 @@ void master_update_counts(void)
 	if (!config->cluster_master_address)	// If we don't have a master, skip it for a while.
 		return;
 
-	// C_BYTES format changed in 2.1.0 (cluster version 5)
-	// during upgrade from previous versions, hang onto our counters
-	// for a bit until the new master comes up
-	if (config->cluster_last_hb_ver < 5)
-		return;
-
 	i = MAX_B_RECS * 5; // Examine max 3000 sessions;
 	if (config->cluster_highest_sessionid > i)
 		i = config->cluster_highest_sessionid;
@@ -1311,54 +1305,62 @@ static int cluster_recv_tunnel(int more, uint8_t *p)
 }
 
 
-// pre v5 heartbeat session structure
+// pre v6 heartbeat session structure
 struct oldsession {
 	sessionidt next;
 	sessionidt far;
 	tunnelidt tunnel;
+	uint8_t flags;
+	struct {
+		uint8_t phase;
+		uint8_t lcp:4;
+		uint8_t ipcp:4;
+		uint8_t ipv6cp:4;
+		uint8_t ccp:4;
+	} ppp;
+	char reserved_1[2];
 	in_addr_t ip;
 	int ip_pool_index;
-	unsigned long unique_id;
-	uint16_t nr;
-	uint16_t ns;
+	uint32_t unique_id;
+	char reserved_2[4];
 	uint32_t magic;
-	uint32_t cin, cout;
 	uint32_t pin, pout;
-	uint32_t total_cin;
-	uint32_t total_cout;
-	uint32_t id;
+	uint32_t cin, cout;
+	uint32_t cin_wrap, cout_wrap;
+	uint32_t cin_delta, cout_delta;
 	uint16_t throttle_in;
 	uint16_t throttle_out;
+	uint8_t filter_in;
+	uint8_t filter_out;
+	uint16_t mru;
 	clockt opened;
 	clockt die;
+	uint32_t session_timeout;
+	uint32_t idle_timeout;
 	time_t last_packet;
+	time_t last_data;
 	in_addr_t dns1, dns2;
 	routet route[MAXROUTE];
-	uint16_t radius;
-	uint16_t mru;
 	uint16_t tbf_in;
 	uint16_t tbf_out;
-	uint8_t l2tp_flags;
-	uint8_t reserved_old_snoop;
-	uint8_t walled_garden;
-	uint8_t flags1;
-	char random_vector[MAXTEL];
 	int random_vector_length;
-	char user[129];
+	uint8_t random_vector[MAXTEL];
+	char user[MAXUSER];
 	char called[MAXTEL];
 	char calling[MAXTEL];
 	uint32_t tx_connect_speed;
 	uint32_t rx_connect_speed;
-	uint32_t flags;
-#define SF_IPCP_ACKED	1	// Has this session seen an IPCP Ack?
-#define SF_LCP_ACKED	2	// LCP negotiated
-#define SF_CCP_ACKED	4	// CCP negotiated
+	clockt timeout;
+        uint32_t mrru;
+        uint8_t mssf;
+        epdist epdis;
+        bundleidt bundle;
 	in_addr_t snoop_ip;
 	uint16_t snoop_port;
-	uint16_t sid;
-	uint8_t filter_in;
-	uint8_t filter_out;
-	char reserved[18];
+	uint8_t walled_garden;
+	uint8_t ipv6prefixlen;
+	struct in6_addr ipv6route;
+	char reserved_3[11];
 };
 
 static uint8_t *convert_session(struct oldsession *old)
@@ -1371,17 +1373,24 @@ static uint8_t *convert_session(struct oldsession *old)
 	new.next = old->next;
 	new.far = old->far;
 	new.tunnel = old->tunnel;
-	new.flags = old->l2tp_flags;
+	new.flags = old->flags;
+	new.ppp.phase = old->ppp.phase;
+	new.ppp.lcp = old->ppp.lcp;
+	new.ppp.ipcp = old->ppp.ipcp;
+	new.ppp.ipv6cp = old->ppp.ipv6cp;
+	new.ppp.ccp = old->ppp.ccp;
 	new.ip = old->ip;
 	new.ip_pool_index = old->ip_pool_index;
 	new.unique_id = old->unique_id;
 	new.magic = old->magic;
 	new.pin = old->pin;
 	new.pout = old->pout;
-	new.cin = old->total_cin;
-	new.cout = old->total_cout;
-	new.cin_delta = old->cin;
-	new.cout_delta = old->cout;
+	new.cin = old->cin;
+	new.cout = old->cout;
+	new.cin_wrap = old->cin_wrap;
+	new.cout_wrap = old->cout_wrap;
+	new.cin_delta = old->cin_delta;
+	new.cout_delta = old->cout_delta;
 	new.throttle_in = old->throttle_in;
 	new.throttle_out = old->throttle_out;
 	new.filter_in = old->filter_in;
@@ -1389,7 +1398,10 @@ static uint8_t *convert_session(struct oldsession *old)
 	new.mru = old->mru;
 	new.opened = old->opened;
 	new.die = old->die;
+	new.session_timeout = old->session_timeout;
+	new.idle_timeout = old->idle_timeout;
 	new.last_packet = old->last_packet;
+	new.last_data = old->last_data;
 	new.dns1 = old->dns1;
 	new.dns2 = old->dns2;
 	new.tbf_in = old->tbf_in;
@@ -1397,9 +1409,16 @@ static uint8_t *convert_session(struct oldsession *old)
 	new.random_vector_length = old->random_vector_length;
 	new.tx_connect_speed = old->tx_connect_speed;
 	new.rx_connect_speed = old->rx_connect_speed;
+	new.timeout = old->timeout;
+	new.mrru = old->mrru;
+	new.mssf = old->mssf;
+	new.epdis = old->epdis;
+	new.bundle = old->bundle;
 	new.snoop_ip = old->snoop_ip;
 	new.snoop_port = old->snoop_port;
 	new.walled_garden = old->walled_garden;
+	new.ipv6prefixlen = old->ipv6prefixlen;
+	new.ipv6route = old->ipv6route;
 
 	memcpy(new.random_vector, old->random_vector, sizeof(new.random_vector));
 	memcpy(new.user, old->user, sizeof(new.user));
@@ -1409,30 +1428,13 @@ static uint8_t *convert_session(struct oldsession *old)
 	for (i = 0; i < MAXROUTE; i++)
 		memcpy(&new.route[i], &old->route[i], sizeof(new.route[i]));
 
-	if (new.opened)
-	{
-		new.ppp.phase = Establish;
-		if (old->flags & (SF_IPCP_ACKED|SF_LCP_ACKED))
-		{
-			new.ppp.phase = Network;
-			new.ppp.lcp   = Opened;
-			new.ppp.ipcp  = (old->flags & SF_IPCP_ACKED) ? Opened : Starting;
-			new.ppp.ccp   = (old->flags & SF_CCP_ACKED)  ? Opened : Stopped;
-		}
-
-		// no PPPv6 in old session
-		new.ppp.ipv6cp = Stopped;
-	}
-
 	return (uint8_t *) &new;
 }
 
 //
 // Process a heartbeat..
 //
-// v3: added interval, timeout
-// v4: added table_version
-// v5: added ipv6, re-ordered session structure
+// v6: added RADIUS class attribute, re-ordered session structure
 static int cluster_process_heartbeat(uint8_t *data, int size, int more, uint8_t *p, in_addr_t addr)
 {
 	heartt *h;
@@ -1440,12 +1442,12 @@ static int cluster_process_heartbeat(uint8_t *data, int size, int more, uint8_t 
 	int i, type;
 	int hb_ver = more;
 
-#if HB_VERSION != 5
+#if HB_VERSION != 6
 # error "need to update cluster_process_heartbeat()"
 #endif
 
-	// we handle versions 3 through 5
-	if (hb_ver < 3 || hb_ver > HB_VERSION) {
+	// we handle versions 5 through 6
+	if (hb_ver < 5 || hb_ver > HB_VERSION) {
 		LOG(0, 0, 0, "Received a heartbeat version that I don't support (%d)!\n", hb_ver);
 		return -1; // Ignore it??
 	}
@@ -1474,17 +1476,16 @@ static int cluster_process_heartbeat(uint8_t *data, int size, int more, uint8_t 
 			return -1; // Skip it.
 		}
 
-		if (hb_ver >= 4) {
-			if (h->table_version > config->cluster_table_version) {
-				LOG(0, 0, 0, "They've seen more state changes (%" PRIu64 " vs my %" PRIu64 ") so I'm gone!\n",
+		if (h->table_version > config->cluster_table_version) {
+			LOG(0, 0, 0, "They've seen more state changes (%" PRIu64 " vs my %" PRIu64 ") so I'm gone!\n",
 					h->table_version, config->cluster_table_version);
 
-				kill(0, SIGTERM);
-				exit(1);
-			}
-			if (h->table_version < config->cluster_table_version)
-			    	return -1;
+			kill(0, SIGTERM);
+			exit(1);
 		}
+
+		if (h->table_version < config->cluster_table_version)
+			return -1;
 
 		if (basetime > h->basetime) {
 			LOG(0, 0, 0, "They're an older master than me so I'm gone!\n");
@@ -1607,7 +1608,7 @@ static int cluster_process_heartbeat(uint8_t *data, int size, int more, uint8_t 
 				s -= (p - orig_p);
 
 				// session struct changed with v5
-				if (hb_ver < 5)
+				if (hb_ver < 6)
 				{
 					if (size != sizeof(struct oldsession)) {
 						LOG(0, 0, 0, "DANGER: Received a v%d CSESSION that didn't decompress correctly!\n", hb_ver);
@@ -1628,7 +1629,7 @@ static int cluster_process_heartbeat(uint8_t *data, int size, int more, uint8_t 
 				break;
 			}
 			case C_SESSION:
-			    	if (hb_ver < 5)
+				if (hb_ver < 6)
 				{
 					if (s < sizeof(struct oldsession))
 						goto shortpacket;

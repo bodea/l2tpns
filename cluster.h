@@ -24,7 +24,7 @@
 #define C_BUNDLE		17	// Bundle structure.
 #define C_CBUNDLE		18	// Compressed bundle structure.
 
-#define HB_VERSION		5	// Protocol version number..
+#define HB_VERSION		6	// Protocol version number..
 #define HB_MAX_SEQ		(1<<30)	// Maximum sequence number. (MUST BE A POWER OF 2!)
 #define HB_HISTORY_SIZE		64	// How many old heartbeats we remember?? (Must be a factor of HB_MAX_SEQ)
 

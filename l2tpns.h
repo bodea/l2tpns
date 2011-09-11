@@ -40,6 +40,7 @@
 #define MAXTEL		96		// telephone number
 #define MAXUSER		128		// username
 #define MAXPASS		128		// password
+#define MAXCLASS	128		// radius class attribute size
 #define MAXPLUGINS	20		// maximum number of plugins to load
 #define MAXRADSERVER	10		// max radius servers
 #define MAXROUTE	10		// max static routes per session
@@ -272,11 +273,10 @@ typedef struct
 		uint8_t ipv6cp:4;	//   IPV6CP state
 		uint8_t ccp:4;		//   CCP    state
 	} ppp;
-	char reserved_1[2];		// unused: padding
+	uint16_t mru;			// maximum receive unit
 	in_addr_t ip;			// IP of session set by RADIUS response (host byte order).
 	int ip_pool_index;		// index to IP pool
 	uint32_t unique_id;		// unique session id
-	char reserved_2[4];		// unused: was ns/nr
 	uint32_t magic;			// ppp magic number
 	uint32_t pin, pout;		// packet counts
 	uint32_t cin, cout;		// byte counts
@@ -286,35 +286,36 @@ typedef struct
 	uint16_t throttle_out;		// downstream throttle rate
 	uint8_t filter_in;		// input filter index (to ip_filters[N-1]; 0 if none)
 	uint8_t filter_out;		// output filter index
-	uint16_t mru;			// maximum receive unit
+	uint16_t snoop_port;		// Interception destination port
+	in_addr_t snoop_ip;		// Interception destination IP
 	clockt opened;			// when started
 	clockt die;			// being closed, when to finally free
 	uint32_t session_timeout;	// Maximum session time in seconds
- 	uint32_t idle_timeout;		// Maximum idle time in seconds
+	uint32_t idle_timeout;		// Maximum idle time in seconds
 	time_t last_packet;		// Last packet from the user (used for idle timeouts)
- 	time_t last_data;		// Last data packet to/from the user (used for idle timeouts)
+	time_t last_data;		// Last data packet to/from the user (used for idle timeouts)
 	in_addr_t dns1, dns2;		// DNS servers
 	routet route[MAXROUTE];		// static routes
 	uint16_t tbf_in;		// filter bucket for throttling in from the user.
 	uint16_t tbf_out;		// filter bucket for throttling out to the user.
 	int random_vector_length;
 	uint8_t random_vector[MAXTEL];
-	char user[MAXUSER];		// user (needed in seesion for radius stop messages)
+	char user[MAXUSER];		// user (needed in session for radius stop messages)
 	char called[MAXTEL];		// called number
 	char calling[MAXTEL];		// calling number
 	uint32_t tx_connect_speed;
 	uint32_t rx_connect_speed;
 	clockt timeout;                 // Session timeout
-        uint32_t mrru;                  // Multilink Max-Receive-Reconstructed-Unit
-        uint8_t mssf;                   // Multilink Short Sequence Number Header Format
-        epdist epdis;                   // Multilink Endpoint Discriminator
-        bundleidt bundle;               // Multilink Bundle Identifier
-	in_addr_t snoop_ip;		// Interception destination IP
-	uint16_t snoop_port;		// Interception destination port
+	uint32_t mrru;                  // Multilink Max-Receive-Reconstructed-Unit
+	epdist epdis;                   // Multilink Endpoint Discriminator
+	bundleidt bundle;               // Multilink Bundle Identifier
+	uint8_t mssf;                   // Multilink Short Sequence Number Header Format
 	uint8_t walled_garden;		// is this session gardened?
+	uint8_t classlen;		// class (needed for radius accounting messages)
+	char class[MAXCLASS];
 	uint8_t ipv6prefixlen;		// IPv6 route prefix length
 	struct in6_addr ipv6route;	// Static IPv6 route
-	char reserved_3[11];		// Space to expand structure without changing HB_VERSION
+	char reserved[12];		// Space to expand structure without changing HB_VERSION
 }
 sessiont;
 
