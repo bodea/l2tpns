@@ -514,7 +514,7 @@ void cluster_check_slaves(void)
 //
 void cluster_check_master(void)
 {
-	int i, count, tcount, bcount, high_unique_id = 0;
+	int i, count, high_unique_id = 0;
 	int last_free = 0;
 	clockt t = TIME;
 	static int probed = 0;
@@ -600,7 +600,7 @@ void cluster_check_master(void)
 		// Count the highest used tunnel number as well.
 		//
 	config->cluster_highest_tunnelid = 0;
-	for (i = 0, tcount = 0; i < MAXTUNNEL; ++i) {
+	for (i = 0; i < MAXTUNNEL; ++i) {
 		if (tunnel[i].state == TUNNELUNDEF)
 			tunnel[i].state = TUNNELFREE;
 
@@ -613,7 +613,7 @@ void cluster_check_master(void)
                 // Count the highest used bundle number as well.
                 //
         config->cluster_highest_bundleid = 0;
-        for (i = 0, bcount = 0; i < MAXBUNDLE; ++i) {
+        for (i = 0; i < MAXBUNDLE; ++i) {
                 if (bundle[i].state == BUNDLEUNDEF)
                         bundle[i].state = BUNDLEFREE;
 

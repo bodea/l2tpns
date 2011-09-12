@@ -3,10 +3,11 @@
 - Apply patch from Michael O to avoid sending multiple CDNs.
 - Apply patch from Cyril Elkaim to fix an issue with MacOS.
 - Apply patch from Geoffrey D. Bennett to fix retry of control packets.
-- Apply patch from Geoffrey D. Bennett to fix handle RADIUS Class attribute.
+- Apply patch from Geoffrey D. Bennett to handle RADIUS Class attribute.
 - Bump heartbeat version to handle Class entry in session (v6).
 - Re-arrange session struct to remove padding.
 - Update cluster code to handle v6 packets.  Drop compatability for pre-v5.
+- Clean up some compiler errors.
 
 * Mon Dec 18 2006 Brendan O'Dea <bod@optus.net> 2.2.0
 - Only poll clifd if successfully bound.

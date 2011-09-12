@@ -2369,7 +2369,7 @@ uint8_t *makeppp(uint8_t *b, int size, uint8_t *p, int l, sessionidt s, tunnelid
 
 	if ((b - start) + l > size)
 	{
-		LOG(2, s, t, "makeppp would overflow buffer (size=%d, header+payload=%d)\n", size, (b - start) + l);
+		LOG(2, s, t, "makeppp would overflow buffer (size=%d, header+payload=%ld)\n", size, (b - start) + l);
 		return NULL;
 	}
 

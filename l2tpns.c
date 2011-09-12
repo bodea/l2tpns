@@ -1276,7 +1276,7 @@ static void processipout(uint8_t *buf, int len)
                 if(session[s].bundle != 0 && bundle[session[s].bundle].num_of_links > 1)
                 {
                         bid = session[s].bundle;
-                        s = bundle[bid].members[bundle[bid].current_ses = ++bundle[bid].current_ses % bundle[bid].num_of_links];
+                        s = bundle[bid].members[bundle[bid].current_ses = (bundle[bid].current_ses + 1) % bundle[bid].num_of_links];
 			t = session[s].tunnel;
 			sp = &session[s];
                         LOG(4, s, t, "MPPP: (1)Session number becomes: %d\n", s);
@@ -1299,8 +1299,8 @@ static void processipout(uint8_t *buf, int len)
 				update_session_out_stat(s, sp, fraglen);
 				remain -= fraglen;
 				while (remain > last_fraglen)
-				{ 
-                                	s = b->members[b->current_ses = ++b->current_ses % num_of_links];
+				{
+					s = b->members[b->current_ses = (b->current_ses + 1) % num_of_links];
 					t = session[s].tunnel;
 					sp = &session[s];
                                 	LOG(4, s, t, "MPPP: (2)Session number becomes: %d\n", s);
@@ -1311,7 +1311,7 @@ static void processipout(uint8_t *buf, int len)
 					remain -= fraglen;
 				}
 				// send the last fragment
-				s = b->members[b->current_ses = ++b->current_ses % num_of_links];
+				s = b->members[b->current_ses = (b->current_ses + 1) % num_of_links];
 				t = session[s].tunnel;
 				sp = &session[s];
                                	LOG(4, s, t, "MPPP: (2)Session number becomes: %d\n", s);
@@ -1418,7 +1418,7 @@ static void processipv6out(uint8_t * buf, int len)
 	if (session[s].bundle && bundle[session[s].bundle].num_of_links > 1)
 	{
 		bundleidt bid = session[s].bundle;
-		s = bundle[bid].members[bundle[bid].current_ses = ++bundle[bid].current_ses % bundle[bid].num_of_links];
+		s = bundle[bid].members[bundle[bid].current_ses = (bundle[bid].current_ses + 1) % bundle[bid].num_of_links];
 		LOG(3, s, session[s].tunnel, "MPPP: Session number becomes: %u\n", s);
 	}
 	t = session[s].tunnel;
@@ -1473,7 +1473,6 @@ static void send_ipout(sessionidt s, uint8_t *buf, int len)
 {
 	sessiont *sp;
 	tunnelidt t;
-	in_addr_t ip;
 
 	uint8_t b[MAXETHER + 20];
 
@@ -1486,8 +1485,6 @@ static void send_ipout(sessionidt s, uint8_t *buf, int len)
 	// Skip the tun header
 	buf += 4;
 	len -= 4;
-
-	ip = *(in_addr_t *)(buf + 16);
 
 	if (!session[s].ip)
 		return;
